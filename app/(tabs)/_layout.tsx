@@ -53,7 +53,7 @@ export default function TabLayout() {
         name="settings/index"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={24} name="ellipsis.circle" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={24} name="gearshape.fill" color={color} />,
         }}
       />
       {/* Hidden screens */}

@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle } from 'react-native';
+import { View, StyleSheet, ViewStyle, StyleProp } from 'react-native';
 import { Colors, Radius, Shadows, Spacing } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   variant?: 'flat' | 'elevated' | 'outline';
 }
 
