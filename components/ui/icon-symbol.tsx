@@ -13,7 +13,7 @@ type IconSymbolName = keyof typeof MAPPING;
  * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
  * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
  */
-const MAPPING = {
+const MAPPING: Record<string, ComponentProps<typeof MaterialIcons>['name']> = {
   'house.fill': 'home',
   'list.bullet': 'list',
   'arrow.down.doc.fill': 'file-download',
@@ -33,7 +33,14 @@ const MAPPING = {
   'home': 'home',
   'help-circle': 'help',
   'plus': 'add',
-} as IconMapping;
+  'magnifyingglass': 'search',
+  'bell': 'notifications',
+  'ellipsis': 'more-horiz',
+  'a.circle.fill': 'font-download',
+  'applelogo': 'apple',
+  'person.fill': 'person',
+  'arrow.up.doc.fill': 'file-upload',
+};
 
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.

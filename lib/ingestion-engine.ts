@@ -2,13 +2,14 @@ import { database } from '@/model/database';
 import { Q } from '@nozbe/watermelondb';
 import { Parser, ParsedTransaction } from './parser';
 import { CategorizationEngine } from './categorization-engine';
-import { crypto } from 'expo-crypto';
+import * as Crypto from 'expo-crypto';
+import { Transaction, SyncLog, FailedParse } from '@/model/models';
 
 export class IngestionEngine {
   static async processAlert(rawBody: string, sender: string, timestamp: number) {
     // 1. Check for duplicates (hash of raw content)
     const contentHash = await this.hashString(rawBody);
-    const existingLog = await database.get('sync_logs').query(Q.where('raw_content_hash', contentHash)).fetch();
+    const existingLog = await database.get<SyncLog>('sync_logs').query(Q.where('raw_content_hash', contentHash)).fetch();
     
     if (existingLog.length > 0) {
       console.log('Duplicate alert detected, skipping');
@@ -35,7 +36,7 @@ export class IngestionEngine {
 
     // 5. Persist
     await database.write(async () => {
-      const transaction = await database.get('transactions').create(t => {
+      const transaction = await database.get<Transaction>('transactions').create(t => {
         t.amount = parsed.amount;
         t.currency = parsed.currency;
         t.transactionType = parsed.transactionType;
@@ -53,15 +54,12 @@ export class IngestionEngine {
       });
 
       // 6. Post-processing: Self-transfer check
-      const isSelfTransfer = await CategorizationEngine.detectSelfTransfer(transaction as any);
+      const isSelfTransfer = await CategorizationEngine.detectSelfTransfer(transaction);
       if (isSelfTransfer) {
         // Update the transaction record with self-transfer flag
-        // Note: Models in WatermelonDB are reactive, but for this batch write we can update it
-        // Or handle it in a separate job. For critical fix, we'll mark it.
-        // Actually, WatermelonDB recommends updating within the same write block if possible.
       }
 
-      await database.get('sync_logs').create(log => {
+      await database.get<SyncLog>('sync_logs').create(log => {
         log.sourceChannel = parsed.sourceChannel;
         log.senderIdentifier = sender;
         log.rawContentHash = contentHash;
@@ -73,13 +71,13 @@ export class IngestionEngine {
   }
 
   private static async hashString(str: string) {
-    const digest = await crypto.digestStringAsync(crypto.CryptoDigestAlgorithm.SHA256, str);
+    const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, str);
     return digest;
   }
 
   private static async checkTransactionDuplicate(parsed: ParsedTransaction) {
     const oneHour = 60 * 60 * 1000;
-    const existing = await database.get('transactions').query(
+    const existing = await database.get<Transaction>('transactions').query(
       Q.where('amount', parsed.amount),
       Q.where('transaction_type', parsed.transactionType),
       Q.where('transaction_date', Q.between(parsed.transactionDate - oneHour, parsed.transactionDate + oneHour)),
@@ -92,7 +90,7 @@ export class IngestionEngine {
 
   private static async logFailedParse(rawBody: string, sender: string, reason: string) {
     await database.write(async () => {
-      await database.get('failed_parses').create(f => {
+      await database.get<FailedParse>('failed_parses').create(f => {
         f.sourceChannel = 'sms';
         f.senderIdentifier = sender;
         f.failureReason = reason;
@@ -101,7 +99,7 @@ export class IngestionEngine {
       });
 
       const contentHash = await this.hashString(rawBody);
-      await database.get('sync_logs').create(log => {
+      await database.get<SyncLog>('sync_logs').create(log => {
         log.sourceChannel = 'sms';
         log.senderIdentifier = sender;
         log.rawContentHash = contentHash;
@@ -114,7 +112,7 @@ export class IngestionEngine {
 
   private static async logSyncStatus(sender: string, hash: string, status: string) {
     await database.write(async () => {
-      await database.get('sync_logs').create(log => {
+      await database.get<SyncLog>('sync_logs').create(log => {
         log.sourceChannel = 'sms';
         log.senderIdentifier = sender;
         log.rawContentHash = hash;

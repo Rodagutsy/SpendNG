@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import * as QueryParams from 'expo-auth-session/build/QueryParams';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -43,7 +42,8 @@ export const signInWithGoogle = async () => {
   const res = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
 
   if (res.type === 'success') {
-    const { params } = QueryParams.parseQueryString(res.url.split('#')[1]);
+    const fragment = res.url.split('#')[1];
+    const params = Object.fromEntries(new URLSearchParams(fragment).entries());
     const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
       access_token: params.access_token,
       refresh_token: params.refresh_token,
