@@ -5,25 +5,39 @@ import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
-type IconSymbolName = keyof typeof MAPPING;
-
-/**
- * Add your SF Symbols to Material Icons mappings here.
- * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
- * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
- */
 const MAPPING: Record<string, ComponentProps<typeof MaterialIcons>['name']> = {
+  'house': 'home',
   'house.fill': 'home',
   'list.bullet': 'list',
-  'arrow.down.doc.fill': 'file-download',
+  'chart.bar': 'bar-chart',
+  'chart.bar.fill': 'bar-chart',
+  'ellipsis.circle': 'more-horiz',
+  'ellipsis.circle.fill': 'more-vert',
   'gearshape.fill': 'settings',
+  'person.fill': 'person',
+  'lock.fill': 'lock',
+  'link': 'link',
+  'plus.circle.fill': 'add-circle',
+  'magnifyingglass': 'search',
+  'tag.fill': 'local-offer',
+  'questionmark.circle.fill': 'help',
+  'bubble.left.fill': 'chat-bubble',
+  'info.circle.fill': 'info',
+  'trash.fill': 'delete',
+  'crown.fill': 'stars',
+  'bell': 'notifications',
+  'plus': 'add',
+  'chevron.right': 'chevron-right',
+  'arrow.up.right': 'trending-up',
+  'arrow.down.right': 'trending-down',
+  'arrow.up.right.circle.fill': 'arrow-circle-up',
+  'lightbulb.fill': 'lightbulb',
+  'arrow.down.doc.fill': 'file-download',
+  'arrow.up.doc.fill': 'file-upload',
   'utensils': 'restaurant',
   'car': 'directions-car',
   'zap': 'bolt',
   'wifi': 'wifi',
-  'arrow-up-right': 'north-east',
-  'arrow-down-left': 'south-west',
   'wallet': 'account-balance-wallet',
   'briefcase': 'work',
   'shopping-bag': 'shopping-bag',
@@ -32,20 +46,15 @@ const MAPPING: Record<string, ComponentProps<typeof MaterialIcons>['name']> = {
   'graduation-cap': 'school',
   'home': 'home',
   'help-circle': 'help',
-  'plus': 'add',
-  'magnifyingglass': 'search',
-  'bell': 'notifications',
-  'ellipsis': 'more-horiz',
   'a.circle.fill': 'font-download',
   'applelogo': 'apple',
-  'person.fill': 'person',
-  'arrow.up.doc.fill': 'file-upload',
 };
+
+export type IconSymbolName = keyof typeof MAPPING;
 
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
  * This ensures a consistent look across platforms, and optimal resource usage.
- * Icon `name`s are based on SF Symbols and require manual mapping to Material Icons.
  */
 export function IconSymbol({
   name,
