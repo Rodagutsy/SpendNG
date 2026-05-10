@@ -5,15 +5,36 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 
 interface CategoryBadgeProps {
   name: string;
-  icon: string;
-  color: string;
+  icon?: string;
+  color?: string;
+  colorHex?: string;
+  iconName?: string;
+  size?: 'small' | 'medium';
 }
 
-export const CategoryBadge: React.FC<CategoryBadgeProps> = ({ name, icon, color }) => {
+export const CategoryBadge: React.FC<CategoryBadgeProps> = ({ 
+  name, 
+  icon, 
+  color, 
+  colorHex, 
+  iconName,
+  size = 'medium' 
+}) => {
+  const finalColor = colorHex || color || '#7B786F';
+  const finalIcon = iconName || icon || 'help-circle';
+  
   return (
-    <View style={[styles.container, { backgroundColor: `${color}26` }]}>
-      <IconSymbol name={icon as any} size={16} color={color} />
-      <Text style={[styles.text, { color }]}>{name}</Text>
+    <View style={[
+      styles.container, 
+      { backgroundColor: `${finalColor}26` },
+      size === 'small' && { paddingHorizontal: Spacing[1], paddingVertical: 2 }
+    ]}>
+      <IconSymbol name={finalIcon as any} size={size === 'small' ? 12 : 16} color={finalColor} />
+      <Text style={[
+        styles.text, 
+        { color: finalColor },
+        size === 'small' && { fontSize: 10 }
+      ]}>{name}</Text>
     </View>
   );
 };

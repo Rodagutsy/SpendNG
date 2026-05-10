@@ -57,6 +57,7 @@ export default function ComponentsPreviewScreen() {
           amount={4500} 
           type="debit" 
           date="Today, 2:30 PM" 
+          account="Kuda Bank"
         />
         <TransactionItem 
           merchant="Salary Payment" 
@@ -65,6 +66,7 @@ export default function ComponentsPreviewScreen() {
           amount={450000} 
           type="credit" 
           date="Yesterday" 
+          account="Standard Chartered"
         />
       </Section>
 

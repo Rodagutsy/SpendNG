@@ -28,6 +28,11 @@ export const Palette = {
   },
   success: {
     main: '#00BD00',
+  },
+  gradients: {
+    primary: ['#6B4EFF', '#A294FF'],
+    secondary: ['#E6E0FF', '#F3F0FF'],
+    balance: ['#7B61FF', '#BFAFFF'],
   }
 };
 
@@ -86,6 +91,9 @@ export const Typography = {
     labelL: 14,
     labelM: 12,
     labelS: 11,
+    buttonL: 16,
+    buttonM: 14,
+    buttonS: 12,
   },
   lineHeights: {
     displayL: 86,

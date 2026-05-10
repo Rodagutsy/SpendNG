@@ -34,14 +34,14 @@ export default function TabLayout() {
         name="export"
         options={{
           title: 'Export',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="arrow.down.doc.fill" color={color} />,
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="arrow.up.doc.fill" color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
-          title: 'Settings',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="gearshape.fill" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.fill" color={color} />,
         }}
       />
     </Tabs>

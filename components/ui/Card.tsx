@@ -6,16 +6,34 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 interface CardProps {
   children: React.ReactNode;
   style?: ViewStyle;
+  variant?: 'flat' | 'elevated' | 'outline';
 }
 
-export const Card: React.FC<CardProps> = ({ children, style }) => {
+export const Card: React.FC<CardProps> = ({ children, style, variant = 'elevated' }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+
+  const variantStyles = {
+    elevated: {
+      ...Shadows.sm,
+      backgroundColor: theme.surfaceContainerLowest,
+      borderWidth: 0,
+    },
+    flat: {
+      backgroundColor: theme.surfaceContainerLow,
+      borderWidth: 0,
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      borderWidth: 1,
+      borderColor: theme.outlineVariant,
+    }
+  };
 
   return (
     <View style={[
       styles.card,
-      { backgroundColor: theme.surfaceContainerLowest, borderColor: theme.outlineVariant },
+      variantStyles[variant],
       style
     ]}>
       {children}
@@ -26,8 +44,6 @@ export const Card: React.FC<CardProps> = ({ children, style }) => {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
     padding: Spacing[4],
-    ...Shadows.sm,
   },
 });

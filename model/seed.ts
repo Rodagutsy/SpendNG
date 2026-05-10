@@ -1,4 +1,5 @@
 import { database } from './database';
+import { Category } from './models';
 
 export const DEFAULT_CATEGORIES = [
   { id: 'cat-01', name: 'Food & Dining', type: 'debit', icon: 'utensils', color: '#FF6B35' },
@@ -18,7 +19,7 @@ export const DEFAULT_CATEGORIES = [
 ];
 
 export async function seedCategories() {
-  const categoriesCollection = database.get('categories');
+  const categoriesCollection = database.get<Category>('categories');
   const count = await categoriesCollection.query().fetchCount();
   
   if (count === 0) {
