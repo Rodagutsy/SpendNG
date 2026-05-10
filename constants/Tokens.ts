@@ -5,8 +5,10 @@
 
 export const Palette = {
   primary: {
+    10: '#001A4D',
     50: '#0B5CFF',
     60: '#3377FF',
+    90: '#E6EEFF',
   },
   neutral: {
     10: '#191919',
@@ -44,6 +46,8 @@ export const Colors = {
     onSurface: Palette.neutral[10],
     primary: Palette.primary[50],
     onPrimary: Palette.neutral[100],
+    primaryContainer: Palette.primary[90],
+    onPrimaryContainer: Palette.primary[10],
     outline: Palette.neutralVariant[50],
     outlineVariant: Palette.neutralVariant[80],
     error: Palette.error[40],
@@ -51,6 +55,16 @@ export const Colors = {
     ripple: Palette.neutral[93],
     surfaceContainerLowest: Palette.neutral[100],
     surfaceContainerLow: Palette.neutral[96],
+    surfaceContainer: Palette.neutral[93],
+    
+    roles: {
+      primary: Palette.primary[50],
+      success: Palette.success.main,
+      error: Palette.error[40],
+      surface: Palette.neutral[100],
+      onSurface: Palette.neutral[10],
+      outline: Palette.neutralVariant[50],
+    }
   },
   dark: {
     background: Palette.neutral[10],
@@ -59,6 +73,8 @@ export const Colors = {
     onSurface: Palette.neutral[96],
     primary: Palette.primary[60],
     onPrimary: Palette.neutral[100],
+    primaryContainer: Palette.primary[10],
+    onPrimaryContainer: Palette.primary[90],
     outline: Palette.neutralVariant[30],
     outlineVariant: Palette.neutralVariant[20],
     error: Palette.error[60],
@@ -66,6 +82,16 @@ export const Colors = {
     ripple: Palette.neutral[20],
     surfaceContainerLowest: Palette.neutral[10],
     surfaceContainerLow: Palette.neutral[20],
+    surfaceContainer: Palette.neutralVariant[20],
+    
+    roles: {
+      primary: Palette.primary[60],
+      success: Palette.success.main,
+      error: Palette.error[60],
+      surface: Palette.neutral[20],
+      onSurface: Palette.neutral[96],
+      outline: Palette.neutralVariant[30],
+    }
   }
 };
 
@@ -95,12 +121,43 @@ export const Typography = {
     buttonM: 14,
     buttonS: 12,
   },
-  lineHeights: {
-    displayL: 86,
-    headlineL: 42,
-    titleL: 30,
-    bodyL: 24,
-    labelL: 20,
+  styles: {
+    displaySmallB: {
+      fontFamily: 'Red Hat Display',
+      fontSize: 40,
+      fontWeight: '700' as const,
+      lineHeight: 52,
+    },
+    headlineSmallSb: {
+      fontFamily: 'Red Hat Display',
+      fontSize: 24,
+      fontWeight: '600' as const,
+      lineHeight: 32,
+    },
+    bodyMediumR: {
+      fontFamily: 'Poppins',
+      fontSize: 16,
+      fontWeight: '400' as const,
+      lineHeight: 22,
+    },
+    bodyMediumM: {
+      fontFamily: 'Poppins',
+      fontSize: 16,
+      fontWeight: '500' as const,
+      lineHeight: 22,
+    },
+    labelLargeM: {
+      fontFamily: 'Poppins',
+      fontSize: 14,
+      fontWeight: '500' as const,
+      lineHeight: 20,
+    },
+    buttonMedium: {
+      fontFamily: 'Poppins',
+      fontSize: 14,
+      fontWeight: '500' as const,
+      lineHeight: 14,
+    }
   }
 };
 
@@ -133,14 +190,14 @@ export const Shadows = {
     shadowRadius: 4,
     elevation: 2,
   },
-  md: {
+  normal: {
     shadowColor: '#1C1C1C',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
   },
-  lg: {
+  large: {
     shadowColor: '#1C1C1C',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.25,
