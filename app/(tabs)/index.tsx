@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -17,7 +17,7 @@ import { TransactionItem } from '@/components/ui/TransactionItem';
 import { Skeleton, TransactionSkeleton } from '@/components/ui/Skeleton';
 import { BalanceCard } from '@/components/dashboard/BalanceCard';
 import { UpcomingPaymentCard } from '@/components/dashboard/UpcomingPaymentCard';
-import { useHomeData } from '@/hooks/useHomeData';
+import { useHomeData, TransactionWithCategory } from '@/hooks/useHomeData';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 
@@ -35,7 +35,7 @@ export default function HomeScreen() {
 
   const totalBalance = thisMonthIncome - thisMonthSpending;
 
-  const renderHeader = () => (
+  const headerElement = useMemo(() => (
     <View style={styles.header}>
       <View style={styles.topBar}>
         <View>
@@ -93,33 +93,16 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
     </View>
-  );
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
-        <View style={styles.listContent}>
-          <Skeleton width="50%" height={24} style={{ marginTop: Spacing[4] }} />
-          <Skeleton width="70%" height={32} style={{ marginBottom: Spacing[6] }} />
-          <Skeleton height={140} radius={Radius.lg} style={{ marginBottom: Spacing[8] }} />
-          <Skeleton width="50%" height={24} style={{ marginBottom: Spacing[4] }} />
-          <View style={{ flexDirection: 'row', gap: 16 }}>
-            <Skeleton width={160} height={160} radius={Radius.lg} />
-            <Skeleton width={160} height={160} radius={Radius.lg} />
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  ), [theme, router]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
       
       <FlatList
-        data={recentTransactions}
+        data={isLoading ? [] : recentTransactions}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }: { item: any }) => (
+        renderItem={({ item }: { item: TransactionWithCategory }) => (
           <TransactionItem
             merchant={item.merchantName || 'Unknown Merchant'}
             category={item.categoryName}
@@ -132,19 +115,29 @@ export default function HomeScreen() {
             onPress={() => router.push(`/(tabs)/transactions/${item.id}`)}
           />
         )}
-        ListHeaderComponent={renderHeader}
+        ListHeaderComponent={headerElement}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Text style={[styles.emptyText, { color: theme.outline }]}>
-              No transactions found for this month.
-            </Text>
-          </View>
+          isLoading ? (
+            <View>
+              <TransactionSkeleton />
+              <TransactionSkeleton />
+              <TransactionSkeleton />
+              <TransactionSkeleton />
+            </View>
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Text style={[styles.emptyText, { color: theme.outline }]}>
+                No transactions found for this month.
+              </Text>
+            </View>
+          )
         }
         ItemSeparatorComponent={() => (
           <View style={[styles.separator, { backgroundColor: theme.outlineVariant }]} />
         )}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false} // Explicitly disable to avoid native view recycling issues on Android
       />
     </View>
   );

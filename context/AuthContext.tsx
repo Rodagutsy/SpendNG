@@ -19,23 +19,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for initial session
+    // DEVELOPMENT BYPASS: Auto-login a dummy user to jump straight to UI work
+    setSession({ user: { id: 'dev-user' } } as any);
+    setUser({ id: 'dev-user' } as any);
+    setLoading(false);
+
+    // Original Supabase check (commented out for now)
+    /*
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
+    */
   }, []);
 
   const signOut = async () => {
