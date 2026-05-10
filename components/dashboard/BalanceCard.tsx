@@ -21,7 +21,7 @@ export function BalanceCard({ balance, onAddPress }: BalanceCardProps) {
         <Text style={styles.label}>Current Balance</Text>
         <Text style={styles.amount}>{balance}</Text>
       </View>
-      
+
       <TouchableOpacity style={styles.addButton} onPress={onAddPress}>
         <IconSymbol name="plus" size={24} color="#7B61FF" />
       </TouchableOpacity>

@@ -1,19 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
   ScrollView,
   StatusBar,
-  Pressable 
+  Pressable
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, Shadows, ZIndex } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { TransactionItem } from '@/components/ui/TransactionItem';
 import { TransactionSkeleton } from '@/components/ui/Skeleton';
 import { useHomeData, TransactionWithCategory } from '@/hooks/useHomeData';
@@ -21,20 +21,52 @@ import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 
+interface QuickActionProps {
+  icon: IconSymbolName;
+  onPress: () => void;
+  accessibilityLabel: string;
+}
+
+const QuickAction = ({ icon, onPress, accessibilityLabel }: QuickActionProps) => {
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+  const [pressed, setPressed] = useState(false);
+
+  return (
+    <Pressable
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={[
+        styles.actionCard,
+        {
+          backgroundColor: pressed ? theme.primaryContainer : theme.surfaceContainer,
+          borderColor: pressed ? theme.primary : 'transparent',
+          borderWidth: 1,
+        },
+        Shadows.sm
+      ]}
+    >
+      <IconSymbol name={icon} size={24} color={theme.onBackground} />
+    </Pressable>
+  );
+};
+
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const { 
-    thisMonthIncome, 
-    thisMonthSpending, 
+  const {
+    thisMonthIncome,
+    thisMonthSpending,
     incomeDelta,
     spendingDelta,
-    topSpendingCategory,
     quickInsights,
-    recentTransactions, 
-    isLoading 
+    recentTransactions,
+    isLoading
   } = useHomeData();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -78,9 +110,9 @@ export default function HomeScreen() {
   const KeyInsightCard = useMemo(() => {
     const insight = quickInsights[0] || { text: 'Analyzing your spending patterns...' };
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[styles.keyInsightCard, { backgroundColor: theme.primaryContainer }]}
-        onPress={() => router.push('/(tabs)/insights')}
+        onPress={() => router.push('/insights')}
       >
         <View style={styles.insightHeader}>
           <Text style={[styles.insightTitle, { color: theme.onPrimaryContainer }]}>Key Insight</Text>
@@ -93,6 +125,36 @@ export default function HomeScreen() {
     );
   }, [theme, quickInsights, router]);
 
+  const QuickActionsRow = useMemo(() => (
+    <View style={styles.quickActionsContainer}>
+      <View style={styles.sectionHeader}>
+        <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Quick Actions</Text>
+      </View>
+      <View style={styles.actionsRow}>
+        <QuickAction
+          icon="plus"
+          onPress={() => router.push('/manual-entry')}
+          accessibilityLabel="Add cash transaction button"
+        />
+        <QuickAction
+          icon="export"
+          onPress={() => router.push('/export')}
+          accessibilityLabel="Export data button"
+        />
+        <QuickAction
+          icon="magnifyingglass"
+          onPress={() => { }}
+          accessibilityLabel="Search transactions button"
+        />
+        <QuickAction
+          icon="report"
+          onPress={() => router.push('/insights')}
+          accessibilityLabel="Financial report button"
+        />
+      </View>
+    </View>
+  ), [theme, router]);
+
   const headerElement = useMemo(() => (
     <View style={styles.header}>
       <View style={styles.topBar}>
@@ -101,7 +163,7 @@ export default function HomeScreen() {
           <Text style={[styles.welcomeName, { color: theme.onBackground }]}>Jeremiah</Text>
         </View>
         <View>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.notificationBtn, { backgroundColor: theme.surface }]}
             onPress={() => setShowNotifications(!showNotifications)}
           >
@@ -127,42 +189,29 @@ export default function HomeScreen() {
           )}
         </View>
       </View>
-      
+
       {HeroSection}
 
       {KeyInsightCard}
 
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.onBackground }, Typography.styles.headlineSmallSb]}>Top Spending</Text>
-      </View>
-      <Card style={styles.categoryCard}>
-        <View style={styles.categoryContent}>
-          <View style={[styles.categoryCircle, { borderColor: topSpendingCategory.color }]}>
-            <Text style={[styles.categoryPercent, { color: theme.onBackground }]}>{topSpendingCategory.percentage}%</Text>
-          </View>
-          <View style={styles.categoryDetails}>
-            <Text style={[styles.categoryName, { color: theme.onBackground }]}>{topSpendingCategory.name}</Text>
-            <Text style={[styles.categoryAmount, { color: theme.onBackground }]}>{formatCurrency(topSpendingCategory.amount)}</Text>
-          </View>
-        </View>
-      </Card>
+      {QuickActionsRow}
 
       <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.onBackground }, Typography.styles.headlineSmallSb]}>Recent Transactions</Text>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/transactions')}>
+        <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Transactions</Text>
+        <TouchableOpacity onPress={() => router.push('/transactions')}>
           <Text style={[styles.seeAll, { color: theme.primary }]}>View All</Text>
         </TouchableOpacity>
       </View>
     </View>
-  ), [theme, router, HeroSection, KeyInsightCard, topSpendingCategory, showNotifications]);
+  ), [theme, router, HeroSection, KeyInsightCard, QuickActionsRow, showNotifications]);
 
   return (
     <Pressable style={{ flex: 1 }} onPress={() => setShowNotifications(false)}>
       <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
-        <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} />
-        
+        <StatusBar barStyle="dark-content" />
+
         <FlatList
-          data={isLoading ? [] : recentTransactions}
+          data={isLoading ? [] : recentTransactions.slice(0, 4)}
           keyExtractor={(item) => item.id}
           renderItem={({ item }: { item: TransactionWithCategory }) => (
             <TransactionItem
@@ -174,7 +223,7 @@ export default function HomeScreen() {
               amount={item.amount}
               type={item.transactionType}
               date={format(item.transactionDate, 'MMM dd')}
-              onPress={() => router.push(`/(tabs)/transactions/${item.id}`)}
+              onPress={() => router.push(`/transactions/${item.id}`)}
             />
           )}
           ListHeaderComponent={headerElement}
@@ -200,7 +249,7 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         />
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.fab, { backgroundColor: theme.primary }, Shadows.normal]}
           onPress={() => router.push('/manual-entry')}
         >
@@ -217,7 +266,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: Spacing[4],
-    paddingBottom: Spacing[24],
+    paddingBottom: 24,
   },
   header: {
     paddingTop: Spacing[4],
@@ -226,7 +275,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing[8],
+    marginBottom: 24,
     zIndex: ZIndex.overlay,
   },
   welcomeLabel: {
@@ -279,6 +328,7 @@ const styles = StyleSheet.create({
   },
   dropdownItem: {
     paddingVertical: Spacing[2],
+    borderBottomColor: '#F0F0F0',
     borderBottomWidth: 1,
   },
   dropdownText: {
@@ -293,7 +343,7 @@ const styles = StyleSheet.create({
   heroRow: {
     flexDirection: 'row',
     gap: 16,
-    marginBottom: Spacing[4],
+    marginBottom: 24,
   },
   statCard: {
     flex: 1,
@@ -304,7 +354,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing[2],
-    marginBottom: Spacing[2],
+    marginBottom: 16,
   },
   statLabel: {
     fontFamily: Typography.fonts.title,
@@ -312,7 +362,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   statValue: {
-    // headlineSmallSb
     marginBottom: 4,
   },
   trendContainer: {
@@ -334,19 +383,18 @@ const styles = StyleSheet.create({
   keyInsightCard: {
     padding: Spacing[5],
     borderRadius: Radius.lg,
-    marginTop: Spacing[2],
-    marginBottom: Spacing[6],
+    marginBottom: 24,
   },
   insightHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing[2],
+    marginBottom: 16,
   },
   insightTitle: {
     fontFamily: Typography.fonts.title,
-    fontSize: Typography.sizes.bodyM,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '500',
   },
   insightBody: {
     fontFamily: Typography.fonts.body,
@@ -357,48 +405,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing[4],
+    marginBottom: 16,
   },
   sectionTitle: {
-    // headlineSmallSb
+    fontFamily: Typography.fonts.title,
+    fontSize: 16,
+    fontWeight: '500',
   },
   seeAll: {
     fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.labelL,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '400',
   },
-  categoryCard: {
-    padding: Spacing[4],
-    marginBottom: Spacing[2],
+  quickActionsContainer: {
+    marginBottom: 24,
   },
-  categoryContent: {
+  actionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[4],
+    gap: 8,
+    justifyContent: 'space-between',
   },
-  categoryCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 6,
+  actionCard: {
+    width: 64,
+    height: 64,
+    borderRadius: Radius.md,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  categoryPercent: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  categoryDetails: {
-    flex: 1,
-  },
-  categoryName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  categoryAmount: {
-    fontSize: 14,
-    fontWeight: '500',
   },
   emptyContainer: {
     padding: Spacing[10],
@@ -411,7 +443,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    marginVertical: Spacing[2],
+    marginVertical: Spacing[1],
   },
   fab: {
     position: 'absolute',

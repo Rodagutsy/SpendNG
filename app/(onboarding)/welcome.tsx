@@ -1,13 +1,43 @@
-import { View, Text, Button } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Colors, Typography } from '@/constants/Tokens';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+
+  useEffect(() => {
+    // Optional: Auto-navigate after 2 seconds
+    const timer = setTimeout(() => {
+      router.push('/(onboarding)/value-prop');
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-      <Text style={{ fontSize: 24, fontWeight: 'bold', marginBottom: 10 }}>SpendNG</Text>
-      <Text style={{ textAlign: 'center', marginBottom: 40 }}>Your complete money record, built automatically.</Text>
-      <Button title="Get Started" onPress={() => router.push('/(onboarding)/value-prop')} />
-    </View>
+    <Pressable 
+      style={[styles.container, { backgroundColor: theme.primary }]} 
+      onPress={() => router.push('/(onboarding)/value-prop')}
+    >
+      <StatusBar barStyle="light-content" />
+      <Text style={[styles.appName, { color: theme.onPrimary }]}>SpendNG</Text>
+    </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appName: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 48,
+    fontWeight: '700',
+    letterSpacing: -1,
+  },
+});

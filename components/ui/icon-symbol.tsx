@@ -1,7 +1,6 @@
 // Fallback for using MaterialIcons on Android and web.
-
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { SymbolWeight, SymbolViewProps } from 'expo-symbols';
+import { SymbolWeight } from 'expo-symbols';
 import { ComponentProps } from 'react';
 import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
 
@@ -14,24 +13,27 @@ const MAPPING: Record<string, ComponentProps<typeof MaterialIcons>['name']> = {
   'ellipsis.circle': 'more-horiz',
   'ellipsis.circle.fill': 'more-vert',
   'gearshape.fill': 'settings',
-  'person.fill': 'person',
-  'lock.fill': 'lock',
+  'square.and.pencil': 'edit',
+  'chart.pie': 'pie-chart',
+  'arrow.up.doc': 'file-upload',
+  'person.fill': 'person-outline',
+  'lock.fill': 'lock-outline',
   'link': 'link',
-  'plus.circle.fill': 'add-circle',
+  'plus.circle.fill': 'add-circle-outline',
   'magnifyingglass': 'search',
   'tag.fill': 'local-offer',
-  'questionmark.circle.fill': 'help',
-  'bubble.left.fill': 'chat-bubble',
-  'info.circle.fill': 'info',
-  'trash.fill': 'delete',
+  'questionmark.circle.fill': 'help-outline',
+  'bubble.left.fill': 'chat-bubble-outline',
+  'info.circle.fill': 'info-outline',
+  'trash.fill': 'delete-outline',
   'crown.fill': 'stars',
-  'bell': 'notifications',
+  'bell': 'notifications-none',
   'plus': 'add',
   'chevron.right': 'chevron-right',
   'arrow.up.right': 'trending-up',
   'arrow.down.right': 'trending-down',
   'arrow.up.right.circle.fill': 'arrow-circle-up',
-  'lightbulb.fill': 'lightbulb',
+  'lightbulb.fill': 'lightbulb-outline',
   'arrow.down.doc.fill': 'file-download',
   'arrow.up.doc.fill': 'file-upload',
   'utensils': 'restaurant',
@@ -39,22 +41,25 @@ const MAPPING: Record<string, ComponentProps<typeof MaterialIcons>['name']> = {
   'zap': 'bolt',
   'wifi': 'wifi',
   'wallet': 'account-balance-wallet',
-  'briefcase': 'work',
+  'briefcase': 'work-outline',
   'shopping-bag': 'shopping-bag',
-  'clapperboard': 'movie',
+  'clapperboard': 'movie-filter',
   'stethoscope': 'medical-services',
   'graduation-cap': 'school',
   'home': 'home',
-  'help-circle': 'help',
+  'help-circle': 'help-outline',
   'a.circle.fill': 'font-download',
   'applelogo': 'apple',
+  'export': 'ios-share',
+  'report': 'assessment',
+  'eye': 'visibility',
+  'eye.slash': 'visibility-off',
 };
 
 export type IconSymbolName = keyof typeof MAPPING;
 
 /**
  * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
- * This ensures a consistent look across platforms, and optimal resource usage.
  */
 export function IconSymbol({
   name,

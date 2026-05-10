@@ -97,8 +97,8 @@ export const Colors = {
 
 export const Typography = {
   fonts: {
-    display: 'Red Hat Display',
-    title: 'Red Hat Text',
+    display: 'Poppins-Bold',
+    title: 'Poppins-SemiBold',
     body: 'Poppins',
   },
   sizes: {
@@ -123,39 +123,33 @@ export const Typography = {
   },
   styles: {
     displaySmallB: {
-      fontFamily: 'Red Hat Display',
+      fontFamily: 'Poppins-Bold',
       fontSize: 40,
-      fontWeight: '700' as const,
       lineHeight: 52,
     },
     headlineSmallSb: {
-      fontFamily: 'Red Hat Display',
+      fontFamily: 'Poppins-SemiBold',
       fontSize: 24,
-      fontWeight: '600' as const,
       lineHeight: 32,
     },
     bodyMediumR: {
       fontFamily: 'Poppins',
       fontSize: 16,
-      fontWeight: '400' as const,
       lineHeight: 22,
     },
     bodyMediumM: {
-      fontFamily: 'Poppins',
+      fontFamily: 'Poppins-Medium',
       fontSize: 16,
-      fontWeight: '500' as const,
       lineHeight: 22,
     },
     labelLargeM: {
-      fontFamily: 'Poppins',
+      fontFamily: 'Poppins-Medium',
       fontSize: 14,
-      fontWeight: '500' as const,
       lineHeight: 20,
     },
     buttonMedium: {
-      fontFamily: 'Poppins',
+      fontFamily: 'Poppins-Medium',
       fontSize: 14,
-      fontWeight: '500' as const,
       lineHeight: 14,
     }
   }
