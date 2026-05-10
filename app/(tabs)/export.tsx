@@ -9,18 +9,16 @@ import {
   AppState, 
   AppStateStatus 
 } from 'react-native';
-import { Q } from '@nozbe/watermelondb';
-import { database } from '@/model/database';
-import { Transaction } from '@/model/models';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
+import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
-import { ExportService, ExportFormat } from '@/lib/export-service';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { startOfMonth, endOfMonth, subDays, format } from 'date-fns';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+
+// Mock Export Format
+type ExportFormat = 'PDF' | 'CSV';
 
 export default function ExportScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -31,69 +29,23 @@ export default function ExportScreen() {
   const [formatType, setFormatType] = useState<ExportFormat>('PDF');
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-
-  // Interruption handling
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      if (isGenerating) {
-        if (nextAppState === 'background') {
-          console.log('Export paused: app backgrounded');
-          ExportService.setPaused(true);
-        } else if (nextAppState === 'active') {
-          console.log('Export resumed: app foregrounded');
-          ExportService.setPaused(false);
-        }
-      }
-    });
-    return () => {
-      subscription.remove();
-      ExportService.setPaused(false); // Clean up
-    };
-  }, [isGenerating]);
 
   const handleExport = async () => {
-    try {
-      setIsGenerating(true);
-      setProgress(0);
+    setIsGenerating(true);
+    setProgress(0);
 
-      // 1. Fetch transactions
-      const transactions = await database
-        .get<Transaction>('transactions')
-        .query(
-          Q.where('transaction_date', Q.between(startDate.getTime(), endDate.getTime())),
-          Q.sortBy('transaction_date', Q.desc)
-        )
-        .fetch();
-
-      if (transactions.length === 0) {
-        Alert.alert('Empty Range', 'No transactions found for this period.');
-        setIsGenerating(false);
-        return;
-      }
-
-      // 2. Fetch user name (placeholder for now)
-      const userName = 'SpendNG User';
-
-      // 3. Generate
-      const filePath = await ExportService.exportData({
-        format: formatType,
-        startDate,
-        endDate,
-        transactions,
-        userName
-      }, (p) => setProgress(p));
-
-      // 4. Share
-      await ExportService.shareFile(filePath);
-
-    } catch (error: any) {
-      Alert.alert('Export Failed', error.message);
-    } finally {
-      setIsGenerating(false);
-      setProgress(0);
-    }
+    // Simulate generation progress
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsGenerating(false);
+          Alert.alert('Export Successful', `Your ${formatType} report has been generated.`);
+          return 100;
+        }
+        return prev + 10;
+      });
+    }, 300);
   };
 
   const QuickRangeButton = ({ label, getDates }: { label: string, getDates: () => [Date, Date] }) => (
@@ -122,27 +74,21 @@ export default function ExportScreen() {
         <Text style={[styles.sectionLabel, { color: theme.outline }]}>DATE RANGE</Text>
         
         <View style={styles.dateRow}>
-          <TouchableOpacity 
-            style={styles.datePicker} 
-            onPress={() => setShowStartPicker(true)}
-          >
+          <View style={styles.datePicker}>
             <Text style={[styles.dateLabel, { color: theme.outline }]}>From</Text>
             <Text style={[styles.dateValue, { color: theme.onBackground }]}>
               {format(startDate, 'MMM dd, yyyy')}
             </Text>
-          </TouchableOpacity>
+          </View>
 
           <View style={styles.dateSeparator} />
 
-          <TouchableOpacity 
-            style={styles.datePicker} 
-            onPress={() => setShowEndPicker(true)}
-          >
+          <View style={styles.datePicker}>
             <Text style={[styles.dateLabel, { color: theme.outline }]}>To</Text>
             <Text style={[styles.dateValue, { color: theme.onBackground }]}>
               {format(endDate, 'MMM dd, yyyy')}
             </Text>
-          </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.quickRanges}>
@@ -204,30 +150,6 @@ export default function ExportScreen() {
           />
         )}
       </View>
-
-      {showStartPicker && (
-        <DateTimePicker
-          value={startDate}
-          mode="date"
-          display="default"
-          onChange={(event, date) => {
-            setShowStartPicker(false);
-            if (date) setStartDate(date);
-          }}
-        />
-      )}
-
-      {showEndPicker && (
-        <DateTimePicker
-          value={endDate}
-          mode="date"
-          display="default"
-          onChange={(event, date) => {
-            setShowEndPicker(false);
-            if (date) setEndDate(date);
-          }}
-        />
-      )}
     </ScrollView>
   );
 }

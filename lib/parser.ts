@@ -1,6 +1,3 @@
-import { database } from '@/model/database';
-import { Q } from '@nozbe/watermelondb';
-
 export interface ParsedTransaction {
   amount: number;
   currency: string;

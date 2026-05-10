@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -11,23 +12,13 @@ export const unstable_settings = {
 };
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { DatabaseProvider } from '@nozbe/watermelondb/DatabaseProvider';
-import { database } from '@/model/database';
-
-import { seedDatabase } from '@/lib/setup';
-
 function RootLayoutNav() {
-  const colorScheme = useColorScheme();
   const { session, loading } = useAuth();
-
-  useEffect(() => {
-    seedDatabase().catch(err => console.error('Seeding failed', err));
-  }, []);
 
   if (loading) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DefaultTheme}>
       <Stack screenOptions={{ headerShown: false }}>
         {!session ? (
           <Stack.Screen name="(onboarding)" />
@@ -57,17 +48,17 @@ function RootLayoutNav() {
           options={{ title: 'Component Library' }} 
         />
       </Stack>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
     </ThemeProvider>
   );
 }
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <DatabaseProvider database={database}>
+    <SafeAreaProvider>
+      <AuthProvider>
         <RootLayoutNav />
-      </DatabaseProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
