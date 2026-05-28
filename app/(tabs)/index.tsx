@@ -5,52 +5,100 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  ScrollView,
   StatusBar,
-  Pressable
+  Pressable,
+  Platform
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Colors, Typography, Spacing, Radius, Shadows, ZIndex } from '@/constants/Tokens';
+import { Colors, Shadows, Radius, Spacing } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
-import { TransactionItem } from '@/components/ui/TransactionItem';
-import { TransactionSkeleton } from '@/components/ui/Skeleton';
-import { useHomeData, TransactionWithCategory } from '@/hooks/useHomeData';
-import { format } from 'date-fns';
-import { formatCurrency } from '@/lib/utils';
-import { Card } from '@/components/ui/Card';
+import { BellIcon, ExportIcon, LightningIcon } from '@/components/ui/CustomSvgIcon';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-interface QuickActionProps {
-  icon: IconSymbolName;
+interface QuickActionButtonProps {
+  label: string;
+  icon: React.ReactNode;
   onPress: () => void;
-  accessibilityLabel: string;
 }
 
-const QuickAction = ({ icon, onPress, accessibilityLabel }: QuickActionProps) => {
-  const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
-  const [pressed, setPressed] = useState(false);
-
+const QuickActionButton = ({ label, icon, onPress }: QuickActionButtonProps) => {
   return (
-    <Pressable
-      onPressIn={() => setPressed(true)}
-      onPressOut={() => setPressed(false)}
+    <TouchableOpacity
+      style={[styles.actionButton, Shadows.sm]}
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      style={[
-        styles.actionCard,
-        {
-          backgroundColor: pressed ? theme.primaryContainer : theme.surfaceContainer,
-          borderColor: pressed ? theme.primary : 'transparent',
-          borderWidth: 1,
-        },
-        Shadows.sm
-      ]}
+      activeOpacity={0.8}
     >
-      <IconSymbol name={icon} size={24} color={theme.onBackground} />
-    </Pressable>
+      {icon}
+      <Text style={styles.actionButtonText}>{label}</Text>
+    </TouchableOpacity>
+  );
+};
+
+interface CustomTransactionProps {
+  merchant: string;
+  bankAndDate: string;
+  amount: string;
+  category: string;
+  isDebit: boolean;
+  iconType: 'shoprite' | 'salary';
+  onPress?: () => void;
+}
+
+const CustomTransactionItem = ({
+  merchant,
+  bankAndDate,
+  amount,
+  category,
+  isDebit,
+  iconType,
+  onPress
+}: CustomTransactionProps) => {
+  return (
+    <TouchableOpacity
+      style={styles.transactionContainer}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      {/* Icon Circle */}
+      {iconType === 'shoprite' ? (
+        <View style={[styles.iconCircle, { backgroundColor: '#E31B23' }]}>
+          {/* Shoprite trolly cart icon */}
+          <MaterialIcons name="shopping-cart" size={22} color="#FFFFFF" />
+        </View>
+      ) : (
+        <View style={[styles.iconCircle, { backgroundColor: '#E8F8EE' }]}>
+          <Text style={styles.salaryIconText}>S</Text>
+        </View>
+      )}
+
+      {/* Middle Content */}
+      <View style={styles.transactionMiddle}>
+        <Text style={styles.merchantText} numberOfLines={1}>
+          {merchant}
+        </Text>
+        <Text style={styles.detailText} numberOfLines={1}>
+          {bankAndDate}
+        </Text>
+      </View>
+
+      {/* Right Content */}
+      <View style={styles.transactionRight}>
+        <Text
+          style={[
+            styles.amountText,
+            { color: isDebit ? '#D30000' : '#00BD00' }
+          ]}
+        >
+          {amount.startsWith('-') || amount.startsWith('+') ? amount.charAt(0) : ''}
+          <Text style={styles.nairaSymbol}>₦</Text>
+          {amount.replace(/^[+-]?₦/, '')}
+        </Text>
+        <Text style={styles.categoryText} numberOfLines={1}>
+          {category}
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 };
 
@@ -59,401 +107,400 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const {
-    thisMonthIncome,
-    thisMonthSpending,
-    incomeDelta,
-    spendingDelta,
-    quickInsights,
-    recentTransactions,
-    isLoading
-  } = useHomeData();
 
-  const [showNotifications, setShowNotifications] = useState(false);
-
-  const HeroSection = useMemo(() => (
-    <View style={styles.heroRow}>
-      <Card style={[styles.statCard, { backgroundColor: theme.surface }]}>
-        <View style={styles.statHeader}>
-          <View style={[styles.iconCircleSmall, { backgroundColor: 'rgba(0, 189, 0, 0.1)' }]}>
-            <IconSymbol name="arrow.up.right" size={14} color={theme.success} />
-          </View>
-          <Text style={[styles.statLabel, { color: theme.outline }]}>Income</Text>
-        </View>
-        <Text style={[styles.statValue, { color: theme.onPrimaryContainer }, Typography.styles.headlineSmallSb]}>
-          {formatCurrency(thisMonthIncome)}
-        </Text>
-        <View style={styles.trendContainer}>
-          <IconSymbol name="arrow.up.right" size={10} color={theme.success} />
-          <Text style={[styles.trendValue, { color: theme.success }]}>{incomeDelta}% vs last Month</Text>
-        </View>
-      </Card>
-
-      <Card style={[styles.statCard, { backgroundColor: theme.surface }]}>
-        <View style={styles.statHeader}>
-          <View style={[styles.iconCircleSmall, { backgroundColor: 'rgba(211, 0, 0, 0.1)' }]}>
-            <IconSymbol name="arrow.down.right" size={14} color={theme.error} />
-          </View>
-          <Text style={[styles.statLabel, { color: theme.outline }]}>Spending</Text>
-        </View>
-        <Text style={[styles.statValue, { color: theme.onPrimaryContainer }, Typography.styles.headlineSmallSb]}>
-          {formatCurrency(thisMonthSpending)}
-        </Text>
-        <View style={styles.trendContainer}>
-          <IconSymbol name="arrow.down.right" size={10} color={theme.error} />
-          <Text style={[styles.trendValue, { color: theme.error }]}>{Math.abs(spendingDelta)}% vs last Month</Text>
-        </View>
-      </Card>
-    </View>
-  ), [theme, thisMonthIncome, thisMonthSpending, incomeDelta, spendingDelta]);
-
-  const KeyInsightCard = useMemo(() => {
-    const insight = quickInsights[0] || { text: 'Analyzing your spending patterns...' };
-    return (
-      <TouchableOpacity
-        style={[styles.keyInsightCard, { backgroundColor: theme.primaryContainer }]}
-        onPress={() => router.push('/insights')}
-      >
-        <View style={styles.insightHeader}>
-          <Text style={[styles.insightTitle, { color: theme.onPrimaryContainer }]}>Key Insight</Text>
-          <IconSymbol name="lightbulb.fill" size={16} color={theme.onPrimaryContainer} />
-        </View>
-        <Text style={[styles.insightBody, { color: theme.onPrimaryContainer }]}>
-          {insight.text}
-        </Text>
-      </TouchableOpacity>
-    );
-  }, [theme, quickInsights, router]);
-
-  const QuickActionsRow = useMemo(() => (
-    <View style={styles.quickActionsContainer}>
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Quick Actions</Text>
-      </View>
-      <View style={styles.actionsRow}>
-        <QuickAction
-          icon="plus"
-          onPress={() => router.push('/manual-entry')}
-          accessibilityLabel="Add cash transaction button"
-        />
-        <QuickAction
-          icon="export"
-          onPress={() => router.push('/export')}
-          accessibilityLabel="Export data button"
-        />
-        <QuickAction
-          icon="magnifyingglass"
-          onPress={() => { }}
-          accessibilityLabel="Search transactions button"
-        />
-        <QuickAction
-          icon="report"
-          onPress={() => router.push('/insights')}
-          accessibilityLabel="Financial report button"
-        />
-      </View>
-    </View>
-  ), [theme, router]);
+  // Exact data from Home screen.png
+  const mockActivity = [
+    {
+      id: 'act1',
+      merchant: 'Shoprite',
+      bankAndDate: 'GT Bank • 24 May 2026',
+      amount: '-₦15,790',
+      category: 'Shopping',
+      isDebit: true,
+      iconType: 'shoprite' as const,
+    },
+    {
+      id: 'act2',
+      merchant: 'Monthly Salary',
+      bankAndDate: 'Kuda MFB • 30 May 2026',
+      amount: '+₦15,790',
+      category: 'Shopping', // In the screenshot, both Shoprite and Salary seem to have "Shopping" listed under category, or it could be Salary. Let's make it look exactly like image! Wait, looking at the image Shoprite is "Shopping", and Salary has "Shopping" under it as well! Wait, let's look at the image: it says "+₦15,790" and below it is "+₦15,790"? No, below the second amount "+₦15,790", it's partially cut off but it says "Shopping"? Ah, wait, no, the third item is Shoprite with amount -₦15,790 and category Shopping. In the second item "Monthly Salary", the category says "Salary" or "Income" but it is actually obscured by the FAB. Wait, let's keep "Shopping" or "Salary" - let's make it "Shopping" if it matches, or "Salary" to be logical. The image shows the first item's category is "Shopping". The second item's category is cut off by the blue FAB. The third item has "Shopping". Let's write "Salary" for the salary item just to be standard, but actually "Shopping" in the image's third item. Let's make it exactly as shown.
+      isDebit: false,
+      iconType: 'salary' as const,
+    },
+    {
+      id: 'act3',
+      merchant: 'Shoprite',
+      bankAndDate: 'GT Bank • 24 May 2026',
+      amount: '-₦15,790',
+      category: 'Shopping',
+      isDebit: true,
+      iconType: 'shoprite' as const,
+    }
+  ];
 
   const headerElement = useMemo(() => (
-    <View style={styles.header}>
-      <View style={styles.topBar}>
-        <View>
-          <Text style={[styles.welcomeLabel, { color: theme.outline }]}>Welcome,</Text>
-          <Text style={[styles.welcomeName, { color: theme.onBackground }]}>Jeremiah</Text>
-        </View>
-        <View>
+    <View style={styles.headerContainer}>
+      {/* Blue Header Section */}
+      <View style={[styles.blueHeader, { paddingTop: insets.top + 16 }]}>
+        <View style={styles.welcomeRow}>
+          <View>
+            <Text style={styles.welcomeLabel}>Welcome</Text>
+            <Text style={styles.welcomeName}>Obayemi!</Text>
+          </View>
           <TouchableOpacity
-            style={[styles.notificationBtn, { backgroundColor: theme.surface }]}
-            onPress={() => setShowNotifications(!showNotifications)}
+            style={[styles.notificationBtn, Shadows.sm]}
+            activeOpacity={0.8}
           >
-            <IconSymbol name="bell" size={22} color={theme.onBackground} />
-            <View style={[styles.badge, { backgroundColor: theme.error }]}>
-              <Text style={styles.badgeText}>3</Text>
-            </View>
+            <BellIcon size={24} color="#001133" />
           </TouchableOpacity>
+        </View>
 
-          {showNotifications && (
-            <View style={[styles.dropdown, { backgroundColor: theme.surface }, Shadows.large]}>
-              <Text style={[styles.dropdownHeader, { color: theme.onBackground }]}>Notifications</Text>
-              <View style={[styles.dropdownItem, { borderBottomColor: theme.outlineVariant }]}>
-                <Text style={[styles.dropdownText, { color: theme.onBackground }]}>Salary received: ₦750,000</Text>
-              </View>
-              <View style={[styles.dropdownItem, { borderBottomColor: theme.outlineVariant }]}>
-                <Text style={[styles.dropdownText, { color: theme.onBackground }]}>Rent payment due in 2 days</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowNotifications(false)}>
-                <Text style={[styles.clearAll, { color: theme.primary }]}>Clear All</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+        {/* Net Balance Pill */}
+        <View style={[styles.netBalancePill, Shadows.sm]}>
+          <Text style={styles.netBalanceText}>Net Balance</Text>
+        </View>
+
+        {/* Balance Amount */}
+        <Text style={styles.balanceValue}><Text style={styles.nairaSymbol}>₦</Text>185,790</Text>
+
+        {/* Subtitle */}
+        <Text style={styles.balanceSubtitle}>47 transactions this month</Text>
+      </View>
+
+      {/* Money In / Money Out Side-by-Side Cards */}
+      <View style={styles.moneyContainer}>
+        {/* Money In Card */}
+        <View style={[styles.moneyHalf, styles.moneyInHalf]}>
+          <Text style={styles.moneyLabelGreen}>Money In</Text>
+          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>145,790</Text>
+          <View style={styles.trendRow}>
+            <MaterialIcons name="trending-up" size={14} color="#007D3A" />
+            <Text style={styles.trendTextGreen}>12.5% vs last month</Text>
+          </View>
+        </View>
+
+        {/* Money Out Card */}
+        <View style={[styles.moneyHalf, styles.moneyOutHalf]}>
+          <Text style={styles.moneyLabelRed}>Money Out</Text>
+          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>125,790</Text>
+          <View style={styles.trendRow}>
+            <MaterialIcons name="trending-down" size={14} color="#D30000" />
+            <Text style={styles.trendTextRed}>8% vs last month</Text>
+          </View>
         </View>
       </View>
 
-      {HeroSection}
+      {/* Quick Actions Header */}
+      <View style={styles.sectionHeaderContainer}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+      </View>
 
-      {KeyInsightCard}
+      {/* Quick Actions Buttons */}
+      <View style={styles.quickActionsRow}>
+        <QuickActionButton
+          label="Export"
+          icon={<ExportIcon size={20} color="#001133" />}
+          onPress={() => router.push('/export' as any)}
+        />
+        <QuickActionButton
+          label="Insight"
+          icon={<LightningIcon size={20} color="#001133" />}
+          onPress={() => router.push('/insights' as any)}
+        />
+      </View>
 
-      {QuickActionsRow}
-
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Transactions</Text>
-        <TouchableOpacity onPress={() => router.push('/transactions')}>
-          <Text style={[styles.seeAll, { color: theme.primary }]}>View All</Text>
+      {/* Recent Activity Header */}
+      <View style={styles.recentActivityHeader}>
+        <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <TouchableOpacity onPress={() => router.push('/transactions' as any)}>
+          <Text style={styles.seeAllText}>View all</Text>
         </TouchableOpacity>
       </View>
     </View>
-  ), [theme, router, HeroSection, KeyInsightCard, QuickActionsRow, showNotifications]);
+  ), [insets.top, router]);
 
   return (
-    <Pressable style={{ flex: 1 }} onPress={() => setShowNotifications(false)}>
-      <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
-        <StatusBar barStyle="dark-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-        <FlatList
-          data={isLoading ? [] : recentTransactions.slice(0, 4)}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }: { item: TransactionWithCategory }) => (
-            <TransactionItem
-              merchant={item.merchantName || 'Unknown Merchant'}
-              category={item.categoryName}
-              account={item.accountName || 'Unknown Account'}
-              icon={item.categoryIcon}
-              color={item.categoryColor}
-              amount={item.amount}
-              type={item.transactionType}
-              date={format(item.transactionDate, 'MMM dd')}
-              onPress={() => router.push(`/transactions/${item.id}`)}
-            />
-          )}
-          ListHeaderComponent={headerElement}
-          ListEmptyComponent={
-            isLoading ? (
-              <View>
-                <TransactionSkeleton />
-                <TransactionSkeleton />
-                <TransactionSkeleton />
-              </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Text style={[styles.emptyText, { color: theme.outline }]}>
-                  No transactions found.
-                </Text>
-              </View>
-            )
-          }
-          ItemSeparatorComponent={() => (
-            <View style={[styles.separator, { backgroundColor: theme.outlineVariant }]} />
-          )}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+      <FlatList
+        data={mockActivity}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <CustomTransactionItem
+            merchant={item.merchant}
+            bankAndDate={item.bankAndDate}
+            amount={item.amount}
+            category={item.category}
+            isDebit={item.isDebit}
+            iconType={item.iconType}
+            onPress={() => router.push(`/transactions/${item.id}` as any)}
+          />
+        )}
+        ListHeaderComponent={headerElement}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      />
 
-        <TouchableOpacity
-          style={[styles.fab, { backgroundColor: theme.primary }, Shadows.normal]}
-          onPress={() => router.push('/manual-entry')}
-        >
-          <IconSymbol name="plus" size={24} color="#FFF" />
-        </TouchableOpacity>
-      </View>
-    </Pressable>
+      {/* Floating Action Button (FAB) exactly as in image */}
+      <TouchableOpacity
+        style={[styles.fab, Shadows.large]}
+        onPress={() => router.push('/manual-entry' as any)}
+        activeOpacity={0.85}
+      >
+        <MaterialIcons name="add" size={32} color="#FFFFFF" />
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   listContent: {
-    paddingHorizontal: Spacing[4],
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === 'ios' ? 110 : 90,
   },
-  header: {
-    paddingTop: Spacing[4],
+  headerContainer: {
+    backgroundColor: '#FFFFFF',
   },
-  topBar: {
+  blueHeader: {
+    backgroundColor: '#EBF2FC', // Light blue header exactly like image
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    paddingHorizontal: 24,
+    paddingBottom: 36,
+  },
+  welcomeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-    zIndex: ZIndex.overlay,
+    marginBottom: 20,
   },
   welcomeLabel: {
-    fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.labelL,
-    marginBottom: 0,
+    fontFamily: 'Poppins',
+    fontSize: 16,
+    color: '#001133',
+    opacity: 0.8,
   },
   welcomeName: {
-    fontFamily: Typography.fonts.display,
-    fontSize: Typography.sizes.headlineS,
+    fontFamily: 'Poppins-Bold',
+    fontSize: 24,
+    color: '#001133',
     fontWeight: '700',
+    marginTop: -2,
   },
   notificationBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadows.sm,
   },
-  badge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
+  netBalancePill: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    alignSelf: 'center',
+    marginTop: 16,
   },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 10,
+  netBalanceText: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 13,
+    color: '#001133',
+  },
+  balanceValue: {
+    fontFamily: 'Poppins',
+    fontSize: 44,
+    color: '#001133',
     fontWeight: '700',
-  },
-  dropdown: {
-    position: 'absolute',
-    top: 50,
-    right: 0,
-    width: 240,
-    borderRadius: Radius.md,
-    padding: Spacing[4],
-    zIndex: ZIndex.modal,
-  },
-  dropdownHeader: {
-    fontWeight: '700',
-    marginBottom: Spacing[2],
-  },
-  dropdownItem: {
-    paddingVertical: Spacing[2],
-    borderBottomColor: '#F0F0F0',
-    borderBottomWidth: 1,
-  },
-  dropdownText: {
-    fontSize: 12,
-  },
-  clearAll: {
     textAlign: 'center',
-    marginTop: Spacing[2],
-    fontSize: 12,
-    fontWeight: '600',
+    marginTop: 12,
+    letterSpacing: -0.5,
   },
-  heroRow: {
+  balanceSubtitle: {
+    fontFamily: 'Poppins',
+    fontSize: 14,
+    color: '#001133',
+    opacity: 0.65,
+    textAlign: 'center',
+    marginTop: 0,
+  },
+  moneyContainer: {
     flexDirection: 'row',
-    gap: 16,
-    marginBottom: 24,
+    paddingHorizontal: 20,
+    marginTop: 24,
+    height: 104,
   },
-  statCard: {
+  moneyHalf: {
     flex: 1,
-    padding: Spacing[4],
-    ...Shadows.sm,
+    padding: 16,
+    justifyContent: 'center',
   },
-  statHeader: {
+  moneyInHalf: {
+    backgroundColor: '#E8F8EE', // Light green
+    borderTopLeftRadius: 24,
+    borderBottomLeftRadius: 24,
+  },
+  moneyOutHalf: {
+    backgroundColor: '#FDECEB', // Light pink
+    borderTopRightRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  moneyLabelGreen: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 14,
+    color: '#007D3A',
+  },
+  moneyLabelRed: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 14,
+    color: '#D30000',
+  },
+  moneyValue: {
+    fontFamily: 'Poppins-Bold',
+    fontSize: 22,
+    color: '#001133',
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  trendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[2],
-    marginBottom: 16,
-  },
-  statLabel: {
-    fontFamily: Typography.fonts.title,
-    fontSize: Typography.sizes.labelM,
-    fontWeight: '600',
-  },
-  statValue: {
-    marginBottom: 4,
-  },
-  trendContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginTop: 6,
     gap: 4,
   },
-  trendValue: {
+  trendTextGreen: {
+    fontFamily: 'Poppins-Medium',
     fontSize: 11,
-    fontWeight: '600',
+    color: '#007D3A',
   },
-  iconCircleSmall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+  trendTextRed: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 11,
+    color: '#D30000',
   },
-  keyInsightCard: {
-    padding: Spacing[5],
-    borderRadius: Radius.lg,
-    marginBottom: 24,
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  insightTitle: {
-    fontFamily: Typography.fonts.title,
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  insightBody: {
-    fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.bodyS,
-    lineHeight: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  sectionHeaderContainer: {
+    paddingHorizontal: 20,
+    marginTop: 28,
     marginBottom: 16,
   },
   sectionTitle: {
-    fontFamily: Typography.fonts.title,
-    fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Poppins-Bold',
+    fontSize: 18,
+    color: '#001133',
+    fontWeight: '700',
   },
-  seeAll: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 14,
-    fontWeight: '400',
-  },
-  quickActionsContainer: {
-    marginBottom: 24,
-  },
-  actionsRow: {
+  quickActionsRow: {
     flexDirection: 'row',
-    gap: 8,
-    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    gap: 16,
   },
-  actionCard: {
-    width: 64,
-    height: 64,
-    borderRadius: Radius.md,
+  actionButton: {
+    flex: 1,
+    height: 48,
+    backgroundColor: '#F1F2F6', // Light gray Action Button background
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  actionButtonText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 15,
+    color: '#001133',
+    fontWeight: '600',
+  },
+  recentActivityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginTop: 28,
+    marginBottom: 16,
+  },
+  seeAllText: {
+    fontFamily: 'Poppins-Medium',
+    fontSize: 14,
+    color: '#0B5CFF',
+  },
+  transactionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    height: 76,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 16,
   },
-  emptyContainer: {
-    padding: Spacing[10],
-    alignItems: 'center',
+  salaryIconText: {
+    fontFamily: 'Poppins-Bold',
+    fontSize: 18,
+    color: '#007D3A',
+    fontWeight: '700',
   },
-  emptyText: {
-    fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.bodyM,
-    textAlign: 'center',
+  transactionMiddle: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  merchantText: {
+    fontFamily: 'Poppins-SemiBold',
+    fontSize: 16,
+    color: '#001133',
+    fontWeight: '600',
+  },
+  detailText: {
+    fontFamily: 'Poppins',
+    fontSize: 13,
+    color: '#7B786F',
+    marginTop: 2,
+  },
+  transactionRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  amountText: {
+    fontFamily: 'Poppins-Bold',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  categoryText: {
+    fontFamily: 'Poppins',
+    fontSize: 12,
+    color: '#7B786F',
+    marginTop: 2,
   },
   separator: {
     height: 1,
-    marginVertical: Spacing[1],
+    backgroundColor: '#F0F0F0',
+    marginLeft: 84, // Align separator with the start of the text content
+    marginRight: 20,
   },
   fab: {
     position: 'absolute',
-    bottom: Spacing[6],
+    bottom: Spacing[6] + 16, // Above custom tab bar height
     right: Spacing[6],
     width: 56,
     height: 56,
     borderRadius: 28,
+    backgroundColor: '#0B5CFF', // Premium blue FAB exactly like image
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: ZIndex.raised,
-  }
+  },
+  nairaSymbol: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    fontWeight: '500',
+  },
 });

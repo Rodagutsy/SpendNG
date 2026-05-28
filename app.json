@@ -20,7 +20,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.rodagutsy.spendngapp"
+      "package": "com.rodagutsy.spendngapp",
+      "newArchEnabled": true
     },
     "web": {
       "output": "static",
