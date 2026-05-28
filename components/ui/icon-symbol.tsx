@@ -54,6 +54,13 @@ const MAPPING: Record<string, ComponentProps<typeof MaterialIcons>['name']> = {
   'report': 'assessment',
   'eye': 'visibility',
   'eye.slash': 'visibility-off',
+  'line.3.horizontal.decrease': 'filter-list',
+  'chart-up': 'show-chart',
+  'arrow-up-right': 'trending-up',
+  'arrow-down-left': 'call-received',
+  'checkmark': 'check',
+  'calendar': 'calendar-today',
+  'money': 'attach-money',
 };
 
 export type IconSymbolName = keyof typeof MAPPING;

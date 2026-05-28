@@ -4,19 +4,23 @@ import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { 
+import {
   useFonts,
   Poppins_400Regular,
   Poppins_500Medium,
   Poppins_600SemiBold,
-  Poppins_700Bold 
+  Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { initDatabase } from '@/lib/db/database';
+import { seedDatabase } from '@/lib/db/seed';
+import { useUIStore } from '@/lib/stores/uiStore';
+import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
 
-// Keep splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
@@ -31,15 +35,32 @@ function RootLayoutNav() {
     'Poppins-SemiBold': Poppins_600SemiBold,
     'Poppins-Bold': Poppins_700Bold,
   });
+  const dbInitialized = useUIStore((s) => s.dbInitialized);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    async function setup() {
+      try {
+        await initDatabase();
+        await seedDatabase();
+        useUIStore.getState().setDbInitialized(true);
+        useCategoryStore.getState().fetchCategories();
+        useTransactionStore.getState().fetchTransactions();
+      } catch (error) {
+        console.error('Database init error:', error);
+        useUIStore.getState().setDbInitialized(true);
+      }
+    }
+    setup();
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && !authLoading && dbInitialized) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, authLoading, dbInitialized]);
 
   if (!fontsLoaded && !fontError) return null;
-  if (authLoading) return null;
+  if (authLoading || !dbInitialized) return null;
 
   return (
     <ThemeProvider value={DefaultTheme}>
@@ -49,23 +70,22 @@ function RootLayoutNav() {
         ) : (
           <Stack.Screen name="(tabs)" />
         )}
-        
-        {/* Modal Routes */}
-        <Stack.Screen 
-          name="manual-entry" 
-          options={{ presentation: 'modal', title: 'Add Transaction' }} 
+
+        <Stack.Screen
+          name="manual-entry"
+          options={{ presentation: 'modal', title: 'Add Transaction' }}
         />
-        <Stack.Screen 
-          name="recategorization" 
-          options={{ presentation: 'modal', title: 'Edit Category' }} 
+        <Stack.Screen
+          name="recategorization"
+          options={{ presentation: 'modal', title: 'Edit Category' }}
         />
-        <Stack.Screen 
-          name="filter-panel" 
-          options={{ presentation: 'modal', title: 'Filters' }} 
+        <Stack.Screen
+          name="filter-panel"
+          options={{ presentation: 'modal', title: 'Filters' }}
         />
-        <Stack.Screen 
-          name="rule-conflict" 
-          options={{ presentation: 'modal', title: 'Rule Conflict' }} 
+        <Stack.Screen
+          name="rule-conflict"
+          options={{ presentation: 'modal', title: 'Rule Conflict' }}
         />
       </Stack>
       <StatusBar style="dark" />

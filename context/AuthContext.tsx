@@ -2,7 +2,10 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
+import { AppState, AppStateStatus, Platform } from 'react-native';
+import { useUIStore } from '@/lib/stores/uiStore';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface AuthContextType {
   session: Session | null;
@@ -19,19 +22,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // DEVELOPMENT BYPASS: Auto-login a dummy user to jump straight to UI work
-    setSession({ user: { id: 'dev-user' } } as any);
-    setUser({ id: 'dev-user' } as any);
-    setLoading(false);
-
-    // Original Supabase check (commented out for now)
-    /*
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
-    */
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+    });
+
+    const handleAppState = (state: AppStateStatus) => {
+      if (state === 'active') {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    };
+
+    const appState = AppState.addEventListener('change', handleAppState);
+
+    return () => {
+      subscription.unsubscribe();
+      appState.remove();
+    };
   }, []);
 
   const signOut = async () => {

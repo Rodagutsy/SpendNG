@@ -1,13 +1,262 @@
-import { View, Text, Button } from 'react-native';
+import React, { useEffect, useCallback, useState, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { TransactionItem } from '@/components/ui/TransactionItem';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { format } from 'date-fns';
 
 export default function TransactionsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+
+  const {
+    transactions,
+    loading,
+    error,
+    fetchTransactions,
+    filters,
+    clearFilters,
+    setFilters,
+  } = useTransactionStore();
+  const { categories, fetchCategories, getCategoryById } = useCategoryStore();
+
+  const [searchText, setSearchText] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchTransactions();
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchText.trim()) {
+        setFilters({ ...filters, keyword: searchText.trim() });
+      } else if (filters.keyword) {
+        const rest = { ...filters };
+        delete rest.keyword;
+        setFilters(rest);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchText]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchTransactions();
+    setRefreshing(false);
+  }, []);
+
+  const hasActiveFilters = Object.keys(filters).length > 0;
+
+  const resolvedTransactions = useMemo(() =>
+    transactions.map((t) => {
+      const cat = getCategoryById(t.categoryId);
+      return {
+        ...t,
+        categoryName: cat?.name ?? 'Uncategorized',
+        categoryIcon: cat?.iconIdentifier ?? 'help-circle',
+        categoryColor: cat?.colorHex ?? '#ADAAA4',
+      };
+    }),
+    [transactions, categories],
+  );
+
+  const renderItem = ({ item }: any) => (
+    <TransactionItem
+      merchant={item.merchantName ?? 'Unknown'}
+      category={item.categoryName}
+      account={item.accountName ?? ''}
+      icon={item.categoryIcon}
+      color={item.categoryColor}
+      amount={item.amount}
+      type={item.transactionType}
+      date={format(new Date(item.transactionDate), 'd MMM yyyy')}
+      onPress={() => router.push(`/(tabs)/transactions/${item.id}`)}
+    />
+  );
+
+  const renderEmpty = () => {
+    if (loading) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      );
+    }
+    if (error) {
+      return (
+        <View style={styles.emptyContainer}>
+          <IconSymbol name="info.circle.fill" size={48} color={theme.error} />
+          <Text style={[styles.emptyTitle, { color: theme.onBackground }]}>Error loading transactions</Text>
+          <Text style={[styles.emptySubtitle, { color: theme.outline }]}>{error}</Text>
+          <TouchableOpacity onPress={() => fetchTransactions()} style={[styles.retryBtn, { backgroundColor: theme.primary }]}>
+            <Text style={[styles.retryText, { color: theme.onPrimary }]}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.emptyContainer}>
+        <IconSymbol name="list.bullet" size={48} color={theme.outline} />
+        <Text style={[styles.emptyTitle, { color: theme.onBackground }]}>No transactions</Text>
+        <Text style={[styles.emptySubtitle, { color: theme.outline }]}>
+          {hasActiveFilters ? 'Try adjusting your filters' : 'Your transactions will appear here after importing'}
+        </Text>
+      </View>
+    );
+  };
+
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-      <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 20 }}>Transactions</Text>
-      <Text style={{ textAlign: 'center', marginBottom: 40 }}>[Placeholder for Transaction List]</Text>
-      <Button title="View Detail (Sample)" onPress={() => router.push('/(tabs)/transactions/sample-id')} />
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing[3], backgroundColor: theme.surface }]}>
+        <View style={styles.headerRow}>
+          <Text style={[styles.title, { color: theme.onBackground }]}>Transactions</Text>
+          <TouchableOpacity onPress={() => router.push('/filter-panel')} style={[styles.filterBtn, { backgroundColor: theme.ripple }]}>
+            <IconSymbol name="line.3.horizontal.decrease" size={20} color={theme.onBackground} />
+            {hasActiveFilters && <View style={[styles.filterDot, { backgroundColor: theme.primary }]} />}
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.searchContainer, { backgroundColor: theme.background }]}>
+          <IconSymbol name="magnifyingglass" size={18} color={theme.outline} />
+          <TextInput
+            style={[styles.searchInput, { color: theme.onBackground }]}
+            placeholder="Search transactions..."
+            placeholderTextColor={theme.outline}
+            value={searchText}
+            onChangeText={setSearchText}
+            returnKeyType="search"
+          />
+          {searchText ? (
+            <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <IconSymbol name="plus" size={18} color={theme.outline} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {hasActiveFilters && (
+          <TouchableOpacity onPress={clearFilters} style={styles.clearRow}>
+            <Text style={[styles.clearText, { color: theme.primary }]}>Clear filters</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <FlatList
+        data={resolvedTransactions}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ListEmptyComponent={renderEmpty}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
+        contentContainerStyle={[styles.listContent, resolvedTransactions.length === 0 && styles.listEmpty]}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.outlineVariant }]} />}
+        showsVerticalScrollIndicator={false}
+      />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: Spacing[4],
+    paddingBottom: Spacing[3],
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing[3],
+  },
+  title: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.titleL,
+    fontWeight: '700',
+  },
+  filterBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  filterDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing[3],
+    height: 44,
+    borderRadius: Radius.md,
+    gap: Spacing[2],
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyM,
+    height: 44,
+  },
+  clearRow: {
+    alignItems: 'flex-end',
+    marginTop: Spacing[2],
+  },
+  clearText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelL,
+  },
+  listContent: {
+    paddingBottom: Spacing[16],
+  },
+  listEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  separator: {
+    height: 1,
+    marginLeft: 84,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing[8],
+    paddingVertical: Spacing[16],
+  },
+  emptyTitle: {
+    fontFamily: Typography.fonts.title,
+    fontSize: Typography.sizes.titleM,
+    marginTop: Spacing[4],
+    marginBottom: Spacing[2],
+  },
+  emptySubtitle: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyM,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    marginTop: Spacing[4],
+    paddingVertical: Spacing[2],
+    paddingHorizontal: Spacing[6],
+    borderRadius: Radius.md,
+  },
+  retryText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.buttonM,
+    fontWeight: '600',
+  },
+});
