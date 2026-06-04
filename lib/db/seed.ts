@@ -1,5 +1,5 @@
-import { getDatabase } from './database';
-import { Category, Rule } from '../../model_legacy/models';
+// import { getDatabase } from './database';
+// import { Category, Rule } from '../../model_legacy/models';
 
 export const DEFAULT_CATEGORIES = [
   { id: 'cat-01', name: 'Food & Dining', type: 'debit', icon: 'utensils', color: '#FF6B35' },
@@ -18,71 +18,75 @@ export const DEFAULT_CATEGORIES = [
   { id: 'cat-14', name: 'Uncategorized', type: 'both', icon: 'help-circle', color: '#ADAAA4' },
 ];
 
-const SYSTEM_RULES: Array<{ keyword: string; matchType: 'contains'; categoryId: string }> = [
-  { keyword: 'shoprite', matchType: 'contains', categoryId: 'cat-01' },
-  { keyword: 'kfc', matchType: 'contains', categoryId: 'cat-01' },
-  { keyword: 'chicken republic', matchType: 'contains', categoryId: 'cat-01' },
-  { keyword: 'dominos', matchType: 'contains', categoryId: 'cat-01' },
-  { keyword: 'uber eats', matchType: 'contains', categoryId: 'cat-01' },
-  { keyword: 'uber', matchType: 'contains', categoryId: 'cat-02' },
-  { keyword: 'bolt', matchType: 'contains', categoryId: 'cat-02' },
-  { keyword: 'dstv', matchType: 'contains', categoryId: 'cat-03' },
-  { keyword: 'mtn', matchType: 'contains', categoryId: 'cat-04' },
-  { keyword: 'airtel', matchType: 'contains', categoryId: 'cat-04' },
-  { keyword: 'glo', matchType: 'contains', categoryId: 'cat-04' },
-  { keyword: '9mobile', matchType: 'contains', categoryId: 'cat-04' },
-  { keyword: 'jumia', matchType: 'contains', categoryId: 'cat-09' },
-  { keyword: 'konga', matchType: 'contains', categoryId: 'cat-09' },
-  { keyword: 'netflix', matchType: 'contains', categoryId: 'cat-10' },
-  { keyword: 'showmax', matchType: 'contains', categoryId: 'cat-10' },
-  { keyword: 'pharmacy', matchType: 'contains', categoryId: 'cat-11' },
-  { keyword: 'hospital', matchType: 'contains', categoryId: 'cat-11' },
-  { keyword: 'salary', matchType: 'contains', categoryId: 'cat-07' },
-  { keyword: 'payroll', matchType: 'contains', categoryId: 'cat-07' },
-  { keyword: 'rent', matchType: 'contains', categoryId: 'cat-13' },
-];
+// const SYSTEM_RULES: Array<{ keyword: string; matchType: 'contains'; categoryId: string }> = [
+//   { keyword: 'shoprite', matchType: 'contains', categoryId: 'cat-01' },
+//   { keyword: 'kfc', matchType: 'contains', categoryId: 'cat-01' },
+//   { keyword: 'chicken republic', matchType: 'contains', categoryId: 'cat-01' },
+//   { keyword: 'dominos', matchType: 'contains', categoryId: 'cat-01' },
+//   { keyword: 'uber eats', matchType: 'contains', categoryId: 'cat-01' },
+//   { keyword: 'uber', matchType: 'contains', categoryId: 'cat-02' },
+//   { keyword: 'bolt', matchType: 'contains', categoryId: 'cat-02' },
+//   { keyword: 'dstv', matchType: 'contains', categoryId: 'cat-03' },
+//   { keyword: 'mtn', matchType: 'contains', categoryId: 'cat-04' },
+//   { keyword: 'airtel', matchType: 'contains', categoryId: 'cat-04' },
+//   { keyword: 'glo', matchType: 'contains', categoryId: 'cat-04' },
+//   { keyword: '9mobile', matchType: 'contains', categoryId: 'cat-04' },
+//   { keyword: 'jumia', matchType: 'contains', categoryId: 'cat-09' },
+//   { keyword: 'konga', matchType: 'contains', categoryId: 'cat-09' },
+//   { keyword: 'netflix', matchType: 'contains', categoryId: 'cat-10' },
+//   { keyword: 'showmax', matchType: 'contains', categoryId: 'cat-10' },
+//   { keyword: 'pharmacy', matchType: 'contains', categoryId: 'cat-11' },
+//   { keyword: 'hospital', matchType: 'contains', categoryId: 'cat-11' },
+//   { keyword: 'salary', matchType: 'contains', categoryId: 'cat-07' },
+//   { keyword: 'payroll', matchType: 'contains', categoryId: 'cat-07' },
+//   { keyword: 'rent', matchType: 'contains', categoryId: 'cat-13' },
+// ];
+//
+// export async function seedDatabase(): Promise<void> {
+//   const database = getDatabase();
+//
+//   const categoriesCollection = database.get<Category>('categories');
+//   const count = await categoriesCollection.query().fetchCount();
+//
+//   if (count === 0) {
+//     await database.write(async () => {
+//       await Promise.all(
+//         DEFAULT_CATEGORIES.map(cat =>
+//           categoriesCollection.create((record) => {
+//             record._raw.id = cat.id;
+//             record.name = cat.name;
+//             record.transactionTypeHint = cat.type as any;
+//             record.iconIdentifier = cat.icon;
+//             record.colorHex = cat.color;
+//             record.isSystem = true;
+//           })
+//         )
+//       );
+//     });
+//   }
+//
+//   const rulesCollection = database.get<Rule>('rules');
+//   const ruleCount = await rulesCollection.query().fetchCount();
+//
+//   if (ruleCount === 0) {
+//     await database.write(async () => {
+//       await Promise.all(
+//         SYSTEM_RULES.map((rule, index) =>
+//           rulesCollection.create((record) => {
+//             record.keyword = rule.keyword;
+//             record.matchType = rule.matchType;
+//             record.categoryId = rule.categoryId;
+//             record.priority = 50 - index;
+//             record.isSystem = true;
+//           })
+//         )
+//       );
+//     });
+//   }
+// }
 
 export async function seedDatabase(): Promise<void> {
-  const database = getDatabase();
-
-  const categoriesCollection = database.get<Category>('categories');
-  const count = await categoriesCollection.query().fetchCount();
-
-  if (count === 0) {
-    await database.write(async () => {
-      await Promise.all(
-        DEFAULT_CATEGORIES.map(cat =>
-          categoriesCollection.create((record) => {
-            record._raw.id = cat.id;
-            record.name = cat.name;
-            record.transactionTypeHint = cat.type as any;
-            record.iconIdentifier = cat.icon;
-            record.colorHex = cat.color;
-            record.isSystem = true;
-          })
-        )
-      );
-    });
-  }
-
-  const rulesCollection = database.get<Rule>('rules');
-  const ruleCount = await rulesCollection.query().fetchCount();
-
-  if (ruleCount === 0) {
-    await database.write(async () => {
-      await Promise.all(
-        SYSTEM_RULES.map((rule, index) =>
-          rulesCollection.create((record) => {
-            record.keyword = rule.keyword;
-            record.matchType = rule.matchType;
-            record.categoryId = rule.categoryId;
-            record.priority = 50 - index;
-            record.isSystem = true;
-          })
-        )
-      );
-    });
-  }
+  console.log('[Seed] WatermelonDB disabled – seedDatabase stub called');
 }
 
 export function getCategoryById(id: string): typeof DEFAULT_CATEGORIES[0] | undefined {

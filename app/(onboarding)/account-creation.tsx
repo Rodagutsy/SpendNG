@@ -1,29 +1,35 @@
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
 import { signUpWithEmail, signInWithGoogle } from '@/lib/auth-utils';
 import { useState } from 'react';
+import { GoogleLogo } from '@/components/GoogleLogo';
+import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function AccountCreationScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
-    if (!email || !password) return;
+    if (!name || !email || !password || !agreed) return;
     setLoading(true);
     try {
       const { user, session } = await signUpWithEmail(email, password);
-      
+
       if (user && !session) {
         Alert.alert(
           'Verification Required',
           'Please check your email for a verification link to activate your account.'
         );
       }
-      // If session exists, root redirect happens automatically via AuthContext
     } catch (error: any) {
       Alert.alert('Signup Error', error.message);
     } finally {
@@ -43,14 +49,25 @@ export default function AccountCreationScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create Account</Text>
+    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
+      <Text style={[styles.title, { color: theme.onBackground }]}>Create an Account</Text>
+      <Text style={[styles.subtitle, { color: theme.onBackground }]}>Start your journey to financial freedom today</Text>
+
+      <TextInput
+        label="Full Name"
+        placeholder="Your full name"
+        value={name}
+        onChangeText={setName}
+        autoCapitalize="words"
+        containerStyle={{ marginBottom: 12 }}
+      />
       <TextInput
         label="Email"
         placeholder="your@email.com"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
+        containerStyle={{ marginBottom: 12 }}
       />
       <TextInput
         label="Password"
@@ -58,66 +75,141 @@ export default function AccountCreationScreen() {
         secureTextEntry
         value={password}
         onChangeText={setPassword}
+        containerStyle={{ marginBottom: 12 }}
       />
+
+      <TouchableOpacity
+        style={styles.termsRow}
+        onPress={() => setAgreed(!agreed)}
+        activeOpacity={0.7}
+      >
+        <View style={[styles.radio, agreed && { backgroundColor: theme.primary, borderColor: theme.primary }]} />
+        <Text style={[styles.termsText, { color: theme.onBackground }]}>
+          By creating an account, you agree to our{' '}
+          <Text style={{ color: theme.primary }} onPress={() => {}}>
+            Terms of Service
+          </Text>{' '}
+          and{' '}
+          <Text style={{ color: theme.primary }} onPress={() => {}}>
+            Privacy Policy
+          </Text>
+          .
+        </Text>
+      </TouchableOpacity>
 
       <Button
         title="Sign Up"
         onPress={handleSignup}
         loading={loading}
+        disabled={!agreed}
         style={{ marginTop: 20 }}
       />
 
       <View style={styles.divider}>
-        <View style={styles.line} />
-        <Text style={styles.dividerText}>OR</Text>
-        <View style={styles.line} />
+        <View style={[styles.line, { backgroundColor: theme.outline }]} />
+        <Text style={[styles.dividerText, { color: theme.outline }]}>OR</Text>
+        <View style={[styles.line, { backgroundColor: theme.outline }]} />
       </View>
 
-      <Button
-        title="Continue with Google"
+      <TouchableOpacity
         onPress={handleGoogleAuth}
-        variant="outline"
         disabled={loading}
-      />
+        style={[styles.googleButton, { borderColor: theme.outline }]}
+        activeOpacity={0.8}
+      >
+        <GoogleLogo size={20} />
+        <Text style={[styles.googleButtonText, { color: theme.onBackground }]}>
+          Continue with Google
+        </Text>
+      </TouchableOpacity>
 
-      <View style={{ marginTop: 40 }}>
-        <Button
-          title="Already have an account? Sign In"
-          onPress={() => router.push('/(onboarding)/sign-in')}
-          variant="ghost"
-        />
-      </View>
-    </View>
+      <Text style={[styles.footerText, { color: theme.onBackground }]}>
+        Already have an account?{' '}
+        <Text style={{ color: theme.primary }} onPress={() => router.push('/(onboarding)/sign-in')}>
+          Sign In
+        </Text>
+      </Text>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    padding: 32,
+    marginTop: 40,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    lineHeight: 40,
+    marginBottom: 8,
+    textAlign: 'left',
+    fontFamily: Typography.fonts.display,
+  },
+  subtitle: {
+    fontSize: Typography.sizes.bodyM,
+    fontWeight: '400',
+    lineHeight: 24,
     marginBottom: 24,
-    textAlign: 'center',
-    color: 'var(--sys-color-roles-on-primary-container)',
+    textAlign: 'left',
+    fontFamily: Typography.fonts.body,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginBottom: 12,
+  },
+  radio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#9E9E9E',
+    marginTop: 2,
+  },
+  termsText: {
+    flex: 1,
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyS,
+    lineHeight: 20,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 30,
+    marginVertical: 20,
   },
   line: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E0E0E0',
   },
   dividerText: {
     marginHorizontal: 10,
-    color: '#9E9E9E',
     fontWeight: '600',
+    fontFamily: Typography.fonts.body,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    gap: 4,
+  },
+  googleButtonText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.buttonM,
+    fontWeight: '500',
+  },
+  footerText: {
+    textAlign: 'center',
+    marginTop: 24,
+    marginBottom: 40,
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyM,
   },
 });

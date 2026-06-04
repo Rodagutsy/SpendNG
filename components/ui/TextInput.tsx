@@ -29,12 +29,19 @@ export const TextInput: React.FC<TextInputProps> = ({
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const togglePasswordVisibility = () => {
     setIsPasswordVisible(!isPasswordVisible);
   };
 
   const isSecure = secureTextEntry && !isPasswordVisible;
+
+  const borderColor = error
+    ? theme.error
+    : isFocused
+      ? theme.primary
+      : theme.outlineVariant;
 
   return (
     <View style={[styles.container, containerStyle]}>
@@ -50,25 +57,27 @@ export const TextInput: React.FC<TextInputProps> = ({
             {
               backgroundColor: theme.surface,
               color: theme.onSurface,
-              borderColor: error ? theme.error : theme.outline,
+              borderColor,
               paddingRight: secureTextEntry ? 48 : Spacing[4],
             },
             style,
           ]}
-          placeholderTextColor={theme.outline}
+          placeholderTextColor={theme.outlineVariant}
           secureTextEntry={isSecure}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           {...props}
         />
         {secureTextEntry && (
-          <TouchableOpacity 
-            style={styles.eyeIcon} 
+          <TouchableOpacity
+            style={styles.eyeIcon}
             onPress={togglePasswordVisibility}
             accessibilityLabel={isPasswordVisible ? "Hide password" : "Show password"}
           >
-            <IconSymbol 
-              name={isPasswordVisible ? "eye.slash" : "eye"} 
-              size={20} 
-              color={theme.outline} 
+            <IconSymbol
+              name={isPasswordVisible ? "eye.slash" : "eye"}
+              size={20}
+              color={theme.outline}
             />
           </TouchableOpacity>
         )}

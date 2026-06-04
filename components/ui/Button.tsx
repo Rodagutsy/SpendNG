@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   ViewStyle,
-  TextStyle
+  TextStyle,
+  StyleProp,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -17,7 +18,8 @@ interface ButtonProps {
   size?: 'large' | 'medium' | 'small';
   disabled?: boolean;
   loading?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
+  textStyle?: StyleProp<TextStyle>;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -28,6 +30,7 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   loading = false,
   style,
+  textStyle,
 }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
@@ -106,7 +109,7 @@ export const Button: React.FC<ButtonProps> = ({
       {loading ? (
         <ActivityIndicator color={vStyles.text.color} />
       ) : (
-        <Text style={[styles.text, vStyles.text, sStyles.text]}>{title}</Text>
+        <Text style={[styles.text, vStyles.text, sStyles.text, textStyle]}>{title}</Text>
       )}
     </TouchableOpacity>
   );
