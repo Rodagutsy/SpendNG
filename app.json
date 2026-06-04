@@ -21,7 +21,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.rodagutsy.spendngapp",
-      "newArchEnabled": true
+      "newArchEnabled": false
     },
     "web": {
       "output": "static",
@@ -44,8 +44,7 @@
       "@react-native-community/datetimepicker"
     ],
     "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+      "typedRoutes": true
     },
     "extra": {
       "router": {},

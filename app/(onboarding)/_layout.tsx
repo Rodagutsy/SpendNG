@@ -7,6 +7,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="value-prop" />
       <Stack.Screen name="account-creation" />
       <Stack.Screen name="sign-in" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="forgot-password" />
       <Stack.Screen name="sms-permission" />
       <Stack.Screen name="email-connection" />
       <Stack.Screen name="import-progress" />

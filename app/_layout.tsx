@@ -1,8 +1,6 @@
-import React, { useEffect } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState, Component } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -11,94 +9,58 @@ import {
   Poppins_600SemiBold,
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { AuthProvider, useAuth } from '@/context/AuthContext';
-import { initDatabase } from '@/lib/db/database';
-import { seedDatabase } from '@/lib/db/seed';
-import { useUIStore } from '@/lib/stores/uiStore';
-import { useTransactionStore } from '@/lib/stores/transactionStore';
-import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { AuthProvider } from '@/context/AuthContext';
 
 SplashScreen.preventAutoHideAsync();
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+class ErrorHandler extends Component<{ children: React.ReactNode }, { error: Error | null }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    console.error('Root error:', error);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#fff' }}>
+          <Text style={{ color: 'red', fontSize: 16, marginBottom: 10 }}>Error</Text>
+          <Text style={{ color: '#333' }}>{this.state.error.message}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
-function RootLayoutNav() {
-  const { session, loading: authLoading } = useAuth();
+export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'Poppins': Poppins_400Regular,
     'Poppins-Medium': Poppins_500Medium,
     'Poppins-SemiBold': Poppins_600SemiBold,
     'Poppins-Bold': Poppins_700Bold,
   });
-  const dbInitialized = useUIStore((s) => s.dbInitialized);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    async function setup() {
-      try {
-        await initDatabase();
-        await seedDatabase();
-        useUIStore.getState().setDbInitialized(true);
-        useCategoryStore.getState().fetchCategories();
-        useTransactionStore.getState().fetchTransactions();
-      } catch (error) {
-        console.error('Database init error:', error);
-        useUIStore.getState().setDbInitialized(true);
-      }
-    }
-    setup();
-  }, []);
-
-  useEffect(() => {
-    if ((fontsLoaded || fontError) && !authLoading && dbInitialized) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
+      const timer = setTimeout(() => setReady(true), 100);
+      return () => clearTimeout(timer);
     }
-  }, [fontsLoaded, fontError, authLoading, dbInitialized]);
+  }, [fontsLoaded, fontError]);
 
-  if (!fontsLoaded && !fontError) return null;
-  if (authLoading || !dbInitialized) return null;
+  if (!ready) return null;
 
   return (
-    <ThemeProvider value={DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        {!session ? (
-          <Stack.Screen name="(onboarding)" />
-        ) : (
-          <Stack.Screen name="(tabs)" />
-        )}
-
-        <Stack.Screen
-          name="manual-entry"
-          options={{ presentation: 'modal', title: 'Add Transaction' }}
-        />
-        <Stack.Screen
-          name="recategorization"
-          options={{ presentation: 'modal', title: 'Edit Category' }}
-        />
-        <Stack.Screen
-          name="filter-panel"
-          options={{ presentation: 'modal', title: 'Filters' }}
-        />
-        <Stack.Screen
-          name="rule-conflict"
-          options={{ presentation: 'modal', title: 'Rule Conflict' }}
-        />
-      </Stack>
-      <StatusBar style="dark" />
-    </ThemeProvider>
-  );
-}
-
-export default function RootLayout() {
-  return (
-    <SafeAreaProvider>
+    <ErrorHandler>
       <AuthProvider>
-        <RootLayoutNav />
+        <Slot />
       </AuthProvider>
-    </SafeAreaProvider>
+    </ErrorHandler>
   );
 }

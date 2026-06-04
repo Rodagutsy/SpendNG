@@ -1,12 +1,17 @@
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
 import { signInWithEmail, signInWithGoogle } from '@/lib/auth-utils';
 import { useState } from 'react';
+import { GoogleLogo } from '@/components/GoogleLogo';
+import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function SignInScreen() {
   const router = useRouter();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,7 +21,6 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signInWithEmail(email, password);
-      // Success will trigger session change and root redirect
     } catch (error: any) {
       Alert.alert('Sign In Error', error.message);
     } finally {
@@ -36,14 +40,16 @@ export default function SignInScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Sign In</Text>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <Text style={[styles.title, { color: theme.onBackground }]}>Welcome Back</Text>
+      <Text style={[styles.subtitle, { color: theme.onBackground }]}>Continue tracking your finances and stay on top of your money.</Text>
       <TextInput
         label="Email"
         placeholder="your@email.com"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
+        containerStyle={{ marginBottom: 12 }}
       />
       <TextInput
         label="Password"
@@ -51,7 +57,14 @@ export default function SignInScreen() {
         secureTextEntry
         value={password}
         onChangeText={setPassword}
+        containerStyle={{ marginBottom: 6 }}
       />
+      <Text
+        style={[styles.forgotPassword, { color: theme.primary }]}
+        onPress={() => router.push('/(onboarding)/forgot-password')}
+      >
+        Forgot password?
+      </Text>
 
       <Button
         title="Sign In"
@@ -61,25 +74,29 @@ export default function SignInScreen() {
       />
 
       <View style={styles.divider}>
-        <View style={styles.line} />
-        <Text style={styles.dividerText}>OR</Text>
-        <View style={styles.line} />
+        <View style={[styles.line, { backgroundColor: theme.outline }]} />
+        <Text style={[styles.dividerText, { color: theme.outline }]}>OR</Text>
+        <View style={[styles.line, { backgroundColor: theme.outline }]} />
       </View>
 
-      <Button
-        title="Continue with Google"
+      <TouchableOpacity
         onPress={handleGoogleAuth}
-        variant="outline"
         disabled={loading}
-      />
+        style={[styles.googleButton, { borderColor: theme.outline }]}
+        activeOpacity={0.8}
+      >
+        <GoogleLogo size={16} />
+        <Text style={[styles.googleButtonText, { color: theme.onBackground }]}>
+          Continue with Google
+        </Text>
+      </TouchableOpacity>
 
-      <View style={{ marginTop: 40 }}>
-        <Button
-          title="Don't have an account? Sign Up"
-          onPress={() => router.back()}
-          variant="ghost"
-        />
-      </View>
+      <Text style={[styles.footerText, { color: theme.onBackground }]}>
+        Don't have an account?{' '}
+        <Text style={{ color: theme.primary }} onPress={() => router.push('/(onboarding)/account-creation')}>
+          Sign Up
+        </Text>
+      </Text>
     </View>
   );
 }
@@ -87,30 +104,63 @@ export default function SignInScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    padding: 32,
+    marginTop: 40,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    lineHeight: 40,
+    marginBottom: 8,
+    textAlign: 'left',
+    fontFamily: Typography.fonts.display,
+  },
+  subtitle: {
+    fontSize: Typography.sizes.bodyM,
+    fontWeight: '400',
+    lineHeight: 24,
     marginBottom: 24,
-    textAlign: 'center',
-    color: 'var(--sys-color-roles-on-primary-container)',
+    textAlign: 'left',
+    fontFamily: Typography.fonts.body,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 30,
+    marginVertical: 20,
   },
   line: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E0E0E0',
   },
   dividerText: {
     marginHorizontal: 10,
-    color: '#9E9E9E',
     fontWeight: '600',
+    fontFamily: Typography.fonts.body,
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    gap: 8,
+  },
+  googleButtonText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.buttonM,
+    fontWeight: '500',
+  },
+  forgotPassword: {
+    textAlign: 'right',
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelL,
+    fontWeight: '500',
+  },
+  footerText: {
+    textAlign: 'center',
+    marginTop: 24,
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyM,
   },
 });
