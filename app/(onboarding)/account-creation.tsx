@@ -30,6 +30,7 @@ export default function AccountCreationScreen() {
           'Please check your email for a verification link to activate your account.'
         );
       }
+      router.replace('/(tabs)');
     } catch (error: any) {
       Alert.alert('Signup Error', error.message);
     } finally {

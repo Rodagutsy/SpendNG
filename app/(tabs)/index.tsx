@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,18 @@ import {
   TouchableOpacity,
   StatusBar,
   Pressable,
-  Platform
+  Platform,
+  Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Colors, Shadows, Radius, Spacing } from '@/constants/Tokens';
+import { Colors, Typography, Shadows, Radius, Spacing } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { BellIcon, ExportIcon, LightningIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useMonthlyBalances } from '@/lib/stores/transactionStore';
+import { TransactionModal } from '@/components/TransactionModal';
+import { ExportModal } from '@/components/ExportModal';
 
 interface QuickActionButtonProps {
   label: string;
@@ -107,6 +111,38 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { moneyIn, moneyOut, netBalance, transactionCount } = useMonthlyBalances();
+
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
+  const bellRef = useRef<View>(null);
+  const [showTxModal, setShowTxModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const unreadCount = 2;
+  const windowWidth = Dimensions.get('window').width;
+
+  const mockNotifications = [
+    { id: 'n1', text: 'New transaction of ₦15,790 at Shoprite', time: '2 min ago' },
+    { id: 'n2', text: 'Monthly salary of ₦350,000 received', time: '1 hour ago' },
+  ];
+
+  const openNotifications = () => {
+    bellRef.current?.measureInWindow((x, y, width, height) => {
+      setBellPos({ top: y + height + 4, right: windowWidth - x - width });
+      setShowNotifications(true);
+    });
+  };
+
+  const closeNotifications = () => setShowNotifications(false);
+
+  const formatNaira = (amount: number) => {
+    const abs = Math.abs(amount);
+    if (abs > 999_999) {
+      if (abs >= 1_000_000_000) return `${(abs / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`;
+      return `${(abs / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+    }
+    return abs.toLocaleString('en-US');
+  };
 
   // Exact data from Home screen.png
   const mockActivity = [
@@ -149,10 +185,17 @@ export default function HomeScreen() {
             <Text style={styles.welcomeName}>Obayemi!</Text>
           </View>
           <TouchableOpacity
+            ref={bellRef}
             style={[styles.notificationBtn, Shadows.sm]}
+            onPress={openNotifications}
             activeOpacity={0.8}
           >
             <BellIcon size={24} color="#001133" />
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -162,10 +205,12 @@ export default function HomeScreen() {
         </View>
 
         {/* Balance Amount */}
-        <Text style={styles.balanceValue}><Text style={styles.nairaSymbol}>₦</Text>185,790</Text>
+        <Text style={styles.balanceValue}>
+          <Text style={styles.nairaSymbol}>₦</Text>{formatNaira(netBalance)}
+        </Text>
 
         {/* Subtitle */}
-        <Text style={styles.balanceSubtitle}>47 transactions this month</Text>
+        <Text style={styles.balanceSubtitle}>{transactionCount} transactions this month</Text>
       </View>
 
       {/* Money In / Money Out Side-by-Side Cards */}
@@ -173,7 +218,7 @@ export default function HomeScreen() {
         {/* Money In Card */}
         <View style={[styles.moneyHalf, styles.moneyInHalf]}>
           <Text style={styles.moneyLabelGreen}>Money In</Text>
-          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>145,790</Text>
+          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyIn)}</Text>
           <View style={styles.trendRow}>
             <MaterialIcons name="trending-up" size={14} color="#007D3A" />
             <Text style={styles.trendTextGreen}>12.5% vs last month</Text>
@@ -183,7 +228,7 @@ export default function HomeScreen() {
         {/* Money Out Card */}
         <View style={[styles.moneyHalf, styles.moneyOutHalf]}>
           <Text style={styles.moneyLabelRed}>Money Out</Text>
-          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>125,790</Text>
+          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyOut)}</Text>
           <View style={styles.trendRow}>
             <MaterialIcons name="trending-down" size={14} color="#D30000" />
             <Text style={styles.trendTextRed}>8% vs last month</Text>
@@ -199,14 +244,14 @@ export default function HomeScreen() {
       {/* Quick Actions Buttons */}
       <View style={styles.quickActionsRow}>
         <QuickActionButton
-          label="Export"
-          icon={<ExportIcon size={20} color="#001133" />}
-          onPress={() => router.push('/export' as any)}
-        />
-        <QuickActionButton
           label="Insight"
           icon={<LightningIcon size={20} color="#001133" />}
           onPress={() => router.push('/insights' as any)}
+        />
+        <QuickActionButton
+          label="Export"
+          icon={<ExportIcon size={20} color="#001133" />}
+          onPress={() => setShowExportModal(true)}
         />
       </View>
 
@@ -218,41 +263,64 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
     </View>
-  ), [insets.top, router]);
+  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, showNotifications, openNotifications]);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <>
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-      <FlatList
-        data={mockActivity}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <CustomTransactionItem
-            merchant={item.merchant}
-            bankAndDate={item.bankAndDate}
-            amount={item.amount}
-            category={item.category}
-            isDebit={item.isDebit}
-            iconType={item.iconType}
-            onPress={() => router.push(`/transactions/${item.id}` as any)}
-          />
-        )}
-        ListHeaderComponent={headerElement}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+        <FlatList
+          data={mockActivity}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <CustomTransactionItem
+              merchant={item.merchant}
+              bankAndDate={item.bankAndDate}
+              amount={item.amount}
+              category={item.category}
+              isDebit={item.isDebit}
+              iconType={item.iconType}
+              onPress={() => router.push(`/transactions/${item.id}` as any)}
+            />
+          )}
+          ListHeaderComponent={headerElement}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
 
-      {/* Floating Action Button (FAB) exactly as in image */}
-      <TouchableOpacity
-        style={[styles.fab, Shadows.large]}
-        onPress={() => router.push('/manual-entry' as any)}
-        activeOpacity={0.85}
-      >
-        <MaterialIcons name="add" size={32} color="#FFFFFF" />
-      </TouchableOpacity>
-    </View>
+        {/* Floating Action Button (FAB) exactly as in image */}
+        <TouchableOpacity
+          style={[styles.fab, Shadows.large]}
+          onPress={() => setShowTxModal(true)}
+          activeOpacity={0.85}
+        >
+          <MaterialIcons name="add" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <TransactionModal visible={showTxModal} onClose={() => setShowTxModal(false)} />
+        <ExportModal visible={showExportModal} onClose={() => setShowExportModal(false)} />
+      </View>
+
+      {showNotifications && (
+        <TouchableOpacity
+          style={styles.notifOverlay}
+          activeOpacity={1}
+          onPress={closeNotifications}
+        >
+          <View style={[styles.notifDropdown, { top: bellPos.top, right: bellPos.right, width: windowWidth / 2 }]}>
+            <Text style={styles.notifHeader}>Notifications</Text>
+            {mockNotifications.map((n, i) => (
+              <View key={n.id} style={[styles.notifItem, i < mockNotifications.length - 1 && styles.notifItemBorder]}>
+                <Text style={styles.notifText}>{n.text}</Text>
+                <Text style={styles.notifTime}>{n.time}</Text>
+              </View>
+            ))}
+          </View>
+        </TouchableOpacity>
+      )}
+    </>
   );
 }
 
@@ -281,16 +349,15 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   welcomeLabel: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 16,
     color: '#001133',
     opacity: 0.8,
   },
   welcomeName: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 24,
     color: '#001133',
-    fontWeight: '700',
     marginTop: -2,
   },
   notificationBtn: {
@@ -310,21 +377,20 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   netBalanceText: {
-    fontFamily: 'Poppins-Medium',
+    fontFamily: Typography.fonts.medium,
     fontSize: 13,
     color: '#001133',
   },
   balanceValue: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.display,
     fontSize: 44,
     color: '#001133',
-    fontWeight: '700',
     textAlign: 'center',
     marginTop: 12,
     letterSpacing: -0.5,
   },
   balanceSubtitle: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 14,
     color: '#001133',
     opacity: 0.65,
@@ -344,29 +410,28 @@ const styles = StyleSheet.create({
   },
   moneyInHalf: {
     backgroundColor: '#E8F8EE', // Light green
-    borderTopLeftRadius: 24,
-    borderBottomLeftRadius: 24,
+    borderTopLeftRadius: 16,
+    borderBottomLeftRadius: 16,
   },
   moneyOutHalf: {
     backgroundColor: '#FDECEB', // Light pink
-    borderTopRightRadius: 24,
-    borderBottomRightRadius: 24,
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
   },
   moneyLabelGreen: {
-    fontFamily: 'Poppins-Medium',
+    fontFamily: Typography.fonts.medium,
     fontSize: 14,
     color: '#007D3A',
   },
   moneyLabelRed: {
-    fontFamily: 'Poppins-Medium',
+    fontFamily: Typography.fonts.medium,
     fontSize: 14,
     color: '#D30000',
   },
   moneyValue: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 22,
     color: '#001133',
-    fontWeight: '700',
     marginTop: 4,
   },
   trendRow: {
@@ -376,12 +441,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   trendTextGreen: {
-    fontFamily: 'Poppins-Medium',
+    fontFamily: Typography.fonts.medium,
     fontSize: 11,
     color: '#007D3A',
   },
   trendTextRed: {
-    fontFamily: 'Poppins-Medium',
+    fontFamily: Typography.fonts.medium,
     fontSize: 11,
     color: '#D30000',
   },
@@ -391,10 +456,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 18,
     color: '#001133',
-    fontWeight: '700',
   },
   quickActionsRow: {
     flexDirection: 'row',
@@ -412,10 +476,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   actionButtonText: {
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: Typography.fonts.title,
     fontSize: 15,
     color: '#001133',
-    fontWeight: '600',
   },
   recentActivityHeader: {
     flexDirection: 'row',
@@ -426,7 +489,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   seeAllText: {
-    fontFamily: 'Poppins-Medium',
+    fontFamily: Typography.fonts.medium,
     fontSize: 14,
     color: '#0B5CFF',
   },
@@ -446,23 +509,21 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   salaryIconText: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 18,
     color: '#007D3A',
-    fontWeight: '700',
   },
   transactionMiddle: {
     flex: 1,
     justifyContent: 'center',
   },
   merchantText: {
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: Typography.fonts.title,
     fontSize: 16,
     color: '#001133',
-    fontWeight: '600',
   },
   detailText: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 13,
     color: '#7B786F',
     marginTop: 2,
@@ -472,12 +533,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   amountText: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 16,
-    fontWeight: '700',
   },
   categoryText: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 12,
     color: '#7B786F',
     marginTop: 2,
@@ -485,12 +545,76 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: '#F0F0F0',
-    marginLeft: 84, // Align separator with the start of the text content
+    marginLeft: 84,
     marginRight: 20,
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#D30000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
+  notifOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 999,
+  },
+  notifDropdown: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+      },
+      android: { elevation: 4 },
+    }),
+  },
+  notifHeader: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 14,
+    color: '#001133',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  notifItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  notifItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  notifText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 13,
+    color: '#001133',
+    lineHeight: 18,
+  },
+  notifTime: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 11,
+    color: '#7B786F',
+    marginTop: 4,
   },
   fab: {
     position: 'absolute',
-    bottom: Spacing[6] + 16, // Above custom tab bar height
+    bottom: Spacing[6], // Above custom tab bar height
     right: Spacing[6],
     width: 56,
     height: 56,

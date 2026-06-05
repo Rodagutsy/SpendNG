@@ -77,7 +77,7 @@ export const TextInput: React.FC<TextInputProps> = ({
             <IconSymbol
               name={isPasswordVisible ? "eye.slash" : "eye"}
               size={20}
-              color={theme.outline}
+              color={theme.outlineVariant}
             />
           </TouchableOpacity>
         )}
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelL,
-    marginBottom: Spacing[1],
+    marginBottom: Spacing[2],
     fontWeight: '500',
   },
   inputWrapper: {

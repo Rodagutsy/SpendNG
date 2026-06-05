@@ -330,4 +330,13 @@ export class Parser {
     const match = body.match(/(?:Dear|Hi|Hello)\s+(\w+)/i);
     return match ? match[1] : null;
   }
+
+  private static extractEmailDate(body: string): number | null {
+    const match = body.match(/(?:\bDate\b|\bTime\b):\s*([^\n\r]+)/i);
+    if (match) {
+      const parsed = Date.parse(match[1].trim());
+      if (!isNaN(parsed)) return parsed;
+    }
+    return null;
+  }
 }

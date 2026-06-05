@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,124 +6,206 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
-  Dimensions,
-  StatusBar
+  StatusBar,
+  Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Shadows, Spacing, Radius } from '@/constants/Tokens';
+import { Colors, Typography, Shadows, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { BellIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const monthKey = (year: number, month: number) =>
+  `${MONTH_NAMES[month].toLowerCase()}${year}`;
+
+const MOCK_DATA: Record<string, {
+  spendingHealth: { percentage: number; subtext: string; vsPrevious: string };
+  topCategory: { name: string; amount: string; percentage: string; icon: 'restaurant' | 'shopping-cart' | 'local-gas-station' | 'business' };
+  biggestSpend: { merchant: string; amount: string; date: string };
+  mostFrequent: { merchant: string; count: number; firstLetter: string };
+  alerts: { icon: 'local-fire-department' | 'trending-up' | 'warning'; text: string }[];
+  behaviourPatterns: { icon: 'weekend' | 'storefront' | 'access-time'; text: string }[];
+  weeklyBreakdown: { best: { dateRange: string; amount: string }; worst: { dateRange: string; amount: string } };
+}> = {
+  may2026: {
+    spendingHealth: { percentage: 85, subtext: 'of income spent this month', vsPrevious: '+3% vs Apr' },
+    topCategory: { name: 'Food & Dining', amount: '₦45,000', percentage: '34% of spend', icon: 'restaurant' },
+    biggestSpend: { merchant: 'Dana Air', amount: '₦75,000', date: '24 May 2026' },
+    mostFrequent: { merchant: 'Shoprite', count: 12, firstLetter: 'S' },
+    alerts: [
+      { icon: 'trending-up', text: 'Transport spending increased by 22% this month' },
+      { icon: 'local-fire-department', text: 'You spent more than usual on food this week' },
+    ],
+    behaviourPatterns: [
+      { icon: 'weekend', text: 'Most spending happens on weekends' },
+      { icon: 'storefront', text: 'Shoprite is your most frequent merchant' },
+    ],
+    weeklyBreakdown: {
+      best: { dateRange: '08 May - 14 May', amount: '₦15,400' },
+      worst: { dateRange: '15 May - 21 May', amount: '₦48,200' },
+    },
+  },
+  apr2026: {
+    spendingHealth: { percentage: 72, subtext: 'of income spent this month', vsPrevious: '-5% vs Mar' },
+    topCategory: { name: 'Shopping', amount: '₦52,000', percentage: '31% of spend', icon: 'shopping-cart' },
+    biggestSpend: { merchant: 'Konga', amount: '₦62,000', date: '18 Apr 2026' },
+    mostFrequent: { merchant: 'Shoprite', count: 9, firstLetter: 'S' },
+    alerts: [
+      { icon: 'trending-up', text: 'Shopping doubled compared to last month' },
+      { icon: 'warning', text: 'You exceeded your dining budget by 18%' },
+    ],
+    behaviourPatterns: [
+      { icon: 'access-time', text: 'Most transactions happen between 6-9 PM' },
+      { icon: 'storefront', text: 'Shoprite is your most frequent merchant' },
+    ],
+    weeklyBreakdown: {
+      best: { dateRange: '05 Apr - 11 Apr', amount: '₦18,200' },
+      worst: { dateRange: '19 Apr - 25 Apr', amount: '₦41,500' },
+    },
+  },
+  mar2026: {
+    spendingHealth: { percentage: 88, subtext: 'of income spent this month', vsPrevious: '+6% vs Feb' },
+    topCategory: { name: 'Transport', amount: '₦38,000', percentage: '28% of spend', icon: 'local-gas-station' },
+    biggestSpend: { merchant: 'Total Energies', amount: '₦55,000', date: '15 Mar 2026' },
+    mostFrequent: { merchant: 'Uber', count: 16, firstLetter: 'U' },
+    alerts: [
+      { icon: 'trending-up', text: 'Fuel costs rose by 15% this month' },
+    ],
+    behaviourPatterns: [
+      { icon: 'weekend', text: 'Most spending happens on weekends' },
+      { icon: 'storefront', text: 'Uber is your most frequent merchant' },
+    ],
+    weeklyBreakdown: {
+      best: { dateRange: '07 Mar - 13 Mar', amount: '₦12,800' },
+      worst: { dateRange: '21 Mar - 27 Mar', amount: '₦52,100' },
+    },
+  },
+  feb2026: {
+    spendingHealth: { percentage: 65, subtext: 'of income spent this month', vsPrevious: '-10% vs Jan' },
+    topCategory: { name: 'Utilities', amount: '₦42,000', percentage: '30% of spend', icon: 'business' },
+    biggestSpend: { merchant: 'IKEDC', amount: '₦48,000', date: '10 Feb 2026' },
+    mostFrequent: { merchant: 'Shoprite', count: 7, firstLetter: 'S' },
+    alerts: [
+      { icon: 'warning', text: 'Utility bills are 25% higher than last month' },
+    ],
+    behaviourPatterns: [
+      { icon: 'access-time', text: 'Most transactions happen on weekdays' },
+      { icon: 'storefront', text: 'Shoprite is your most frequent merchant' },
+    ],
+    weeklyBreakdown: {
+      best: { dateRange: '01 Feb - 07 Feb', amount: '₦20,100' },
+      worst: { dateRange: '15 Feb - 21 Feb', amount: '₦38,600' },
+    },
+  },
+};
+
+const categoryColorOptions = [
+  { bg: '#E6EEFF', color: '#0B5CFF' },
+  { bg: '#F3F0FF', color: '#6B4EFF' },
+  { bg: '#EBF2FC', color: '#3377FF' },
+  { bg: '#E8F0FF', color: '#001A4D' },
+];
+
+function getCategoryStyle(index: number) {
+  return categoryColorOptions[index % categoryColorOptions.length];
+}
 
 export default function InsightsScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const today = new Date();
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
+  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [showFilter, setShowFilter] = useState(false);
+  const [filterPos, setFilterPos] = useState({ top: 0, right: 0 });
+  const filterBtnRef = useRef<View>(null);
+  const windowWidth = Dimensions.get('window').width;
 
-  // Sleek interactive state switcher for verifying active and empty states
-  const [hasEnoughData, setHasEnoughData] = useState(true);
+  const data = MOCK_DATA[monthKey(selectedYear, selectedMonth)];
+  const hasEnoughData = !!data;
+  const pct = data?.spendingHealth.percentage ?? 0;
+  const healthColor = pct >= 80 ? theme.roles.success : pct >= 70 ? theme.roles.warning : theme.roles.error;
+  const catStyle = getCategoryStyle(selectedMonth);
+  const selectedLabel = `${MONTH_NAMES[selectedMonth]} ${selectedYear}`;
 
-  // Mock data matching the specifications
-  const activeData = {
-    monthYear: 'May 2026',
-    spendingHealth: {
-      percentage: 85,
-      subtext: 'of income spent this month',
-    },
-    topCategory: {
-      name: 'Food & Dining',
-      amount: '₦45,000',
-      percentage: '34% of spend',
-      icon: 'restaurant' as const,
-    },
-    biggestSpend: {
-      merchant: 'Dana Air',
-      amount: '₦75,000',
-      date: '24 May 2026',
-    },
-    mostFrequent: {
-      merchant: 'Shoprite',
-      count: 12,
-      firstLetter: 'S',
-    },
-    weeklyBreakdown: {
-      best: {
-        dateRange: '08 May - 14 May',
-        amount: '₦15,400',
-      },
-      worst: {
-        dateRange: '15 May - 21 May',
-        amount: '₦48,200',
-      }
-    }
+  const openFilter = () => {
+    filterBtnRef.current?.measureInWindow((x, y, width, height) => {
+      setFilterPos({ top: y + height + 4, right: windowWidth - x - width });
+      setShowFilter(true);
+    });
   };
-
-  // Helper to dynamically color-code spending health progress bar
-  const getSpendingHealthColor = (percentage: number) => {
-    if (percentage < 70) return '#00BD00'; // Green
-    if (percentage <= 90) return '#FFA000'; // Amber/Yellow
-    return '#D30000'; // Red
-  };
-
-  const healthColor = getSpendingHealthColor(activeData.spendingHealth.percentage);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-      {/* Screen Header */}
       <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.headerTitle}>Insights</Text>
-            <Text style={styles.headerSubtitle}>{activeData.monthYear}</Text>
+            <Text style={styles.headerSubtitle}>Track your spending trends</Text>
           </View>
           <TouchableOpacity
-            style={[styles.notificationBtn, Shadows.sm]}
+            ref={filterBtnRef}
+            style={styles.filterDropdownBtn}
+            onPress={openFilter}
             activeOpacity={0.8}
           >
-            <BellIcon size={24} color="#001133" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Premium Segmented Toggle to Switch States for Testing */}
-        <View style={styles.toggleContainer}>
-          <TouchableOpacity
-            style={[
-              styles.toggleTab,
-              hasEnoughData && styles.toggleTabActive
-            ]}
-            onPress={() => setHasEnoughData(true)}
-            activeOpacity={0.9}
-          >
-            <Text style={[
-              styles.toggleTabText,
-              hasEnoughData && styles.toggleTabTextActive
-            ]}>
-              Active Insights
+            <Text style={styles.filterDropdownText}>
+              {selectedLabel}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.toggleTab,
-              !hasEnoughData && styles.toggleTabActive
-            ]}
-            onPress={() => setHasEnoughData(false)}
-            activeOpacity={0.9}
-          >
-            <Text style={[
-              styles.toggleTabText,
-              !hasEnoughData && styles.toggleTabTextActive
-            ]}>
-              Empty State
-            </Text>
+            <MaterialIcons name="expand-more" size={18} color="#001133" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Main Content Area */}
+      {showFilter && (
+        <TouchableOpacity
+          style={styles.notifOverlay}
+          activeOpacity={1}
+          onPress={() => setShowFilter(false)}
+        >
+          <View style={[styles.monthPicker, { top: filterPos.top, right: filterPos.right }]}>
+            {/* Year Header */}
+            <View style={styles.yearHeader}>
+              <TouchableOpacity onPress={() => setPickerYear(pickerYear - 1)} style={styles.yearArrow} activeOpacity={0.7}>
+                <MaterialIcons name="chevron-left" size={22} color="#001133" />
+              </TouchableOpacity>
+              <Text style={styles.yearText}>{pickerYear}</Text>
+              <TouchableOpacity onPress={() => setPickerYear(pickerYear + 1)} style={styles.yearArrow} activeOpacity={0.7}>
+                <MaterialIcons name="chevron-right" size={22} color="#001133" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Month Grid */}
+            <View style={styles.monthGrid}>
+              {MONTH_NAMES.map((name, i) => {
+                const isSelected = selectedYear === pickerYear && selectedMonth === i;
+                return (
+                  <TouchableOpacity
+                    key={name}
+                    style={[styles.monthCell, isSelected && styles.monthCellSelected]}
+                    onPress={() => {
+                      setSelectedYear(pickerYear);
+                      setSelectedMonth(i);
+                      setShowFilter(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.monthCellText, isSelected && styles.monthCellTextSelected]}>
+                      {name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </TouchableOpacity>
+      )}
+
       <ScrollView
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
@@ -131,139 +213,126 @@ export default function InsightsScreen() {
       >
         {hasEnoughData ? (
           <View style={styles.activeLayout}>
-            {/* Card 1 — Spending Health (full width) */}
+            {/* 1. Financial Health Score */}
             <View style={[styles.card, styles.healthCard, Shadows.sm]}>
               <Text style={styles.cardLabel}>Spending Health</Text>
-              
               <View style={styles.healthCenter}>
                 <Text style={[styles.healthPercentage, { color: healthColor }]}>
-                  {activeData.spendingHealth.percentage}%
+                  {data.spendingHealth.percentage}%
                 </Text>
-                <Text style={styles.healthSubtext}>
-                  {activeData.spendingHealth.subtext}
-                </Text>
+                <Text style={styles.healthSubtext}>{data.spendingHealth.subtext}</Text>
               </View>
-
-              {/* Progress bar */}
               <View style={styles.progressBarBg}>
-                <View 
+                <View
                   style={[
-                    styles.progressBarFill, 
-                    { 
-                      width: `${activeData.spendingHealth.percentage}%`,
-                      backgroundColor: healthColor 
-                    }
-                  ]} 
+                    styles.progressBarFill,
+                    { width: `${pct}%`, backgroundColor: healthColor },
+                  ]}
                 />
               </View>
+              <Text style={[styles.vsPrevious, { color: healthColor }]}>
+                {data.spendingHealth.vsPrevious}
+              </Text>
             </View>
 
-            {/* Card 2 & 3 — Side by side */}
+            {/* 2. Top Category & Biggest Spend */}
             <View style={styles.sideBySideContainer}>
-              {/* Card 2: Top Category (Green Tint) */}
-              <View style={[styles.sideCard, styles.categoryCard]}>
-                <Text style={styles.categoryLabel}>Top Category</Text>
-                
-                <View style={styles.categoryIconCircle}>
-                  <MaterialIcons name={activeData.topCategory.icon} size={18} color="#007D3A" />
+              <View style={[styles.sideCard, { backgroundColor: catStyle.bg }]}>
+                <Text style={[styles.categoryLabel, { color: catStyle.color }]}>Top Category</Text>
+                <View style={[styles.categoryIconCircle, { backgroundColor: '#FFFFFF' }]}>
+                  <MaterialIcons name={data.topCategory.icon} size={18} color={catStyle.color} />
                 </View>
-
-                <Text style={styles.categoryName} numberOfLines={1}>
-                  {activeData.topCategory.name}
+                <Text style={[styles.categoryName, { color: '#001133' }]} numberOfLines={1}>
+                  {data.topCategory.name}
                 </Text>
-                
-                <Text style={styles.categoryAmount} numberOfLines={1}>
+                <Text style={[styles.categoryAmount, { color: '#001133' }]} numberOfLines={1}>
                   <Text style={styles.nairaSymbol}>₦</Text>
-                  {activeData.topCategory.amount.replace('₦', '')}
+                  {data.topCategory.amount.replace('₦', '')}
                 </Text>
-
-                <Text style={styles.categorySubtext}>
-                  {activeData.topCategory.percentage}
+                <Text style={[styles.categorySubtext, { color: catStyle.color }]}>
+                  {data.topCategory.percentage}
                 </Text>
               </View>
 
-              {/* Card 3: Biggest Spend (Red Tint) */}
               <View style={[styles.sideCard, styles.spendCard]}>
                 <Text style={styles.spendLabel}>Biggest Spend</Text>
-                
                 <View style={styles.spendIconCircle}>
                   <MaterialIcons name="local-airport" size={18} color="#D30000" />
                 </View>
-
                 <Text style={styles.spendMerchant} numberOfLines={1}>
-                  {activeData.biggestSpend.merchant}
+                  {data.biggestSpend.merchant}
                 </Text>
-                
                 <Text style={styles.spendAmount} numberOfLines={1}>
                   <Text style={styles.nairaSymbol}>₦</Text>
-                  {activeData.biggestSpend.amount.replace('₦', '')}
+                  {data.biggestSpend.amount.replace('₦', '')}
                 </Text>
-
-                <Text style={styles.spendSubtext}>
-                  {activeData.biggestSpend.date}
-                </Text>
+                <Text style={styles.spendSubtext}>{data.biggestSpend.date}</Text>
               </View>
             </View>
 
-            {/* Card 4 — Most Visited Merchant (full width) */}
-            <View style={[styles.card, styles.frequentCard, Shadows.sm]}>
-              <View style={styles.frequentHeaderRow}>
-                <View style={styles.merchantLogoCircle}>
-                  <Text style={styles.merchantLogoText}>
-                    {activeData.mostFrequent.firstLetter}
-                  </Text>
-                </View>
-                <View style={styles.frequentDetails}>
-                  <Text style={styles.frequentLabel}>Most Frequent</Text>
-                  <Text style={styles.frequentMerchantName}>
-                    {activeData.mostFrequent.merchant}
-                  </Text>
-                  <Text style={styles.frequentSubtext}>
-                    You've transacted here {activeData.mostFrequent.count} times this month
-                  </Text>
-                </View>
+            {/* 3. Alerts */}
+            <View style={[styles.card, Shadows.sm]}>
+              <Text style={styles.cardLabel}>Alerts</Text>
+              <View style={styles.alertsContainer}>
+                {data.alerts.map((alert, i) => (
+                  <View key={i} style={styles.alertRow}>
+                    <View style={styles.alertIconCircle}>
+                      <MaterialIcons name={alert.icon} size={16} color="#D30000" />
+                    </View>
+                    <Text style={styles.alertText}>{alert.text}</Text>
+                  </View>
+                ))}
               </View>
             </View>
 
-            {/* Card 5 — Best vs Worst Week (full width) */}
+            {/* 4. Behaviour Patterns */}
+            <View style={[styles.card, { backgroundColor: '#F1F2F6' }, Shadows.sm]}>
+              <Text style={styles.cardLabel}>Behaviour Patterns</Text>
+              <View style={styles.behaviourContainer}>
+                {data.behaviourPatterns.map((pattern, i) => (
+                  <View key={i} style={[styles.behaviourRow, i < data.behaviourPatterns.length - 1 && styles.behaviourRowBorder]}>
+                    <View style={styles.behaviourIconCircle}>
+                      <MaterialIcons name={pattern.icon} size={18} color="#0B5CFF" />
+                    </View>
+                    <Text style={styles.behaviourText}>{pattern.text}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            {/* 5. Weekly Breakdown */}
             <View style={[styles.card, styles.weeklyCard, Shadows.sm]}>
               <Text style={styles.weeklyLabel}>Weekly Breakdown</Text>
-              
-              {/* Best Week Row */}
               <View style={styles.weeklyRow}>
                 <View style={[styles.weeklyArrowCircle, { backgroundColor: '#E8F8EE' }]}>
                   <MaterialIcons name="arrow-upward" size={16} color="#00BD00" />
                 </View>
                 <View style={styles.weeklyRowDetails}>
                   <Text style={styles.weeklyRowTitle}>Best Week</Text>
-                  <Text style={styles.weeklyRowDate}>{activeData.weeklyBreakdown.best.dateRange}</Text>
+                  <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.best.dateRange}</Text>
                 </View>
                 <Text style={[styles.weeklyAmount, { color: '#00BD00' }]}>
                   <Text style={styles.nairaSymbol}>₦</Text>
-                  {activeData.weeklyBreakdown.best.amount.replace('₦', '')}
+                  {data.weeklyBreakdown.best.amount.replace('₦', '')}
                 </Text>
               </View>
-
               <View style={styles.weeklyDivider} />
-
-              {/* Worst Week Row */}
               <View style={styles.weeklyRow}>
                 <View style={[styles.weeklyArrowCircle, { backgroundColor: '#FDECEB' }]}>
                   <MaterialIcons name="arrow-downward" size={16} color="#D30000" />
                 </View>
                 <View style={styles.weeklyRowDetails}>
                   <Text style={styles.weeklyRowTitle}>Worst Week</Text>
-                  <Text style={styles.weeklyRowDate}>{activeData.weeklyBreakdown.worst.dateRange}</Text>
+                  <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.worst.dateRange}</Text>
                 </View>
                 <Text style={[styles.weeklyAmount, { color: '#D30000' }]}>
                   <Text style={styles.nairaSymbol}>₦</Text>
-                  {activeData.weeklyBreakdown.worst.amount.replace('₦', '')}
+                  {data.weeklyBreakdown.worst.amount.replace('₦', '')}
                 </Text>
               </View>
             </View>
           </View>
         ) : (
-          /* Empty State View */
           <View style={[styles.emptyContainer, Shadows.sm]}>
             <View style={styles.emptyIconWrapper}>
               <MaterialIcons name="bar-chart" size={56} color="#C5C3BF" />
@@ -282,12 +351,12 @@ export default function InsightsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFC', // Premium light-gray screen background
+    backgroundColor: '#F9FAFC',
   },
   headerContainer: {
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 24,
-    paddingBottom: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
     ...Platform.select({
@@ -297,72 +366,107 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.03,
         shadowRadius: 5,
       },
-      android: {
-        elevation: 2,
-      },
+      android: { elevation: 2 },
     }),
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   headerTitle: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 24,
     color: '#001133',
-    fontWeight: '700',
   },
   headerSubtitle: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 14,
     color: '#7B786F',
     marginTop: -2,
   },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F1F2F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  toggleContainer: {
+  filterDropdownBtn: {
     flexDirection: 'row',
-    backgroundColor: '#F1F2F6',
-    borderRadius: Radius.md,
-    padding: 4,
-    height: 44,
-  },
-  toggleTab: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.md - 2,
+    backgroundColor: '#F1F2F6',
+    borderRadius: Radius.full,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    gap: 4,
+    height: 40,
   },
-  toggleTabActive: {
+  filterDropdownText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 13,
+    color: '#001133',
+  },
+  notifOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 999,
+  },
+  monthPicker: {
+    position: 'absolute',
     backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    width: 220,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.08,
-        shadowRadius: 4,
+        shadowRadius: 8,
       },
-      android: {
-        elevation: 3,
-      },
+      android: { elevation: 4 },
     }),
   },
-  toggleTabText: {
-    fontFamily: 'Poppins-Medium',
-    fontSize: 13,
-    color: '#7B786F',
+  yearHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginBottom: 12,
   },
-  toggleTabTextActive: {
+  yearArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  yearText: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 16,
     color: '#001133',
-    fontFamily: 'Poppins-SemiBold',
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  monthCell: {
+    width: '33.333%',
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthCellSelected: {
+    backgroundColor: '#0B5CFF',
+    borderRadius: Radius.full,
+    width: '33.333%',
+    paddingVertical: 8,
+    alignSelf: 'center',
+  },
+  monthCellText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 13,
+    color: '#001133',
+  },
+  monthCellTextSelected: {
+    fontFamily: Typography.fonts.medium,
+    color: '#FFFFFF',
   },
   scrollContainer: {
     flex: 1,
@@ -370,7 +474,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: Platform.OS === 'ios' ? 120 : 100, // Safe padding below tab bar
+    paddingBottom: Platform.OS === 'ios' ? 120 : 100,
   },
   activeLayout: {
     gap: 16,
@@ -381,10 +485,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   cardLabel: {
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: Typography.fonts.display,
     fontSize: 14,
     color: '#7B786F',
-    fontWeight: '600',
     marginBottom: 12,
   },
   healthCard: {
@@ -396,28 +499,32 @@ const styles = StyleSheet.create({
     marginVertical: 12,
   },
   healthPercentage: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 48,
-    fontWeight: '700',
     letterSpacing: -0.5,
   },
   healthSubtext: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 14,
     color: '#7B786F',
-    marginTop: 4,
   },
   progressBarBg: {
     width: '100%',
-    height: 6,
+    height: 8,
     backgroundColor: '#F0F0F0',
     borderRadius: 3,
     overflow: 'hidden',
-    marginTop: 8,
+    marginTop: 6,
   },
   progressBarFill: {
     height: '100%',
     borderRadius: 3,
+  },
+  vsPrevious: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
   sideBySideContainer: {
     flexDirection: 'row',
@@ -430,52 +537,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     height: 156,
   },
-  categoryCard: {
-    backgroundColor: '#E8F8EE', // Light green tint
-  },
   categoryLabel: {
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: Typography.fonts.display,
     fontSize: 12,
-    color: '#007D3A',
-    fontWeight: '600',
   },
   categoryIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 8,
   },
   categoryName: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 15,
-    color: '#001133',
-    fontWeight: '700',
   },
   categoryAmount: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 18,
-    color: '#001133',
-    fontWeight: '700',
     marginTop: 2,
   },
   categorySubtext: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 11,
-    color: '#007D3A',
     opacity: 0.8,
     marginTop: 2,
   },
   spendCard: {
-    backgroundColor: '#FDECEB', // Light red tint
+    backgroundColor: '#FDECEB',
   },
   spendLabel: {
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: Typography.fonts.display,
     fontSize: 12,
     color: '#D30000',
-    fontWeight: '600',
   },
   spendIconCircle: {
     width: 32,
@@ -487,91 +582,81 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   spendMerchant: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 15,
     color: '#001133',
-    fontWeight: '700',
   },
   spendAmount: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 18,
     color: '#D30000',
-    fontWeight: '700',
     marginTop: 2,
   },
   spendSubtext: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 11,
     color: '#D30000',
     opacity: 0.8,
     marginTop: 2,
   },
-  frequentCard: {
-    backgroundColor: '#F1F2F6', // Subtle grey background
-    padding: 16,
+  alertsContainer: {
+    gap: 12,
   },
-  frequentHeaderRow: {
+  alertRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  alertIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FDECEB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  alertText: {
+    flex: 1,
+    fontFamily: Typography.fonts.body,
+    fontSize: 13,
+    color: '#001133',
+    lineHeight: 18,
+  },
+  behaviourContainer: {
+    gap: 0,
+  },
+  behaviourRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
   },
-  merchantLogoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  behaviourRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  behaviourIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
   },
-  merchantLogoText: {
-    fontFamily: 'Poppins-Bold',
-    fontSize: 20,
-    color: '#0B5CFF',
-    fontWeight: '700',
-  },
-  frequentDetails: {
+  behaviourText: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  frequentLabel: {
-    fontFamily: 'Poppins-SemiBold',
-    fontSize: 11,
-    color: '#7B786F',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  frequentMerchantName: {
-    fontFamily: 'Poppins-Bold',
-    fontSize: 16,
+    fontFamily: Typography.fonts.body,
+    fontSize: 14,
     color: '#001133',
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  frequentSubtext: {
-    fontFamily: 'Poppins',
-    fontSize: 13,
-    color: '#7B786F',
-    marginTop: 4,
   },
   weeklyCard: {
     paddingBottom: 8,
   },
   weeklyLabel: {
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: Typography.fonts.display,
     fontSize: 14,
     color: '#7B786F',
-    fontWeight: '600',
     marginBottom: 16,
   },
   weeklyRow: {
@@ -591,21 +676,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   weeklyRowTitle: {
-    fontFamily: 'Poppins-SemiBold',
+    fontFamily: Typography.fonts.body,
     fontSize: 14,
     color: '#001133',
-    fontWeight: '600',
   },
   weeklyRowDate: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 12,
     color: '#7B786F',
     marginTop: 2,
   },
   weeklyAmount: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.body,
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   weeklyDivider: {
     height: 1,
@@ -630,14 +714,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   emptyTitle: {
-    fontFamily: 'Poppins-Bold',
+    fontFamily: Typography.fonts.display,
     fontSize: 18,
     color: '#001133',
-    fontWeight: '700',
     marginBottom: 8,
   },
   emptyText: {
-    fontFamily: 'Poppins',
+    fontFamily: Typography.fonts.body,
     fontSize: 14,
     color: '#7B786F',
     textAlign: 'center',

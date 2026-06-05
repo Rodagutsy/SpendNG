@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.bodyM,
   },
   scrollContent: {
-    paddingBottom: Spacing[32],
+    paddingBottom: Spacing[8],
   },
   section: {
     paddingHorizontal: Spacing[4],

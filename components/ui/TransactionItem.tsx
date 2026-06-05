@@ -38,8 +38,8 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   const amountColor = type === 'debit' ? theme.error : theme.success;
 
   return (
-    <TouchableOpacity 
-      style={[styles.container, { backgroundColor: theme.surface }]} 
+    <TouchableOpacity
+      style={[styles.container, { backgroundColor: theme.surface }]}
       onPress={onPress}
       activeOpacity={0.7}
     >
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   merchant: {
     fontFamily: Typography.fonts.title,
     fontSize: Typography.sizes.bodyM,
-    fontWeight: '600',
+    fontWeight: '500',
     marginBottom: 2,
   },
   detail: {
@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   amount: {
     fontFamily: Typography.fonts.title,
     fontSize: Typography.sizes.bodyM,
-    fontWeight: '700',
+    fontWeight: '500',
     marginBottom: 2,
   },
   category: {
