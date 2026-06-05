@@ -134,7 +134,7 @@ export default function InsightsScreen() {
   const hasEnoughData = true;
   const data = MOCK_DATA[selectedMonth];
   const pct = data.spendingHealth.percentage;
-  const healthColor = pct >= 80 ? theme.roles.success : pct >= 70 ? theme.roles.warning : theme.roles.error;
+  const healthColor = pct >= 70 ? theme.roles.error : pct >= 50 ? theme.roles.warning : theme.roles.success;
   const selectedMonthIdx = Math.max(0, MONTHS_SHORT.findIndex(m => m.toLowerCase() === selectedMonth.replace(/\d/g, '')));
   const catStyle = getCategoryStyle(selectedMonthIdx);
 

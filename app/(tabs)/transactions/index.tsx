@@ -180,31 +180,7 @@ export default function TransactionsScreen() {
 
       <View style={[styles.listCard, { backgroundColor: theme.surface }]}>
         <View style={styles.pillsFilterRow}>
-          <View style={styles.typePillsRow}>
-            {TX_TYPE_PILLS.map((pill) => (
-              <TouchableOpacity
-                key={pill.key}
-                style={[
-                  styles.typePill,
-                  {
-                    backgroundColor: txTypeFilter === pill.key ? theme.primary : theme.background,
-                    borderColor: txTypeFilter === pill.key ? theme.primary : theme.outlineVariant,
-                  },
-                ]}
-                onPress={() => setTxTypeFilter(pill.key)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.typePillText,
-                    { color: txTypeFilter === pill.key ? theme.onPrimary : theme.onBackground },
-                  ]}
-                >
-                  {pill.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Text style={[styles.sectionHeaderTitle, { color: theme.onBackground }]}>Transactions</Text>
 
           <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, { backgroundColor: theme.background }]}>
             <IconSymbol name="line.3.horizontal.decrease" size={18} color={theme.onBackground} />
@@ -289,19 +265,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
-  typePillsRow: {
-    flexDirection: 'row',
-    gap: Spacing[1],
-  },
-  typePill: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  typePillText: {
+  sectionHeaderTitle: {
     fontFamily: Typography.fonts.medium,
-    fontSize: 13,
+    fontSize: 16,
   },
   searchRow: {
     flexDirection: 'row',
