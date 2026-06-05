@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    gap: 8,
+    gap: 6,
   },
   activeLabel: {
     color: '#003399',

@@ -38,6 +38,7 @@ export default function FilterPanelScreen() {
   const [selectedCategory, setSelectedCategory] = useState<string | undefined>(filters.categoryId);
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const [keyword, setKeyword] = useState(filters.keyword ?? '');
+  const [searchFocused, setSearchFocused] = useState(false);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -210,8 +211,20 @@ export default function FilterPanelScreen() {
         {/* Keyword Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Keyword</Text>
-          <View style={[styles.searchContainer, { backgroundColor: theme.surface, borderColor: theme.outlineVariant }]}>
-            <IconSymbol name="magnifyingglass" size={18} color={theme.outline} />
+          <View
+            style={[
+              styles.searchContainer,
+              {
+                backgroundColor: theme.surface,
+                borderColor: searchFocused ? theme.primary : theme.outlineVariant,
+              },
+            ]}
+          >
+            <IconSymbol
+              name="magnifyingglass"
+              size={18}
+              color={searchFocused ? theme.primary : theme.outlineVariant}
+            />
             <TextInput
               style={[styles.searchInput, { color: theme.onBackground }]}
               placeholder="Search by merchant name..."
@@ -219,10 +232,12 @@ export default function FilterPanelScreen() {
               value={keyword}
               onChangeText={setKeyword}
               returnKeyType="search"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
             />
             {keyword ? (
               <TouchableOpacity onPress={() => setKeyword('')}>
-                <IconSymbol name="plus" size={18} color={theme.outline} />
+                <IconSymbol name="plus" size={18} color={theme.outlineVariant} style={{ transform: [{ rotate: '45deg' }] }} />
               </TouchableOpacity>
             ) : null}
           </View>

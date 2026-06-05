@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { TextInput } from '@/components/ui/TextInput';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -29,31 +30,23 @@ export default function ProfileScreen() {
           <IconSymbol name="person.fill" size={32} color={theme.primary} />
         </View>
 
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: theme.outline }]}>Name</Text>
-          <TextInput
-            style={[styles.input, { color: theme.onBackground, borderColor: theme.outlineVariant, backgroundColor: editing ? theme.surfaceContainerLow : theme.surface }]}
-            value={name}
-            onChangeText={setName}
-            editable={editing}
-            placeholder="Your name"
-            placeholderTextColor={theme.outline}
-          />
-        </View>
+        <TextInput
+          label="Name"
+          value={name}
+          onChangeText={setName}
+          editable={editing}
+          placeholder="Your name"
+        />
 
-        <View style={styles.fieldGroup}>
-          <Text style={[styles.label, { color: theme.outline }]}>Email</Text>
-          <TextInput
-            style={[styles.input, { color: theme.onBackground, borderColor: theme.outlineVariant, backgroundColor: editing ? theme.surfaceContainerLow : theme.surface }]}
-            value={email}
-            onChangeText={setEmail}
-            editable={editing}
-            placeholder="Your email"
-            placeholderTextColor={theme.outline}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
+        <TextInput
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          editable={editing}
+          placeholder="Your email"
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
 
         <TouchableOpacity
           style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
@@ -104,26 +97,6 @@ const styles = StyleSheet.create({
     borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  fieldGroup: {
-    width: '100%',
-    gap: Spacing[1],
-  },
-  label: {
-    fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.labelL,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  input: {
-    width: '100%',
-    height: 44,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    fontFamily: Typography.fonts.body,
-    fontSize: 15,
   },
   primaryBtn: {
     width: '100%',

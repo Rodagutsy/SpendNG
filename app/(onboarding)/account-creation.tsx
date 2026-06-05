@@ -87,11 +87,11 @@ export default function AccountCreationScreen() {
         <View style={[styles.radio, agreed && { backgroundColor: theme.primary, borderColor: theme.primary }]} />
         <Text style={[styles.termsText, { color: theme.onBackground }]}>
           By creating an account, you agree to our{' '}
-          <Text style={{ color: theme.primary }} onPress={() => {}}>
+          <Text style={{ color: theme.primary }} onPress={() => { }}>
             Terms of Service
           </Text>{' '}
           and{' '}
-          <Text style={{ color: theme.primary }} onPress={() => {}}>
+          <Text style={{ color: theme.primary }} onPress={() => { }}>
             Privacy Policy
           </Text>
           .
@@ -125,7 +125,7 @@ export default function AccountCreationScreen() {
       </TouchableOpacity>
 
       <Text style={[styles.footerText, { color: theme.onBackground }]}>
-        Already have an account?{' '}
+        Have an account?{' '}
         <Text style={{ color: theme.primary }} onPress={() => router.push('/(onboarding)/sign-in')}>
           Sign In
         </Text>
