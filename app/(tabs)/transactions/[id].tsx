@@ -126,9 +126,9 @@ export default function TransactionDetailScreen() {
               </Text>
             </View>
           </View>
-            <Text style={[styles.amountValue, { color: amountColor }]}>
-              <Text style={styles.amountCurrency}>₦</Text>{formattedNumber}
-            </Text>
+          <Text style={[styles.amountValue, { color: amountColor }]}>
+            <Text style={styles.amountCurrency}>₦</Text>{formattedNumber}
+          </Text>
           <Text style={[styles.dateText, { color: theme.outline }]}>{formattedDate}</Text>
         </View>
 
@@ -269,6 +269,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing[4],
     height: 56,
+    paddingTop: Spacing[4],
   },
   headerBtn: {
     width: 40,
@@ -403,7 +404,7 @@ const styles = StyleSheet.create({
   actionBtn: {
     flex: 1,
     height: 48,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },

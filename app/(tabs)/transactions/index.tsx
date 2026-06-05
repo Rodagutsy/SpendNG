@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
@@ -34,6 +34,7 @@ export default function TransactionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'credit' | 'debit'>('all');
 
   useEffect(() => {
     fetchTransactions();
@@ -61,8 +62,14 @@ export default function TransactionsScreen() {
 
   const hasActiveFilters = Object.keys(filters).length > 0;
 
-  const resolvedTransactions = useMemo(() =>
-    transactions.map((t) => {
+  const TX_TYPE_PILLS = [
+    { key: 'all', label: 'All' },
+    { key: 'credit', label: 'Money In' },
+    { key: 'debit', label: 'Money Out' },
+  ] as const;
+
+  const resolvedTransactions = useMemo(() => {
+    const mapped = transactions.map((t) => {
       const cat = getCategoryById(t.categoryId);
       return {
         ...t,
@@ -70,9 +77,10 @@ export default function TransactionsScreen() {
         categoryIcon: cat?.iconIdentifier ?? 'help-circle',
         categoryColor: cat?.colorHex ?? '#ADAAA4',
       };
-    }),
-    [transactions, categories],
-  );
+    });
+    if (txTypeFilter === 'all') return mapped;
+    return mapped.filter((t) => t.transactionType === txTypeFilter);
+  }, [transactions, categories, txTypeFilter]);
 
   const renderItem = ({ item }: any) => (
     <TransactionItem
@@ -120,11 +128,12 @@ export default function TransactionsScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing[3], backgroundColor: theme.surface }]}>
+    <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={styles.topSection}>
         <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: theme.onBackground }]}>Transactions</Text>
+          <Text style={[styles.title, { color: theme.onBackground }]}>Activity</Text>
         </View>
+
         <View style={styles.searchRow}>
           <View
             style={[
@@ -157,42 +166,74 @@ export default function TransactionsScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, { backgroundColor: theme.ripple }]}>
+
+          <TouchableOpacity
+            style={[styles.exportBtn, { backgroundColor: theme.primary }]}
+            onPress={() => setShowExportModal(true)}
+            activeOpacity={0.85}
+          >
+            <IconSymbol name="square.and.arrow.up" size={16} color={theme.onPrimary} />
+            <Text style={[styles.exportBtnText, { color: theme.onPrimary }]}>Export</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={[styles.listCard, { backgroundColor: theme.surface }]}>
+        <View style={styles.pillsFilterRow}>
+          <View style={styles.typePillsRow}>
+            {TX_TYPE_PILLS.map((pill) => (
+              <TouchableOpacity
+                key={pill.key}
+                style={[
+                  styles.typePill,
+                  {
+                    backgroundColor: txTypeFilter === pill.key ? theme.primary : theme.background,
+                    borderColor: txTypeFilter === pill.key ? theme.primary : theme.outlineVariant,
+                  },
+                ]}
+                onPress={() => setTxTypeFilter(pill.key)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.typePillText,
+                    { color: txTypeFilter === pill.key ? theme.onPrimary : theme.onBackground },
+                  ]}
+                >
+                  {pill.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, { backgroundColor: theme.background }]}>
             <IconSymbol name="line.3.horizontal.decrease" size={18} color={theme.onBackground} />
             {hasActiveFilters && <View style={[styles.filterDot, { backgroundColor: theme.primary }]} />}
           </TouchableOpacity>
         </View>
+
         {hasActiveFilters && (
           <TouchableOpacity onPress={clearFilters} style={styles.clearRow}>
             <Text style={[styles.clearText, { color: theme.primary }]}>Clear filters</Text>
           </TouchableOpacity>
         )}
-      </View>
 
-      <FlatList
-        data={resolvedTransactions}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        ListEmptyComponent={renderEmpty}
-        refreshing={refreshing}
-        onRefresh={onRefresh}
-        contentContainerStyle={[styles.listContent, resolvedTransactions.length === 0 && styles.listEmpty]}
-        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.outlineVariant }]} />}
-        showsVerticalScrollIndicator={false}
-      />
+        <FlatList
+          data={resolvedTransactions}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          ListEmptyComponent={renderEmpty}
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          contentContainerStyle={[styles.listContent, resolvedTransactions.length === 0 && styles.listEmpty]}
+          ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.outlineVariant }]} />}
+          showsVerticalScrollIndicator={false}
+        />
+      </View>
 
       <ExportModal visible={showExportModal} onClose={() => setShowExportModal(false)} />
       <FilterModal visible={showFilterModal} onClose={() => setShowFilterModal(false)} />
-
-      <TouchableOpacity
-        style={[styles.exportFab, { backgroundColor: theme.primary }]}
-        onPress={() => setShowExportModal(true)}
-        activeOpacity={0.85}
-      >
-        <IconSymbol name="square.and.arrow.up" size={18} color={theme.onPrimary} />
-        <Text style={[styles.exportFabText, { color: theme.onPrimary }]}>Export</Text>
-      </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -200,26 +241,25 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  topSection: {
     paddingHorizontal: Spacing[4],
     paddingBottom: Spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: 'transparent',
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 32, // 32px bottom spacing under the title
+    marginBottom: 24,
+    marginTop: 32,
   },
   title: {
-    fontFamily: Typography.fonts.medium, // 500 font weight
-    fontSize: Typography.sizes.titleS, // 20px similar font size
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.titleL
   },
   filterBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
+    width: 48,
+    height: 48,
+    borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -231,30 +271,42 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  exportFab: {
-    position: 'absolute',
-    alignSelf: 'center',
-    bottom: 16,
+  exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     height: 48,
-    paddingHorizontal: 28,
-    borderRadius: Radius.full,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    paddingHorizontal: 14,
+    borderRadius: Radius.sm,
   },
-  exportFabText: {
-    fontFamily: Typography.fonts.display,
-    fontSize: Typography.sizes.buttonL,
+  exportBtnText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.buttonM,
+  },
+  pillsFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  typePillsRow: {
+    flexDirection: 'row',
+    gap: Spacing[1],
+  },
+  typePill: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  typePillText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 13,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: 16,
   },
   searchContainer: {
     flex: 1,
@@ -279,16 +331,24 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelL,
   },
+  listCard: {
+    flex: 1,
+    marginHorizontal: Spacing[4],
+    marginTop: Spacing[3],
+    marginBottom: Spacing[3],
+    borderRadius: Radius.lg,
+    padding: Spacing[3],
+    overflow: 'hidden',
+  },
   listContent: {
-    paddingBottom: Spacing[16],
+    paddingBottom: Spacing[4],
   },
   listEmpty: {
     flex: 1,
     justifyContent: 'center',
   },
   separator: {
-    height: 1,
-    marginLeft: 84,
+    height: 0.5,
   },
   emptyContainer: {
     alignItems: 'center',

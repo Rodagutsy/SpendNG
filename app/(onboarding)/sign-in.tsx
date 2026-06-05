@@ -50,7 +50,7 @@ export default function SignInScreen() {
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
-        containerStyle={{ marginBottom: 12 }}
+        containerStyle={{ marginBottom: 8 }}
       />
       <TextInput
         label="Password"
@@ -106,13 +106,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 32,
-    marginTop: 40,
+    marginTop: 24,
   },
   title: {
     fontSize: 28,
     fontWeight: '600',
     lineHeight: 40,
-    marginBottom: 8,
+    marginBottom: Spacing[1],
     textAlign: 'left',
     fontFamily: Typography.fonts.display,
   },
@@ -143,20 +143,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 48,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     borderWidth: 1,
-    gap: 8,
+    gap: Spacing[2],
   },
   googleButtonText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.buttonM,
-    fontWeight: '500',
   },
   forgotPassword: {
     textAlign: 'right',
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelL,
-    fontWeight: '500',
+
   },
   footerText: {
     textAlign: 'center',

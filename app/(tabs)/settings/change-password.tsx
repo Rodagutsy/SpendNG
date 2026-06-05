@@ -42,7 +42,7 @@ export default function ChangePasswordScreen() {
         [],
         { cancelable: false }
       );
-      
+
       // Auto redirect back within 3 seconds
       setTimeout(() => {
         router.back();
@@ -114,8 +114,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing[6],
-    marginTop: Spacing[4],
-    marginBottom: 32, // 32px bottom spacing
+    marginTop: Spacing[8],
+    paddingBottom: Spacing[4]
   },
   backBtn: {
     width: 32,
@@ -125,19 +125,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontFamily: Typography.fonts.medium, // 500 font weight
-    fontSize: Typography.sizes.titleS, // 20px similar font size
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.titleM,
   },
   form: {
     paddingHorizontal: Spacing[6],
-    gap: 12, // 12px spacing between input fields in a form
+    gap: Spacing[3],
   },
   saveBtn: {
-    height: 48, // Height of 48px
-    borderRadius: Radius.sm, // Corner radius of 8px
+    height: 48,
+    borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 8,
+    marginTop: Spacing[2],
   },
   saveBtnText: {
     fontFamily: Typography.fonts.display,

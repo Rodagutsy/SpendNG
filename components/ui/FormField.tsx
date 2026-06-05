@@ -22,5 +22,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: 13,
     color: '#001133',
+    marginBottom: 4,
   },
 });

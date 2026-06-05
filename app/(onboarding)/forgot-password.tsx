@@ -110,13 +110,13 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 32,
-    marginTop: 40,
+    marginTop: 24,
   },
   title: {
     fontSize: 28,
     fontWeight: '600',
     lineHeight: 40,
-    marginBottom: 12,
+    marginBottom: Spacing[1],
     textAlign: 'left',
     fontFamily: Typography.fonts.display,
   },

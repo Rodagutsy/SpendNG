@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: Spacing[6],
-    paddingTop: Spacing[16],
+    paddingTop: Spacing[8],
     marginBottom: Spacing[4],
   },
   backBtn: {
@@ -66,9 +66,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontFamily: Typography.fonts.display,
-    fontSize: Typography.sizes.headlineM,
-    fontWeight: '700',
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.titleM
   },
   body: {
     fontFamily: Typography.fonts.body,

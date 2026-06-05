@@ -136,17 +136,18 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: Spacing[6],
     marginTop: Spacing[4],
-    marginBottom: 32, // 32px bottom spacing
+    marginBottom: 16,
+    paddingTop: 16,
   },
   title: {
-    fontFamily: Typography.fonts.medium, // 500 font weight
-    fontSize: Typography.sizes.titleS, // 20px similar font size
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.titleL,
   },
   profileHeaderCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: Spacing[6],
+    paddingVertical: 8,
+    paddingHorizontal: Spacing[2],
     marginHorizontal: Spacing[4],
     borderRadius: Radius.md,
     marginBottom: 20, // 20px section spacing
@@ -209,7 +210,7 @@ const styles = StyleSheet.create({
   },
   logoutBtn: {
     width: '85%',
-    height: 48, // 48px height
+    height: 48,
     borderWidth: 1.5,
     borderRadius: Radius.sm, // 8px corner radius
     justifyContent: 'center',
@@ -217,9 +218,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   logoutBtnText: {
-    fontFamily: Typography.fonts.medium,
+    fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.buttonL,
-    fontWeight: '600',
+
   },
   deleteLink: {
     paddingVertical: 8,

@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelL,
-    marginBottom: Spacing[2],
+    marginBottom: Spacing[1],
     fontWeight: '500',
   },
   inputWrapper: {
