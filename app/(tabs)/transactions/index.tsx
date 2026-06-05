@@ -30,6 +30,7 @@ export default function TransactionsScreen() {
   const { categories, fetchCategories, getCategoryById } = useCategoryStore();
 
   const [searchText, setSearchText] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -125,8 +126,21 @@ export default function TransactionsScreen() {
           <Text style={[styles.title, { color: theme.onBackground }]}>Transactions</Text>
         </View>
         <View style={styles.searchRow}>
-          <View style={[styles.searchContainer, { backgroundColor: theme.background }]}>
-            <IconSymbol name="magnifyingglass" size={18} color={theme.outline} />
+          <View
+            style={[
+              styles.searchContainer,
+              {
+                backgroundColor: theme.surface,
+                borderColor: searchFocused ? theme.primary : theme.outlineVariant,
+                borderWidth: 1,
+              },
+            ]}
+          >
+            <IconSymbol
+              name="magnifyingglass"
+              size={18}
+              color={searchFocused ? theme.primary : theme.outlineVariant}
+            />
             <TextInput
               style={[styles.searchInput, { color: theme.onBackground }]}
               placeholder="Search transactions..."
@@ -134,10 +148,12 @@ export default function TransactionsScreen() {
               value={searchText}
               onChangeText={setSearchText}
               returnKeyType="search"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
             />
             {searchText ? (
               <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <IconSymbol name="plus" size={18} color={theme.outline} />
+                <IconSymbol name="plus" size={18} color={theme.outlineVariant} style={{ transform: [{ rotate: '45deg' }] }} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -194,12 +210,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing[3],
+    marginBottom: 32, // 32px bottom spacing under the title
   },
   title: {
-    fontFamily: Typography.fonts.display,
-    fontSize: Typography.sizes.titleL,
-    fontWeight: '700',
+    fontFamily: Typography.fonts.medium, // 500 font weight
+    fontSize: Typography.sizes.titleS, // 20px similar font size
   },
   filterBtn: {
     width: 40,
@@ -246,15 +261,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing[3],
-    height: 44,
-    borderRadius: Radius.md,
+    height: 48,
+    borderRadius: Radius.sm,
     gap: Spacing[2],
   },
   searchInput: {
     flex: 1,
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,
-    height: 44,
+    height: 48,
   },
   clearRow: {
     alignItems: 'flex-end',

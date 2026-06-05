@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { Typography, Radius } from '@/constants/Tokens';
+import { Colors, Typography, Radius } from '@/constants/Tokens';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 interface AmountInputProps {
   value: string;
@@ -10,16 +11,21 @@ interface AmountInputProps {
 
 export const AmountInput: React.FC<AmountInputProps> = ({ value, onChangeText, placeholder }) => {
   const [focused, setFocused] = useState(false);
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
+
+  const borderColor = focused ? theme.primary : theme.outlineVariant;
+  const iconColor = focused ? theme.primary : theme.outlineVariant;
 
   return (
-    <View style={[styles.container, focused && styles.containerFocused]}>
-      <Text style={[styles.sign, focused && styles.signFocused]}>₦</Text>
+    <View style={[styles.container, { backgroundColor: theme.surface, borderColor }]}>
+      <Text style={[styles.sign, { color: iconColor }]}>₦</Text>
       <TextInput
-        style={[styles.input, focused && styles.inputFocused, { outlineStyle: 'none' } as any]}
+        style={[styles.input, { color: theme.onSurface, outlineStyle: 'none' } as any]}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder ?? '0.00'}
-        placeholderTextColor="#9E9E9E"
+        placeholderTextColor={theme.outline}
         keyboardType="decimal-pad"
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
@@ -33,24 +39,15 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
+    height: 48,
     borderRadius: Radius.sm,
-    borderWidth: 1.5,
-    borderColor: '#E0E0E0',
+    borderWidth: 1,
     paddingHorizontal: 16,
     gap: 10,
-    backgroundColor: '#FFFFFF',
-  },
-  containerFocused: {
-    borderColor: '#0B5CFF',
   },
   sign: {
     fontSize: 18,
     fontFamily: Typography.fonts.display,
-    color: '#9E9E9E',
-  },
-  signFocused: {
-    color: '#0B5CFF',
   },
   input: {
     flex: 1,
@@ -58,9 +55,5 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     padding: 0,
     height: '100%',
-    color: '#001133',
-  },
-  inputFocused: {
-    color: '#001133',
   },
 });

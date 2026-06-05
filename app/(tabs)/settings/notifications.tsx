@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Spacing[6],
     paddingTop: Spacing[16],
-    marginBottom: Spacing[4],
+    marginBottom: Spacing[2]
   },
   backBtn: {
     width: 32,
@@ -71,8 +71,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.fonts.display,
-    fontSize: Typography.sizes.headlineM,
-    fontWeight: '700',
+    fontSize: Typography.sizes.headlineS,
   },
   section: {
     marginHorizontal: Spacing[6],

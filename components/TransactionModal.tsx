@@ -306,7 +306,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
               {/* Sender/Receiver Name */}
               <FormField label={type === 'credit' ? 'Sender Name' : 'Receiver Name'}>
                 <View style={[styles.textInputWrap, nameFocused && styles.textInputWrapFocused]}>
-                  <MaterialIcons name="person-outline" size={18} color={nameFocused ? theme.primary : theme.outline} />
+                  <MaterialIcons name="person-outline" size={18} color={nameFocused ? theme.primary : theme.outlineVariant} />
                   <TextInput
                     style={[styles.textInputInner, { outlineStyle: 'none' } as any]}
                     value={name}
@@ -332,7 +332,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                   onPress={() => setShowCalendar(true)}
                   activeOpacity={0.7}
                 >
-                  <MaterialIcons name="calendar-today" size={18} color={theme.outline} />
+                  <MaterialIcons name="calendar-today" size={18} color={theme.outlineVariant} />
                   <Text style={[!dateText ? { color: theme.outline } : { color: theme.onBackground }, styles.dateFieldText]}>
                     {dateText || 'DD/MM/YYYY'}
                   </Text>
@@ -641,9 +641,9 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   textInputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 50,
+    height: 48,
     borderRadius: Radius.sm,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: theme.outlineVariant,
     paddingHorizontal: 16,
     gap: 10,

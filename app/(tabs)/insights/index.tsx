@@ -340,6 +340,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 24,
     paddingBottom: 12,
+    marginBottom: 32, // 32px bottom spacing under header
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
     ...Platform.select({
@@ -359,8 +360,8 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   headerTitle: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 24,
+    fontFamily: Typography.fonts.medium, // 500 font weight
+    fontSize: Typography.sizes.titleS, // 20px similar font size
     color: '#001133',
   },
   headerSubtitle: {

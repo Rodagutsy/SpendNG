@@ -62,7 +62,7 @@ export const TextInput: React.FC<TextInputProps> = ({
             },
             style,
           ]}
-          placeholderTextColor={theme.outlineVariant}
+          placeholderTextColor={theme.outline}
           secureTextEntry={isSecure}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
@@ -77,7 +77,7 @@ export const TextInput: React.FC<TextInputProps> = ({
             <IconSymbol
               name={isPasswordVisible ? "eye.slash" : "eye"}
               size={20}
-              color={theme.outlineVariant}
+              color={borderColor}
             />
           </TouchableOpacity>
         )}
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   input: {
     height: 48,
     borderWidth: 1,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     paddingHorizontal: Spacing[4],
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,

@@ -47,6 +47,7 @@ interface TransactionState {
   updateNotes: (id: string, notes: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<TransactionRecord>) => void;
   deleteTransaction: (id: string) => void;
+  clearAllTransactions: () => void;
   setFilters: (filters: TransactionFilters) => void;
   clearFilters: () => void;
 }
@@ -179,6 +180,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     set((state) => ({
       transactions: state.transactions.filter((t) => t.id !== _id),
     }));
+  },
+
+  clearAllTransactions: () => {
+    set({ transactions: [] });
   },
 
   setFilters: (_filters) => {
