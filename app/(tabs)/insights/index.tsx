@@ -14,10 +14,12 @@ import { Colors, Typography, Shadows, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-const monthKey = (year: number, month: number) =>
-  `${MONTH_NAMES[month].toLowerCase()}${year}`;
+const MONTHS = [
+  { key: 'may2026', label: 'May 2026' },
+  { key: 'apr2026', label: 'Apr 2026' },
+  { key: 'mar2026', label: 'Mar 2026' },
+  { key: 'feb2026', label: 'Feb 2026' },
+];
 
 const MOCK_DATA: Record<string, {
   spendingHealth: { percentage: number; subtext: string; vsPrevious: string };
@@ -115,21 +117,17 @@ export default function InsightsScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const today = new Date();
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
-  const [pickerYear, setPickerYear] = useState(today.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState('may2026');
   const [showFilter, setShowFilter] = useState(false);
   const [filterPos, setFilterPos] = useState({ top: 0, right: 0 });
   const filterBtnRef = useRef<View>(null);
   const windowWidth = Dimensions.get('window').width;
 
-  const data = MOCK_DATA[monthKey(selectedYear, selectedMonth)];
-  const hasEnoughData = !!data;
-  const pct = data?.spendingHealth.percentage ?? 0;
+  const hasEnoughData = true;
+  const data = MOCK_DATA[selectedMonth];
+  const pct = data.spendingHealth.percentage;
   const healthColor = pct >= 80 ? theme.roles.success : pct >= 70 ? theme.roles.warning : theme.roles.error;
-  const catStyle = getCategoryStyle(selectedMonth);
-  const selectedLabel = `${MONTH_NAMES[selectedMonth]} ${selectedYear}`;
+  const catStyle = getCategoryStyle(MONTHS.findIndex((m) => m.key === selectedMonth));
 
   const openFilter = () => {
     filterBtnRef.current?.measureInWindow((x, y, width, height) => {
@@ -155,7 +153,7 @@ export default function InsightsScreen() {
             activeOpacity={0.8}
           >
             <Text style={styles.filterDropdownText}>
-              {selectedLabel}
+              {MONTHS.find((m) => m.key === selectedMonth)?.label}
             </Text>
             <MaterialIcons name="expand-more" size={18} color="#001133" />
           </TouchableOpacity>
@@ -164,44 +162,29 @@ export default function InsightsScreen() {
 
       {showFilter && (
         <TouchableOpacity
-          style={styles.notifOverlay}
+          style={styles.modalOverlay}
           activeOpacity={1}
           onPress={() => setShowFilter(false)}
         >
-          <View style={[styles.monthPicker, { top: filterPos.top, right: filterPos.right }]}>
-            {/* Year Header */}
-            <View style={styles.yearHeader}>
-              <TouchableOpacity onPress={() => setPickerYear(pickerYear - 1)} style={styles.yearArrow} activeOpacity={0.7}>
-                <MaterialIcons name="chevron-left" size={22} color="#001133" />
-              </TouchableOpacity>
-              <Text style={styles.yearText}>{pickerYear}</Text>
-              <TouchableOpacity onPress={() => setPickerYear(pickerYear + 1)} style={styles.yearArrow} activeOpacity={0.7}>
-                <MaterialIcons name="chevron-right" size={22} color="#001133" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Month Grid */}
-            <View style={styles.monthGrid}>
-              {MONTH_NAMES.map((name, i) => {
-                const isSelected = selectedYear === pickerYear && selectedMonth === i;
-                return (
-                  <TouchableOpacity
-                    key={name}
-                    style={[styles.monthCell, isSelected && styles.monthCellSelected]}
-                    onPress={() => {
-                      setSelectedYear(pickerYear);
-                      setSelectedMonth(i);
-                      setShowFilter(false);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.monthCellText, isSelected && styles.monthCellTextSelected]}>
-                      {name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          <View style={[styles.filterDropdown, { top: filterPos.top, right: filterPos.right }]}>
+            {MONTHS.map((m) => {
+              const active = selectedMonth === m.key;
+              return (
+                <TouchableOpacity
+                  key={m.key}
+                  style={[styles.modalOption, active && styles.modalOptionActive]}
+                  onPress={() => {
+                    setSelectedMonth(m.key);
+                    setShowFilter(false);
+                  }}
+                >
+                  <Text style={[styles.modalOptionText, active && styles.modalOptionTextActive]}>
+                    {m.label}
+                  </Text>
+                  {active && <MaterialIcons name="check" size={18} color="#FFFFFF" />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </TouchableOpacity>
       )}
@@ -401,72 +384,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#001133',
   },
-  notifOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    zIndex: 999,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
-  monthPicker: {
+  filterDropdown: {
     position: 'absolute',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    width: 220,
+    paddingVertical: 4,
+    minWidth: 160,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.08,
-        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
       },
-      android: { elevation: 4 },
+      android: { elevation: 8 },
     }),
   },
-  yearHeader: {
+  modalOption: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
-  yearArrow: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  yearText: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 16,
-    color: '#001133',
-  },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  monthCell: {
-    width: '33.333%',
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthCellSelected: {
+  modalOptionActive: {
     backgroundColor: '#0B5CFF',
-    borderRadius: Radius.full,
-    width: '33.333%',
-    paddingVertical: 8,
-    alignSelf: 'center',
   },
-  monthCellText: {
+  modalOptionText: {
     fontFamily: Typography.fonts.body,
-    fontSize: 13,
+    fontSize: 14,
     color: '#001133',
   },
-  monthCellTextSelected: {
-    fontFamily: Typography.fonts.medium,
+  modalOptionTextActive: {
     color: '#FFFFFF',
+    fontFamily: Typography.fonts.medium,
   },
   scrollContainer: {
     flex: 1,
@@ -524,7 +479,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
     marginTop: 8,
-    textAlign: 'center',
   },
   sideBySideContainer: {
     flexDirection: 'row',
