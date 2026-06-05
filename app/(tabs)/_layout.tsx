@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { HouseSimpleIcon, LightningIcon, PiggyBankIcon, UserIcon } from '@/components/ui/CustomSvgIcon';
-import { Colors } from '@/constants/Tokens';
+import { Colors, Typography } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
@@ -12,8 +12,9 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   return (
     <View style={[styles.tabBarContainer, { backgroundColor: theme.surface, borderTopColor: theme.outlineVariant }]}>
       {state.routes.map((route: any, index: number) => {
-        // Skip hidden routes (export, transactions/[id])
-        if (route.name === 'export' || route.name === 'transactions/[id]') return null;
+        // Only render known tab routes — skip all auto-discovered sub-pages
+        const VISIBLE_TABS = ['index', 'transactions/index', 'insights/index', 'settings'];
+        if (!VISIBLE_TABS.includes(route.name)) return null;
 
         const isFocused = state.index === index;
 
@@ -43,13 +44,13 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         if (route.name === 'index') {
           icon = <HouseSimpleIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
           label = 'Home';
-        } else if (route.name === 'insights/index') {
-          icon = <LightningIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
-          label = 'Insight';
         } else if (route.name === 'transactions/index') {
           icon = <PiggyBankIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
-          label = 'Savings';
-        } else if (route.name === 'settings/index') {
+          label = 'Transactions';
+        } else if (route.name === 'insights/index') {
+          icon = <LightningIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
+          label = 'Insights';
+        } else if (route.name === 'settings') {
           icon = <UserIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
           label = 'Profile';
         }
@@ -94,19 +95,19 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="insights/index"
-        options={{
-          title: 'Insight',
-        }}
-      />
-      <Tabs.Screen
         name="transactions/index"
         options={{
           title: 'Transactions',
         }}
       />
       <Tabs.Screen
-        name="settings/index"
+        name="insights/index"
+        options={{
+          title: 'Insights',
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
         options={{
           title: 'Settings',
         }}
@@ -168,7 +169,7 @@ const styles = StyleSheet.create({
   },
   activeLabel: {
     color: '#003399',
-    fontFamily: 'Poppins-Medium',
+    fontFamily: Typography.fonts.medium,
     fontSize: 13,
   },
   inactiveIconWrapper: {

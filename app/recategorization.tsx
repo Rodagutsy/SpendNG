@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: Spacing[4],
-    paddingBottom: Spacing[32],
+    paddingBottom: Spacing[8],
   },
   categoryItem: {
     flexDirection: 'row',

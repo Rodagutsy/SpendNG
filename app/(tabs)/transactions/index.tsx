@@ -8,6 +8,8 @@ import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { TransactionItem } from '@/components/ui/TransactionItem';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { ExportModal } from '@/components/ExportModal';
+import { FilterModal } from '@/components/FilterModal';
 import { format } from 'date-fns';
 
 export default function TransactionsScreen() {
@@ -29,6 +31,8 @@ export default function TransactionsScreen() {
 
   const [searchText, setSearchText] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   useEffect(() => {
     fetchTransactions();
@@ -119,26 +123,28 @@ export default function TransactionsScreen() {
       <View style={[styles.header, { paddingTop: insets.top + Spacing[3], backgroundColor: theme.surface }]}>
         <View style={styles.headerRow}>
           <Text style={[styles.title, { color: theme.onBackground }]}>Transactions</Text>
-          <TouchableOpacity onPress={() => router.push('/filter-panel')} style={[styles.filterBtn, { backgroundColor: theme.ripple }]}>
-            <IconSymbol name="line.3.horizontal.decrease" size={20} color={theme.onBackground} />
+        </View>
+        <View style={styles.searchRow}>
+          <View style={[styles.searchContainer, { backgroundColor: theme.background }]}>
+            <IconSymbol name="magnifyingglass" size={18} color={theme.outline} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.onBackground }]}
+              placeholder="Search transactions..."
+              placeholderTextColor={theme.outline}
+              value={searchText}
+              onChangeText={setSearchText}
+              returnKeyType="search"
+            />
+            {searchText ? (
+              <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <IconSymbol name="plus" size={18} color={theme.outline} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+          <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, { backgroundColor: theme.ripple }]}>
+            <IconSymbol name="line.3.horizontal.decrease" size={18} color={theme.onBackground} />
             {hasActiveFilters && <View style={[styles.filterDot, { backgroundColor: theme.primary }]} />}
           </TouchableOpacity>
-        </View>
-        <View style={[styles.searchContainer, { backgroundColor: theme.background }]}>
-          <IconSymbol name="magnifyingglass" size={18} color={theme.outline} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.onBackground }]}
-            placeholder="Search transactions..."
-            placeholderTextColor={theme.outline}
-            value={searchText}
-            onChangeText={setSearchText}
-            returnKeyType="search"
-          />
-          {searchText ? (
-            <TouchableOpacity onPress={() => setSearchText('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <IconSymbol name="plus" size={18} color={theme.outline} />
-            </TouchableOpacity>
-          ) : null}
         </View>
         {hasActiveFilters && (
           <TouchableOpacity onPress={clearFilters} style={styles.clearRow}>
@@ -158,6 +164,18 @@ export default function TransactionsScreen() {
         ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: theme.outlineVariant }]} />}
         showsVerticalScrollIndicator={false}
       />
+
+      <ExportModal visible={showExportModal} onClose={() => setShowExportModal(false)} />
+      <FilterModal visible={showFilterModal} onClose={() => setShowFilterModal(false)} />
+
+      <TouchableOpacity
+        style={[styles.exportFab, { backgroundColor: theme.primary }]}
+        onPress={() => setShowExportModal(true)}
+        activeOpacity={0.85}
+      >
+        <IconSymbol name="square.and.arrow.up" size={18} color={theme.onPrimary} />
+        <Text style={[styles.exportFabText, { color: theme.onPrimary }]}>Export</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -198,7 +216,33 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
+  exportFab: {
+    position: 'absolute',
+    alignSelf: 'center',
+    bottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 48,
+    paddingHorizontal: 28,
+    borderRadius: Radius.full,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  exportFabText: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.buttonL,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
   searchContainer: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing[3],

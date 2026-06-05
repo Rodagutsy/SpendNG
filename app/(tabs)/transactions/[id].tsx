@@ -1,14 +1,21 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
+import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { formatCurrency } from '@/lib/utils';
+import { TransactionModal } from '@/components/TransactionModal';
 import { format } from 'date-fns';
+import { useMemo, useState, useEffect } from 'react';
+import * as ImagePicker from 'expo-image-picker';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+
+const TAX_LABELS: Record<string, string> = {
+  personal: 'Personal',
+  business: 'Business',
+  shared: 'Shared',
+};
 
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -17,11 +24,8 @@ export default function TransactionDetailScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
-  const { transactions, loading, fetchTransactions, updateNotes } = useTransactionStore();
-  const { categories, fetchCategories, getCategoryById } = useCategoryStore();
-
-  const [notesText, setNotesText] = useState('');
-  const [savingNotes, setSavingNotes] = useState(false);
+  const { transactions, updateTransaction } = useTransactionStore();
+  const { categories, getCategoryById } = useCategoryStore();
 
   const transaction = useMemo(() => transactions.find((t) => t.id === id), [transactions, id]);
   const category = useMemo(
@@ -29,33 +33,12 @@ export default function TransactionDetailScreen() {
     [transaction, categories],
   );
 
-  useEffect(() => {
-    if (!transaction) {
-      fetchTransactions();
-    }
-    if (categories.length === 0) {
-      fetchCategories();
-    }
-  }, [id]);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  useEffect(() => {
-    if (transaction?.notes) {
-      setNotesText(transaction.notes);
-    }
-  }, [transaction?.notes]);
-
-  if (loading && !transaction) {
-    return (
-      <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
-        <ActivityIndicator size="large" color={theme.primary} />
-      </View>
-    );
-  }
 
   if (!transaction) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
-        <IconSymbol name="info.circle.fill" size={48} color={theme.error} />
         <Text style={[styles.errorText, { color: theme.onBackground }]}>Transaction not found</Text>
         <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: theme.primary }]}>
           <Text style={[styles.backBtnText, { color: theme.primary }]}>Go back</Text>
@@ -65,149 +48,188 @@ export default function TransactionDetailScreen() {
   }
 
   const isDebit = transaction.transactionType === 'debit';
-  const formattedAmount = `${isDebit ? '-' : '+'}${formatCurrency(transaction.amount)}`;
+  const formattedNumber = Math.abs(transaction.amount).toLocaleString('en-US');
   const amountColor = isDebit ? theme.error : theme.success;
+  const heroBg = isDebit ? theme.error + '14' : theme.success + '1A';
+  const pillBg = isDebit ? theme.error : theme.success;
   const formattedDate = format(new Date(transaction.transactionDate), 'EEEE, d MMMM yyyy');
-  const accountInfo = [transaction.accountName, transaction.accountNumberLast4 ? `••${transaction.accountNumberLast4}` : '']
-    .filter(Boolean)
-    .join(' • ');
+  const bankName = transaction.accountName;
+  const accountNumber = transaction.accountNumberLast4 ? `••${transaction.accountNumberLast4}` : null;
+  const sourceLabel = transaction.sourceChannel === 'sms' ? 'SMS' : transaction.sourceChannel === 'email' ? 'Email' : 'Manual';
 
-  const handleSaveNotes = async () => {
-    setSavingNotes(true);
-    try {
-      await updateNotes(id, notesText);
-    } catch {
-      Alert.alert('Error', 'Failed to save notes');
-    } finally {
-      setSavingNotes(false);
+  const taxKey = transaction.taxClassification;
+  const taxLabel = taxKey ? TAX_LABELS[taxKey] : 'Unclassified';
+
+  const handleEdit = () => {
+    setShowEditModal(true);
+  };
+
+  const handlePickReceipt = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      updateTransaction(id, { receiptImageUri: result.assets[0].uri });
     }
+  };
+
+  const handleMarkDuplicate = () => {
+    Alert.alert(
+      'Mark as Duplicate',
+      'What would you like to do?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete This Transaction',
+          style: 'destructive',
+          onPress: () => {
+            updateTransaction(id, { isDuplicate: true });
+            router.back();
+          },
+        },
+        {
+          text: 'Override Other',
+          onPress: () => {
+            updateTransaction(id, { isDuplicate: true });
+            router.back();
+          },
+        },
+      ],
+    );
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing[2], backgroundColor: theme.surface }]}>
+      <View style={[styles.header, { paddingTop: insets.top + Spacing[2] }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
-            <IconSymbol name="chevron.right" size={24} color={theme.onBackground} />
+            <Text style={[styles.backArrow, { color: theme.onBackground }]}>‹</Text>
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.onBackground }]}>Transaction Detail</Text>
-          <TouchableOpacity
-            onPress={() => router.push(`/recategorization?id=${transaction.id}`)}
-            style={styles.headerBtn}
-          >
-            <IconSymbol name="square.and.pencil" size={22} color={theme.primary} />
-          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.onBackground }]}>Transaction Details</Text>
+          <View style={styles.headerBtn} />
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Amount Section */}
-        <View style={[styles.amountSection, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.amountLabel, { color: theme.outline }]}>
-            {isDebit ? 'Debit' : 'Credit'}
-          </Text>
-          <Text style={[styles.amountValue, { color: amountColor }]}>{formattedAmount}</Text>
-          <Text style={[styles.merchantName, { color: theme.onBackground }]}>
-            {transaction.merchantName ?? 'Unknown'}
-          </Text>
+        {/* Hero */}
+        <View style={[styles.heroSection, { backgroundColor: heroBg }]}>
+          <View style={styles.heroTopRow}>
+            <Text style={[styles.merchantName, { color: theme.onBackground }]}>
+              {transaction.merchantName ?? 'Unknown'}
+            </Text>
+            <View style={[styles.typePill, { backgroundColor: pillBg }]}>
+              <Text style={[styles.typePillText, { color: theme.onPrimary }]}>
+                {isDebit ? 'Debit' : 'Credit'}
+              </Text>
+            </View>
+          </View>
+            <Text style={[styles.amountValue, { color: amountColor }]}>
+              <Text style={styles.amountCurrency}>₦</Text>{formattedNumber}
+            </Text>
+          <Text style={[styles.dateText, { color: theme.outline }]}>{formattedDate}</Text>
         </View>
 
-        {/* Info Cards */}
-        <View style={styles.infoSection}>
-          {/* Date */}
-          <View style={[styles.infoRow, { backgroundColor: theme.surface }]}>
-            <View style={styles.infoLeft}>
-              <IconSymbol name="calendar" size={20} color={theme.outline} />
-              <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Date</Text>
-            </View>
-            <Text style={[styles.infoValue, { color: theme.onBackground }]}>{formattedDate}</Text>
-          </View>
-
-          {/* Category */}
-          <View style={[styles.infoRow, { backgroundColor: theme.surface }]}>
-            <View style={styles.infoLeft}>
-              <IconSymbol name="tag.fill" size={20} color={theme.outline} />
+        {/* Core Info */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.outline }]}>Core Info</Text>
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: theme.outlineVariant }]}>
               <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Category</Text>
+              <View style={styles.infoRight}>
+                <View style={[styles.categoryDot, { backgroundColor: category?.colorHex ?? theme.outline }]} />
+                <View style={[styles.pill, { backgroundColor: theme.primary + '14' }]}>
+                  <Text style={[styles.pillText, { color: theme.primary }]}>
+                    {category?.name ?? 'Uncategorized'}
+                  </Text>
+                </View>
+              </View>
             </View>
-            <View style={styles.categoryBadge}>
-              <View style={[styles.categoryDot, { backgroundColor: category?.colorHex ?? '#ADAAA4' }]} />
-              <Text style={[styles.infoValue, { color: theme.onBackground }]}>
-                {category?.name ?? 'Uncategorized'}
-              </Text>
+
+            {bankName && (
+              <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: theme.outlineVariant }]}>
+                <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Bank</Text>
+                <Text style={[styles.infoValue, { color: theme.onBackground }]}>{bankName}</Text>
+              </View>
+            )}
+            {accountNumber && (
+              <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: theme.outlineVariant }]}>
+                <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Account</Text>
+                <Text style={[styles.infoValue, { color: theme.onBackground }]}>{accountNumber}</Text>
+              </View>
+            )}
+
+            <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: theme.outlineVariant }]}>
+              <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Source</Text>
+              <Text style={[styles.infoValue, { color: theme.outline }]}>{sourceLabel}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Tax</Text>
+              <View style={[styles.pill, { backgroundColor: theme.warning + '1A' }]}>
+                <Text style={[styles.pillText, { color: theme.warning }]}>{taxLabel}</Text>
+              </View>
             </View>
           </View>
-
-          {/* Account */}
-          {accountInfo ? (
-            <View style={[styles.infoRow, { backgroundColor: theme.surface }]}>
-              <View style={styles.infoLeft}>
-                <IconSymbol name="wallet" size={20} color={theme.outline} />
-                <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Account</Text>
-              </View>
-              <Text style={[styles.infoValue, { color: theme.onBackground }]}>{accountInfo}</Text>
-            </View>
-          ) : null}
-
-          {/* Balance */}
-          {transaction.availableBalance != null ? (
-            <View style={[styles.infoRow, { backgroundColor: theme.surface }]}>
-              <View style={styles.infoLeft}>
-                <IconSymbol name="money" size={20} color={theme.outline} />
-                <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Balance after</Text>
-              </View>
-              <Text style={[styles.infoValue, { color: theme.onBackground }]}>
-                {formatCurrency(transaction.availableBalance)}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Source */}
-          {transaction.sourceChannel ? (
-            <View style={[styles.infoRow, { backgroundColor: theme.surface }]}>
-              <View style={styles.infoLeft}>
-                <IconSymbol name="link" size={20} color={theme.outline} />
-                <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Source</Text>
-              </View>
-              <Text style={[styles.infoValue, { color: theme.onBackground }]}>
-                {transaction.sourceChannel === 'sms' ? 'SMS' : transaction.sourceChannel === 'email' ? 'Email' : 'Manual'}
-              </Text>
-            </View>
-          ) : null}
         </View>
 
         {/* Notes */}
-        <View style={[styles.notesSection, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.sectionLabel, { color: theme.outline }]}>Notes</Text>
-          <TextInput
-            style={[styles.notesInput, { color: theme.onBackground, borderColor: theme.outlineVariant }]}
-            value={notesText}
-            onChangeText={setNotesText}
-            placeholder="Add notes about this transaction..."
-            placeholderTextColor={theme.outline}
-            multiline
-          />
-          {notesText !== (transaction.notes ?? '') ? (
-            <TouchableOpacity
-              onPress={handleSaveNotes}
-              disabled={savingNotes}
-              style={[styles.saveNotesBtn, { backgroundColor: theme.primary }]}
-            >
-              <Text style={[styles.saveNotesText, { color: theme.onPrimary }]}>
-                {savingNotes ? 'Saving...' : 'Save Notes'}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.outline }]}>Notes</Text>
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            <View style={[styles.notesDisplay]}>
+              <Text style={[styles.notesDisplayText, { color: theme.onBackground }]}>
+                {transaction.notes || transaction.originalMessage || 'No notes added.'}
               </Text>
-            </TouchableOpacity>
-          ) : null}
+            </View>
+          </View>
         </View>
 
-        {/* Recategorize */}
-        <TouchableOpacity
-          onPress={() => router.push(`/recategorization?id=${transaction.id}`)}
-          style={[styles.recategorizeBtn, { backgroundColor: theme.primary }]}
-        >
-          <IconSymbol name="square.and.pencil" size={20} color={theme.onPrimary} />
-          <Text style={[styles.recategorizeText, { color: theme.onPrimary }]}>Change Category</Text>
-        </TouchableOpacity>
+        {/* Receipt */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.outline }]}>Receipt</Text>
+          <View style={[styles.card, { backgroundColor: theme.surface }]}>
+            {transaction.receiptImageUri ? (
+              <View style={styles.receiptDetailWrap}>
+                <Image source={{ uri: transaction.receiptImageUri }} style={[styles.receiptDetailImage, { borderWidth: 1, borderColor: theme.outlineVariant }]} />
+                <TouchableOpacity style={styles.receiptDetailBtn} onPress={handlePickReceipt} activeOpacity={0.8}>
+                  <MaterialIcons name="camera-alt" size={16} color={theme.primary} />
+                  <Text style={[styles.receiptDetailBtnText, { color: theme.primary }]}>Replace</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.addReceiptDetailBtn} onPress={handlePickReceipt} activeOpacity={0.8}>
+                <MaterialIcons name="add-a-photo" size={22} color={theme.outline} />
+                <Text style={[styles.addReceiptDetailText, { color: theme.outline }]}>Add Receipt Image</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Actions */}
+        <View style={styles.section}>
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.secondaryBtn, { borderColor: theme.outlineVariant }]}
+              onPress={handleMarkDuplicate}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.actionBtnText, { color: theme.onBackground }]}>Mark Duplicate</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.primaryActionBtn, { backgroundColor: theme.primary }]}
+              onPress={handleEdit}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.actionBtnText, { color: theme.onPrimary }]}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
+
+      <TransactionModal visible={showEditModal} onClose={() => setShowEditModal(false)} transaction={transaction} />
     </View>
   );
 }
@@ -224,7 +246,6 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,
-    marginTop: Spacing[3],
     marginBottom: Spacing[6],
   },
   backBtn: {
@@ -255,56 +276,91 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  backArrow: {
+    fontSize: 32,
+    lineHeight: 36,
+    fontWeight: '300',
+  },
   headerTitle: {
     fontFamily: Typography.fonts.title,
     fontSize: Typography.sizes.titleM,
-    fontWeight: '600',
   },
   scrollContent: {
-    paddingBottom: Spacing[16],
+    paddingBottom: Spacing[8],
   },
-  amountSection: {
-    alignItems: 'center',
-    paddingVertical: Spacing[8],
+  heroSection: {
     marginHorizontal: Spacing[4],
     marginTop: Spacing[4],
     borderRadius: Radius.lg,
+    padding: Spacing[8],
+    gap: 4,
+    alignItems: 'center',
   },
-  amountLabel: {
+  heroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  merchantName: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.headlineS,
+  },
+  typePill: {
+    paddingVertical: 4,
+    paddingHorizontal: 14,
+    borderRadius: Radius.full,
+  },
+  typePillText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelL,
-    marginBottom: Spacing[2],
   },
   amountValue: {
     fontFamily: Typography.fonts.display,
     fontSize: Typography.sizes.displayS,
-    fontWeight: '700',
     letterSpacing: -0.5,
+    textAlign: 'center',
   },
-  merchantName: {
-    fontFamily: Typography.fonts.title,
-    fontSize: Typography.sizes.bodyL,
-    marginTop: Spacing[2],
+  amountCurrency: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.displayS,
   },
-  infoSection: {
-    marginTop: Spacing[4],
+  dateText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyM,
+    textAlign: 'center',
+  },
+  section: {
+    marginTop: 20,
     marginHorizontal: Spacing[4],
-    gap: 1,
-    borderRadius: Radius.lg,
+  },
+  sectionTitle: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelL,
+    fontWeight: '500',
+    marginBottom: Spacing[2],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  card: {
+    borderRadius: 20,
     overflow: 'hidden',
   },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: Spacing[4],
+    paddingVertical: Spacing[2],
     paddingHorizontal: Spacing[4],
-    minHeight: 52,
+    minHeight: 50,
   },
-  infoLeft: {
+  infoRowBorder: {
+    borderBottomWidth: 0.5,
+  },
+  infoRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing[3],
+    gap: Spacing[2],
   },
   infoLabel: {
     fontFamily: Typography.fonts.body,
@@ -314,64 +370,79 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,
     fontWeight: '500',
-    textAlign: 'right',
-    flexShrink: 1,
-  },
-  categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing[2],
   },
   categoryDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
-  notesSection: {
-    marginTop: Spacing[4],
-    marginHorizontal: Spacing[4],
-    padding: Spacing[4],
-    borderRadius: Radius.lg,
+  pill: {
+    paddingVertical: 2,
+    paddingHorizontal: 10,
+    borderRadius: Radius.full,
   },
-  sectionLabel: {
+  pillText: {
     fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.labelL,
-    marginBottom: Spacing[3],
+    fontSize: Typography.sizes.labelM,
+    fontWeight: '500',
   },
-  notesInput: {
+  notesDisplay: {
+    padding: Spacing[4],
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  notesDisplayText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,
-    borderWidth: 1,
-    borderRadius: Radius.sm,
-    padding: Spacing[3],
-    minHeight: 80,
-    textAlignVertical: 'top',
+    lineHeight: 22,
   },
-  saveNotesBtn: {
-    marginTop: Spacing[3],
-    paddingVertical: Spacing[2],
-    paddingHorizontal: Spacing[6],
-    borderRadius: Radius.md,
-    alignSelf: 'flex-end',
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 10,
   },
-  saveNotesText: {
+  actionBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionBtnText: {
     fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.buttonM,
-    fontWeight: '600',
+    fontSize: Typography.sizes.buttonL,
   },
-  recategorizeBtn: {
+  primaryActionBtn: {},
+  secondaryBtn: {
+    borderWidth: 1.5,
+  },
+  receiptDetailWrap: {
+    padding: Spacing[4],
+    gap: 12,
+    alignItems: 'center',
+  },
+  receiptDetailImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: Radius.sm,
+  },
+  receiptDetailBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  receiptDetailBtnText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 13,
+  },
+  addReceiptDetailBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: Spacing[2],
-    marginTop: Spacing[6],
-    marginHorizontal: Spacing[4],
-    paddingVertical: Spacing[4],
-    borderRadius: Radius.md,
+    gap: 8,
+    paddingVertical: 20,
   },
-  recategorizeText: {
+  addReceiptDetailText: {
     fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.buttonL,
-    fontWeight: '600',
+    fontSize: 14,
   },
 });

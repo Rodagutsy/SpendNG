@@ -28,6 +28,9 @@ export const Palette = {
     40: '#D30000',
     60: '#FF3333',
   },
+  warning: {
+    main: '#FFA000',
+  },
   success: {
     main: '#00BD00',
   },
@@ -51,6 +54,7 @@ export const Colors = {
     outline: Palette.neutralVariant[50],
     outlineVariant: Palette.neutralVariant[80],
     error: Palette.error[40],
+    warning: Palette.warning.main,
     success: Palette.success.main,
     ripple: Palette.neutral[93],
     surfaceContainerLowest: Palette.neutral[100],
@@ -60,6 +64,7 @@ export const Colors = {
     roles: {
       primary: Palette.primary[50],
       success: Palette.success.main,
+      warning: Palette.warning.main,
       error: Palette.error[40],
       surface: Palette.neutral[100],
       onSurface: Palette.neutral[10],
@@ -78,6 +83,7 @@ export const Colors = {
     outline: Palette.neutralVariant[30],
     outlineVariant: Palette.neutralVariant[20],
     error: Palette.error[60],
+    warning: Palette.warning.main,
     success: Palette.success.main,
     ripple: Palette.neutral[20],
     surfaceContainerLowest: Palette.neutral[10],
@@ -87,6 +93,7 @@ export const Colors = {
     roles: {
       primary: Palette.primary[60],
       success: Palette.success.main,
+      warning: Palette.warning.main,
       error: Palette.error[60],
       surface: Palette.neutral[20],
       onSurface: Palette.neutral[96],
@@ -97,9 +104,10 @@ export const Colors = {
 
 export const Typography = {
   fonts: {
-    display: 'Poppins-Bold',
-    title: 'Poppins-SemiBold',
+    display: 'Poppins-SemiBold',
+    title: 'Poppins-Medium',
     body: 'Poppins',
+    medium: 'Poppins-Medium',
   },
   sizes: {
     displayL: 72,

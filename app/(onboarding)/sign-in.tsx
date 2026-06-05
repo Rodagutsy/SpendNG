@@ -21,6 +21,7 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signInWithEmail(email, password);
+      router.replace('/(tabs)');
     } catch (error: any) {
       Alert.alert('Sign In Error', error.message);
     } finally {
