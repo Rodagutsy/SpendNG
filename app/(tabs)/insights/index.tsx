@@ -9,17 +9,24 @@ import {
   StatusBar,
   Dimensions
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Shadows, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-const MONTHS = [
-  { key: 'may2026', label: 'May 2026' },
-  { key: 'apr2026', label: 'Apr 2026' },
-  { key: 'mar2026', label: 'Mar 2026' },
-  { key: 'feb2026', label: 'Feb 2026' },
-];
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+function getMonthKey(year: number, month: number): string {
+  return `${MONTHS_SHORT[month - 1].toLowerCase()}${year}`;
+}
+
+function formatMonthLabel(key: string): string {
+  const match = key.match(/^([a-z]+)(\d{4})$/);
+  if (!match) return key;
+  const idx = MONTHS_SHORT.findIndex(m => m.toLowerCase() === match[1]);
+  return `${MONTHS_FULL[idx] ?? match[1]} ${match[2]}`;
+}
 
 const MOCK_DATA: Record<string, {
   spendingHealth: { percentage: number; subtext: string; vsPrevious: string };
@@ -118,8 +125,9 @@ export default function InsightsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const [selectedMonth, setSelectedMonth] = useState('may2026');
+  const [viewYear, setViewYear] = useState(2026);
   const [showFilter, setShowFilter] = useState(false);
-  const [filterPos, setFilterPos] = useState({ top: 0, right: 0 });
+  const [filterPos, setFilterPos] = useState({ top: 0, left: 0 });
   const filterBtnRef = useRef<View>(null);
   const windowWidth = Dimensions.get('window').width;
 
@@ -127,38 +135,184 @@ export default function InsightsScreen() {
   const data = MOCK_DATA[selectedMonth];
   const pct = data.spendingHealth.percentage;
   const healthColor = pct >= 80 ? theme.roles.success : pct >= 70 ? theme.roles.warning : theme.roles.error;
-  const catStyle = getCategoryStyle(MONTHS.findIndex((m) => m.key === selectedMonth));
+  const selectedMonthIdx = Math.max(0, MONTHS_SHORT.findIndex(m => m.toLowerCase() === selectedMonth.replace(/\d/g, '')));
+  const catStyle = getCategoryStyle(selectedMonthIdx);
 
   const openFilter = () => {
     filterBtnRef.current?.measureInWindow((x, y, width, height) => {
-      setFilterPos({ top: y + height + 4, right: windowWidth - x - width });
+      const match = selectedMonth.match(/^[a-z]+(\d{4})$/);
+      if (match) setViewYear(parseInt(match[1]));
+      const dropdownWidth = 280;
+      let left = x + width - dropdownWidth;
+      if (left < 12) left = 12;
+      setFilterPos({ top: y + height + 4, left });
       setShowFilter(true);
     });
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <>
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: '#F9FAFC' }}>
+        <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-      <View style={[styles.headerContainer, { paddingTop: insets.top + 16 }]}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.headerTitle}>Insights</Text>
-            <Text style={styles.headerSubtitle}>Track your spending trends</Text>
+        <View style={[styles.headerContainer, { paddingTop: 16 }]}>
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.headerTitle}>Insights</Text>
+            </View>
+            <TouchableOpacity
+              ref={filterBtnRef}
+              style={styles.filterDropdownBtn}
+              onPress={openFilter}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.filterDropdownText}>
+                {formatMonthLabel(selectedMonth)}
+              </Text>
+              <MaterialIcons name="expand-more" size={18} color="#001133" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity
-            ref={filterBtnRef}
-            style={styles.filterDropdownBtn}
-            onPress={openFilter}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.filterDropdownText}>
-              {MONTHS.find((m) => m.key === selectedMonth)?.label}
-            </Text>
-            <MaterialIcons name="expand-more" size={18} color="#001133" />
-          </TouchableOpacity>
         </View>
-      </View>
+
+        <ScrollView
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {hasEnoughData ? (
+            <View style={styles.activeLayout}>
+              {/* 1. Financial Health Score */}
+              <View style={[styles.card, styles.healthCard, Shadows.sm]}>
+                <Text style={styles.cardLabel}>Spending Health</Text>
+                <View style={styles.healthCenter}>
+                  <Text style={[styles.healthPercentage, { color: healthColor }]}>
+                    {data.spendingHealth.percentage}%
+                  </Text>
+                  <Text style={styles.healthSubtext}>{data.spendingHealth.subtext}</Text>
+                </View>
+                <View style={styles.progressBarBg}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      { width: `${pct}%`, backgroundColor: healthColor },
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.vsPrevious, { color: healthColor }]}>
+                  {data.spendingHealth.vsPrevious}
+                </Text>
+              </View>
+
+              {/* 2. Top Category & Biggest Spend */}
+              <View style={styles.sideBySideContainer}>
+                <View style={[styles.sideCard, { backgroundColor: catStyle.bg }]}>
+                  <Text style={[styles.categoryLabel, { color: catStyle.color }]}>Top Category</Text>
+                  <View style={[styles.categoryIconCircle, { backgroundColor: '#FFFFFF' }]}>
+                    <MaterialIcons name={data.topCategory.icon} size={18} color={catStyle.color} />
+                  </View>
+                  <Text style={[styles.categoryName, { color: '#001133' }]} numberOfLines={1}>
+                    {data.topCategory.name}
+                  </Text>
+                  <Text style={[styles.categoryAmount, { color: '#001133' }]} numberOfLines={1}>
+                    <Text style={styles.nairaSymbol}>₦</Text>
+                    {data.topCategory.amount.replace('₦', '')}
+                  </Text>
+                  <Text style={[styles.categorySubtext, { color: catStyle.color }]}>
+                    {data.topCategory.percentage}
+                  </Text>
+                </View>
+
+                <View style={[styles.sideCard, styles.spendCard]}>
+                  <Text style={styles.spendLabel}>Biggest Spend</Text>
+                  <View style={styles.spendIconCircle}>
+                    <MaterialIcons name="local-airport" size={18} color="#D30000" />
+                  </View>
+                  <Text style={styles.spendMerchant} numberOfLines={1}>
+                    {data.biggestSpend.merchant}
+                  </Text>
+                  <Text style={styles.spendAmount} numberOfLines={1}>
+                    <Text style={styles.nairaSymbol}>₦</Text>
+                    {data.biggestSpend.amount.replace('₦', '')}
+                  </Text>
+                  <Text style={styles.spendSubtext}>{data.biggestSpend.date}</Text>
+                </View>
+              </View>
+
+              {/* 3. Alerts */}
+              <View style={[styles.card, Shadows.sm]}>
+                <Text style={styles.cardLabel}>Alerts</Text>
+                <View style={styles.alertsContainer}>
+                  {data.alerts.map((alert, i) => (
+                    <View key={i} style={styles.alertRow}>
+                      <View style={styles.alertIconCircle}>
+                        <MaterialIcons name={alert.icon} size={16} color="#D30000" />
+                      </View>
+                      <Text style={styles.alertText}>{alert.text}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* 4. Behaviour Patterns */}
+              <View style={[styles.card, { backgroundColor: '#F1F2F6' }, Shadows.sm]}>
+                <Text style={styles.cardLabel}>Behaviour Patterns</Text>
+                <View style={styles.behaviourContainer}>
+                  {data.behaviourPatterns.map((pattern, i) => (
+                    <View key={i} style={[styles.behaviourRow, i < data.behaviourPatterns.length - 1 && styles.behaviourRowBorder]}>
+                      <View style={styles.behaviourIconCircle}>
+                        <MaterialIcons name={pattern.icon} size={18} color="#0B5CFF" />
+                      </View>
+                      <Text style={styles.behaviourText}>{pattern.text}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* 5. Weekly Breakdown */}
+              <View style={[styles.card, styles.weeklyCard, Shadows.sm]}>
+                <Text style={styles.weeklyLabel}>Weekly Breakdown</Text>
+                <View style={styles.weeklyRow}>
+                  <View style={[styles.weeklyArrowCircle, { backgroundColor: '#E8F8EE' }]}>
+                    <MaterialIcons name="arrow-upward" size={16} color="#00BD00" />
+                  </View>
+                  <View style={styles.weeklyRowDetails}>
+                    <Text style={styles.weeklyRowTitle}>Best Week</Text>
+                    <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.best.dateRange}</Text>
+                  </View>
+                  <Text style={[styles.weeklyAmount, { color: '#00BD00' }]}>
+                    <Text style={styles.nairaSymbol}>₦</Text>
+                    {data.weeklyBreakdown.best.amount.replace('₦', '')}
+                  </Text>
+                </View>
+                <View style={styles.weeklyDivider} />
+                <View style={styles.weeklyRow}>
+                  <View style={[styles.weeklyArrowCircle, { backgroundColor: '#FDECEB' }]}>
+                    <MaterialIcons name="arrow-downward" size={16} color="#D30000" />
+                  </View>
+                  <View style={styles.weeklyRowDetails}>
+                    <Text style={styles.weeklyRowTitle}>Worst Week</Text>
+                    <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.worst.dateRange}</Text>
+                  </View>
+                  <Text style={[styles.weeklyAmount, { color: '#D30000' }]}>
+                    <Text style={styles.nairaSymbol}>₦</Text>
+                    {data.weeklyBreakdown.worst.amount.replace('₦', '')}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={[styles.emptyContainer, Shadows.sm]}>
+              <View style={styles.emptyIconWrapper}>
+                <MaterialIcons name="bar-chart" size={56} color="#C5C3BF" />
+              </View>
+              <Text style={styles.emptyTitle}>Insights Unavailable</Text>
+              <Text style={styles.emptyText}>
+                Not enough data yet. Keep using SpendNG and insights will appear here.
+              </Text>
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
 
       {showFilter && (
         <TouchableOpacity
@@ -166,168 +320,54 @@ export default function InsightsScreen() {
           activeOpacity={1}
           onPress={() => setShowFilter(false)}
         >
-          <View style={[styles.filterDropdown, { top: filterPos.top, right: filterPos.right }]}>
-            {MONTHS.map((m) => {
-              const active = selectedMonth === m.key;
-              return (
-                <TouchableOpacity
-                  key={m.key}
-                  style={[styles.modalOption, active && styles.modalOptionActive]}
-                  onPress={() => {
-                    setSelectedMonth(m.key);
-                    setShowFilter(false);
-                  }}
-                >
-                  <Text style={[styles.modalOptionText, active && styles.modalOptionTextActive]}>
-                    {m.label}
-                  </Text>
-                  {active && <MaterialIcons name="check" size={18} color="#FFFFFF" />}
-                </TouchableOpacity>
-              );
-            })}
+          <View style={[styles.calendarDropdown, { top: filterPos.top, left: filterPos.left }]}>
+            <View style={styles.calendarYearRow}>
+              <TouchableOpacity onPress={() => setViewYear(viewYear - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <MaterialIcons name="chevron-left" size={22} color="#001133" />
+              </TouchableOpacity>
+              <Text style={styles.calendarYearText}>{viewYear}</Text>
+              <TouchableOpacity onPress={() => setViewYear(viewYear + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <MaterialIcons name="chevron-right" size={22} color="#001133" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.calendarGrid}>
+              {MONTHS_SHORT.map((label, index) => {
+                const monthNum = index + 1;
+                const monthKey = getMonthKey(viewYear, monthNum);
+                const isSelected = selectedMonth === monthKey;
+                const hasData = !!MOCK_DATA[monthKey];
+                return (
+                  <TouchableOpacity
+                    key={monthKey}
+                    style={[
+                      styles.calendarMonthBtn,
+                      isSelected && styles.calendarMonthBtnActive,
+                      !hasData && styles.calendarMonthBtnDisabled,
+                    ]}
+                    onPress={() => {
+                      if (hasData) {
+                        setSelectedMonth(monthKey);
+                        setShowFilter(false);
+                      }
+                    }}
+                    disabled={!hasData}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.calendarMonthLabel,
+                      isSelected && styles.calendarMonthLabelActive,
+                      !hasData && styles.calendarMonthLabelDisabled,
+                    ]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
         </TouchableOpacity>
       )}
-
-      <ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {hasEnoughData ? (
-          <View style={styles.activeLayout}>
-            {/* 1. Financial Health Score */}
-            <View style={[styles.card, styles.healthCard, Shadows.sm]}>
-              <Text style={styles.cardLabel}>Spending Health</Text>
-              <View style={styles.healthCenter}>
-                <Text style={[styles.healthPercentage, { color: healthColor }]}>
-                  {data.spendingHealth.percentage}%
-                </Text>
-                <Text style={styles.healthSubtext}>{data.spendingHealth.subtext}</Text>
-              </View>
-              <View style={styles.progressBarBg}>
-                <View
-                  style={[
-                    styles.progressBarFill,
-                    { width: `${pct}%`, backgroundColor: healthColor },
-                  ]}
-                />
-              </View>
-              <Text style={[styles.vsPrevious, { color: healthColor }]}>
-                {data.spendingHealth.vsPrevious}
-              </Text>
-            </View>
-
-            {/* 2. Top Category & Biggest Spend */}
-            <View style={styles.sideBySideContainer}>
-              <View style={[styles.sideCard, { backgroundColor: catStyle.bg }]}>
-                <Text style={[styles.categoryLabel, { color: catStyle.color }]}>Top Category</Text>
-                <View style={[styles.categoryIconCircle, { backgroundColor: '#FFFFFF' }]}>
-                  <MaterialIcons name={data.topCategory.icon} size={18} color={catStyle.color} />
-                </View>
-                <Text style={[styles.categoryName, { color: '#001133' }]} numberOfLines={1}>
-                  {data.topCategory.name}
-                </Text>
-                <Text style={[styles.categoryAmount, { color: '#001133' }]} numberOfLines={1}>
-                  <Text style={styles.nairaSymbol}>₦</Text>
-                  {data.topCategory.amount.replace('₦', '')}
-                </Text>
-                <Text style={[styles.categorySubtext, { color: catStyle.color }]}>
-                  {data.topCategory.percentage}
-                </Text>
-              </View>
-
-              <View style={[styles.sideCard, styles.spendCard]}>
-                <Text style={styles.spendLabel}>Biggest Spend</Text>
-                <View style={styles.spendIconCircle}>
-                  <MaterialIcons name="local-airport" size={18} color="#D30000" />
-                </View>
-                <Text style={styles.spendMerchant} numberOfLines={1}>
-                  {data.biggestSpend.merchant}
-                </Text>
-                <Text style={styles.spendAmount} numberOfLines={1}>
-                  <Text style={styles.nairaSymbol}>₦</Text>
-                  {data.biggestSpend.amount.replace('₦', '')}
-                </Text>
-                <Text style={styles.spendSubtext}>{data.biggestSpend.date}</Text>
-              </View>
-            </View>
-
-            {/* 3. Alerts */}
-            <View style={[styles.card, Shadows.sm]}>
-              <Text style={styles.cardLabel}>Alerts</Text>
-              <View style={styles.alertsContainer}>
-                {data.alerts.map((alert, i) => (
-                  <View key={i} style={styles.alertRow}>
-                    <View style={styles.alertIconCircle}>
-                      <MaterialIcons name={alert.icon} size={16} color="#D30000" />
-                    </View>
-                    <Text style={styles.alertText}>{alert.text}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* 4. Behaviour Patterns */}
-            <View style={[styles.card, { backgroundColor: '#F1F2F6' }, Shadows.sm]}>
-              <Text style={styles.cardLabel}>Behaviour Patterns</Text>
-              <View style={styles.behaviourContainer}>
-                {data.behaviourPatterns.map((pattern, i) => (
-                  <View key={i} style={[styles.behaviourRow, i < data.behaviourPatterns.length - 1 && styles.behaviourRowBorder]}>
-                    <View style={styles.behaviourIconCircle}>
-                      <MaterialIcons name={pattern.icon} size={18} color="#0B5CFF" />
-                    </View>
-                    <Text style={styles.behaviourText}>{pattern.text}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-
-            {/* 5. Weekly Breakdown */}
-            <View style={[styles.card, styles.weeklyCard, Shadows.sm]}>
-              <Text style={styles.weeklyLabel}>Weekly Breakdown</Text>
-              <View style={styles.weeklyRow}>
-                <View style={[styles.weeklyArrowCircle, { backgroundColor: '#E8F8EE' }]}>
-                  <MaterialIcons name="arrow-upward" size={16} color="#00BD00" />
-                </View>
-                <View style={styles.weeklyRowDetails}>
-                  <Text style={styles.weeklyRowTitle}>Best Week</Text>
-                  <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.best.dateRange}</Text>
-                </View>
-                <Text style={[styles.weeklyAmount, { color: '#00BD00' }]}>
-                  <Text style={styles.nairaSymbol}>₦</Text>
-                  {data.weeklyBreakdown.best.amount.replace('₦', '')}
-                </Text>
-              </View>
-              <View style={styles.weeklyDivider} />
-              <View style={styles.weeklyRow}>
-                <View style={[styles.weeklyArrowCircle, { backgroundColor: '#FDECEB' }]}>
-                  <MaterialIcons name="arrow-downward" size={16} color="#D30000" />
-                </View>
-                <View style={styles.weeklyRowDetails}>
-                  <Text style={styles.weeklyRowTitle}>Worst Week</Text>
-                  <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.worst.dateRange}</Text>
-                </View>
-                <Text style={[styles.weeklyAmount, { color: '#D30000' }]}>
-                  <Text style={styles.nairaSymbol}>₦</Text>
-                  {data.weeklyBreakdown.worst.amount.replace('₦', '')}
-                </Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View style={[styles.emptyContainer, Shadows.sm]}>
-            <View style={styles.emptyIconWrapper}>
-              <MaterialIcons name="bar-chart" size={56} color="#C5C3BF" />
-            </View>
-            <Text style={styles.emptyTitle}>Insights Unavailable</Text>
-            <Text style={styles.emptyText}>
-              Not enough data yet. Keep using SpendNG and insights will appear here.
-            </Text>
-          </View>
-        )}
-      </ScrollView>
-    </View>
+    </>
   );
 }
 
@@ -337,11 +377,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFC',
   },
   headerContainer: {
-    backgroundColor: '#FFFFFF',
     paddingHorizontal: 24,
-    paddingBottom: 12,
-    marginBottom: 32, // 32px bottom spacing under header
-    borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
     ...Platform.select({
       ios: {
@@ -357,18 +393,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    paddingTop: 16,
   },
   headerTitle: {
     fontFamily: Typography.fonts.medium, // 500 font weight
-    fontSize: Typography.sizes.titleS, // 20px similar font size
+    fontSize: Typography.sizes.titleL,// 20px similar font size
     color: '#001133',
-  },
-  headerSubtitle: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 14,
-    color: '#7B786F',
-    marginTop: -2,
+
   },
   filterDropdownBtn: {
     flexDirection: 'row',
@@ -386,15 +417,19 @@ const styles = StyleSheet.create({
     color: '#001133',
   },
   modalOverlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: 'transparent',
   },
-  filterDropdown: {
+  calendarDropdown: {
     position: 'absolute',
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingVertical: 4,
-    minWidth: 160,
+    borderRadius: 16,
+    padding: 16,
+    width: 280,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -405,24 +440,46 @@ const styles = StyleSheet.create({
       android: { elevation: 8 },
     }),
   },
-  modalOption: {
+  calendarYearRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    marginBottom: 16,
+    paddingHorizontal: 4,
   },
-  modalOptionActive: {
+  calendarYearText: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 18,
+    color: '#001133',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarMonthBtn: {
+    width: '25%',
+    aspectRatio: 1.4,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  calendarMonthBtnActive: {
     backgroundColor: '#0B5CFF',
   },
-  modalOptionText: {
+  calendarMonthBtnDisabled: {
+    opacity: 0.3,
+  },
+  calendarMonthLabel: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
     color: '#001133',
   },
-  modalOptionTextActive: {
+  calendarMonthLabelActive: {
     color: '#FFFFFF',
     fontFamily: Typography.fonts.medium,
+  },
+  calendarMonthLabelDisabled: {
+    color: '#ADAAA4',
   },
   scrollContainer: {
     flex: 1,

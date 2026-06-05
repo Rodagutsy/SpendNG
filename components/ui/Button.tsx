@@ -74,17 +74,17 @@ export const Button: React.FC<ButtonProps> = ({
     switch (size) {
       case 'large':
         return {
-          container: { height: 56, paddingHorizontal: Spacing[6] },
+          container: { height: 56, paddingHorizontal: Spacing[6], borderRadius: 8 },
           text: { fontSize: Typography.sizes.buttonL },
         };
       case 'medium':
         return {
-          container: { height: 48, paddingHorizontal: Spacing[4] },
+          container: { height: 48, paddingHorizontal: Spacing[4], borderRadius: 8 },
           text: { fontSize: Typography.sizes.buttonM },
         };
       case 'small':
         return {
-          container: { height: 40, paddingHorizontal: Spacing[3] },
+          container: { height: 40, paddingHorizontal: Spacing[3], borderRadius: 8 },
           text: { fontSize: Typography.sizes.buttonS },
         };
     }
@@ -117,7 +117,7 @@ export const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

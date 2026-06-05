@@ -340,13 +340,14 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     paddingHorizontal: 24,
-    paddingBottom: 36,
+    paddingBottom: 24,
   },
   welcomeRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+    marginTop: 16,
   },
   welcomeLabel: {
     fontFamily: Typography.fonts.body,

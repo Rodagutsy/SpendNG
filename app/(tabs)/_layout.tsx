@@ -46,7 +46,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           label = 'Home';
         } else if (route.name === 'transactions/index') {
           icon = <PiggyBankIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
-          label = 'Transactions';
+          label = 'Activity';
         } else if (route.name === 'insights/index') {
           icon = <LightningIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
           label = 'Insights';
@@ -97,7 +97,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="transactions/index"
         options={{
-          title: 'Transactions',
+          title: 'Activity',
         }}
       />
       <Tabs.Screen
