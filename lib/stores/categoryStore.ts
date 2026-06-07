@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { getDatabase } from '../db/database';
+import { Category } from '../../model_legacy/models';
 
 export interface CategoryRecord {
   id: string;
@@ -24,8 +26,22 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   error: null,
 
   fetchCategories: async () => {
-    set({ loading: false, error: null });
-    console.log('[CategoryStore] WatermelonDB disabled – fetchCategories stub called');
+    set({ loading: true, error: null });
+    try {
+      const db = getDatabase();
+      const records = await db.get<Category>('categories').query().fetch();
+      const categories: CategoryRecord[] = records.map((r) => ({
+        id: r.id,
+        name: r.name,
+        iconIdentifier: r.iconIdentifier,
+        colorHex: r.colorHex,
+        transactionTypeHint: r.transactionTypeHint,
+        isSystem: r.isSystem,
+      }));
+      set({ categories, loading: false });
+    } catch (err: any) {
+      set({ error: err.message || 'Failed to fetch categories', loading: false });
+    }
   },
 
   getCategoryById: (id) => {

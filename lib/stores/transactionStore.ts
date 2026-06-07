@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { Q } from '@nozbe/watermelondb';
+import { getDatabase } from '../db/database';
+import { Transaction } from '../../model_legacy/models';
 
 export interface TransactionRecord {
   id: string;
@@ -45,9 +48,9 @@ interface TransactionState {
   addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence'>) => Promise<TransactionRecord>;
   updateCategory: (id: string, categoryId: string) => Promise<void>;
   updateNotes: (id: string, notes: string) => Promise<void>;
-  updateTransaction: (id: string, data: Partial<TransactionRecord>) => void;
-  deleteTransaction: (id: string) => void;
-  clearAllTransactions: () => void;
+  updateTransaction: (id: string, data: Partial<TransactionRecord>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  clearAllTransactions: () => Promise<void>;
   setFilters: (filters: TransactionFilters) => void;
   clearFilters: () => void;
 }
@@ -58,146 +61,230 @@ monthStart.setDate(1);
 monthStart.setHours(0, 0, 0, 0);
 const monthStartTs = monthStart.getTime();
 
-const mockTransactions: TransactionRecord[] = [
-  {
-    id: 'act1',
-    amount: 15790,
-    currency: 'NGN',
-    transactionType: 'debit',
-    merchantName: 'Shoprite',
-    categoryId: 'shopping',
-    accountName: 'GT Bank',
-    accountNumberLast4: '1234',
-    transactionDate: new Date(2026, 4, 24).getTime(),
-    availableBalance: null,
-    sourceChannel: 'sms',
-    parseConfidence: null,
-    taxClassification: null,
-    confidenceLevel: 'high',
-    originalMessage: 'GTBank: You spent NGN15,790 at Shoprite on 24/05/2026. Available balance: NGN245,000.',
-    isDuplicate: false,
-    isFlaggedForReview: false,
-    notes: null,
-    receiptImageUri: null,
-    isSynced: false,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: 'act2',
-    amount: 145790,
-    currency: 'NGN',
-    transactionType: 'credit',
-    merchantName: 'Monthly Salary',
-    categoryId: 'salary',
-    accountName: 'Kuda MFB',
-    accountNumberLast4: '5678',
-    transactionDate: new Date(2026, 4, 30).getTime(),
-    availableBalance: null,
-    sourceChannel: 'manual',
-    parseConfidence: null,
-    taxClassification: 'personal',
-    confidenceLevel: 'high',
-    originalMessage: 'Kuda: Salary credit of NGN145,790 from TechCorp Ltd. Ref: SAL/MAY/2026.',
-    isDuplicate: false,
-    isFlaggedForReview: false,
-    notes: null,
-    receiptImageUri: null,
-    isSynced: false,
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: 'act3',
-    amount: 15790,
-    currency: 'NGN',
-    transactionType: 'debit',
-    merchantName: 'Shoprite',
-    categoryId: 'shopping',
-    accountName: 'GT Bank',
-    accountNumberLast4: '1234',
-    transactionDate: new Date(2026, 4, 24).getTime(),
-    availableBalance: null,
-    sourceChannel: 'sms',
-    parseConfidence: null,
-    taxClassification: null,
-    confidenceLevel: 'low',
-    originalMessage: 'GTBank: You spent NGN15,790 at Shoprite on 24/05/2026. Available balance: NGN229,210.',
-    isDuplicate: false,
-    isFlaggedForReview: false,
-    notes: null,
-    receiptImageUri: null,
-    isSynced: false,
-    createdAt: now,
-    updatedAt: now,
-  },
-];
-
 export const useTransactionStore = create<TransactionState>((set, get) => ({
-  transactions: mockTransactions,
+  transactions: [],
   loading: false,
   error: null,
   filters: {},
 
-  fetchTransactions: async (_filters?) => {
-    set({ loading: false, error: null });
-    console.log('[TransactionStore] Mock mode – transactions already set');
+  fetchTransactions: async (filters) => {
+    set({ loading: true, error: null });
+    try {
+      const db = getDatabase();
+      const activeFilters = filters || get().filters;
+      let query = db.get<Transaction>('transactions').query();
+
+      const clauses: any[] = [];
+      if (activeFilters.categoryId) {
+        clauses.push(Q.where('category_id', activeFilters.categoryId));
+      }
+      if (activeFilters.transactionType) {
+        clauses.push(Q.where('transaction_type', activeFilters.transactionType));
+      }
+      if (activeFilters.startDate) {
+        clauses.push(Q.where('transaction_date', Q.gte(activeFilters.startDate)));
+      }
+      if (activeFilters.endDate) {
+        clauses.push(Q.where('transaction_date', Q.lte(activeFilters.endDate)));
+      }
+      if (activeFilters.sourceChannel) {
+        clauses.push(Q.where('source_channel', activeFilters.sourceChannel));
+      }
+      if (activeFilters.needsReview !== undefined) {
+        clauses.push(Q.where('is_flagged_for_review', activeFilters.needsReview));
+      }
+      if (activeFilters.keyword) {
+        clauses.push(
+          Q.or(
+            Q.where('merchant_name', Q.like(`%${Q.sanitizeLikeString(activeFilters.keyword)}%`)),
+            Q.where('notes', Q.like(`%${Q.sanitizeLikeString(activeFilters.keyword)}%`))
+          )
+        );
+      }
+      
+      if (clauses.length > 0) {
+        query = db.get<Transaction>('transactions').query(...clauses);
+      }
+
+      query = query.extend(Q.sortBy('transaction_date', Q.desc));
+      const records = await query.fetch();
+
+      const transactions: TransactionRecord[] = records.map((r) => ({
+        id: r.id,
+        amount: r.amount,
+        currency: r.currency,
+        transactionType: r.transactionType,
+        merchantName: r.merchantName,
+        categoryId: r.categoryId,
+        accountName: r.accountName,
+        accountNumberLast4: r.accountNumberLast4,
+        transactionDate: r.transactionDate,
+        availableBalance: r.availableBalance,
+        sourceChannel: r.sourceChannel,
+        parseConfidence: r.parseConfidence,
+        taxClassification: null,
+        confidenceLevel: null,
+        originalMessage: r.rawSourceText,
+        isDuplicate: r.isDuplicate,
+        isFlaggedForReview: r.isFlaggedForReview,
+        notes: r.notes,
+        receiptImageUri: null,
+        isSynced: r.isSynced,
+        createdAt: r.createdAt.getTime(),
+        updatedAt: r.updatedAt.getTime(),
+      }));
+
+      set({ transactions, loading: false });
+    } catch (err: any) {
+      set({ error: err.message || 'Failed to fetch transactions', loading: false });
+    }
   },
 
   addTransaction: async (data) => {
-    const newTx: TransactionRecord = {
-      id: `manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      isDuplicate: false,
-      isSynced: false,
-      parseConfidence: null,
-      ...data,
+    const db = getDatabase();
+    let newRecord: Transaction | null = null;
+    await db.write(async () => {
+      newRecord = await db.get<Transaction>('transactions').create((t) => {
+        t.amount = data.amount;
+        t.currency = data.currency;
+        t.transactionType = data.transactionType;
+        t.merchantName = data.merchantName;
+        t.categoryId = data.categoryId;
+        t.accountName = data.accountName;
+        t.accountNumberLast4 = data.accountNumberLast4;
+        t.transactionDate = data.transactionDate;
+        t.availableBalance = data.availableBalance;
+        t.sourceChannel = data.sourceChannel;
+        t.rawSourceText = data.originalMessage;
+        t.parseConfidence = null;
+        t.isDuplicate = false;
+        t.isFlaggedForReview = data.isFlaggedForReview || false;
+        t.notes = data.notes;
+        t.isSynced = false;
+      });
+    });
+
+    if (!newRecord) {
+      throw new Error('Failed to create transaction record');
+    }
+
+    const rec = newRecord as Transaction;
+    const added: TransactionRecord = {
+      id: rec.id,
+      amount: rec.amount,
+      currency: rec.currency,
+      transactionType: rec.transactionType,
+      merchantName: rec.merchantName,
+      categoryId: rec.categoryId,
+      accountName: rec.accountName,
+      accountNumberLast4: rec.accountNumberLast4,
+      transactionDate: rec.transactionDate,
+      availableBalance: rec.availableBalance,
+      sourceChannel: rec.sourceChannel,
+      parseConfidence: rec.parseConfidence,
+      taxClassification: null,
+      confidenceLevel: null,
+      originalMessage: rec.rawSourceText,
+      isDuplicate: rec.isDuplicate,
+      isFlaggedForReview: rec.isFlaggedForReview,
+      notes: rec.notes,
+      receiptImageUri: null,
+      isSynced: rec.isSynced,
+      createdAt: rec.createdAt.getTime(),
+      updatedAt: rec.updatedAt.getTime(),
     };
+
     set((state) => ({
-      transactions: [newTx, ...state.transactions],
+      transactions: [added, ...state.transactions],
     }));
-    return newTx;
+
+    return added;
   },
 
-  updateCategory: async (_id, _categoryId) => {
-    console.log('[TransactionStore] Mock mode – updateCategory stub called');
-  },
-
-  updateNotes: async (_id, _notes) => {
-    console.log('[TransactionStore] Mock mode – updateNotes stub called');
-  },
-
-  updateTransaction: (_id, _data) => {
+  updateCategory: async (id, categoryId) => {
+    const db = getDatabase();
+    const record = await db.get<Transaction>('transactions').find(id);
+    await db.write(async () => {
+      await record.update((t) => {
+        t.categoryId = categoryId;
+      });
+    });
     set((state) => ({
       transactions: state.transactions.map((t) =>
-        t.id === _id ? { ...t, ..._data, updatedAt: Date.now() } : t
+        t.id === id ? { ...t, categoryId, updatedAt: Date.now() } : t
       ),
     }));
   },
 
-  deleteTransaction: (_id) => {
+  updateNotes: async (id, notes) => {
+    const db = getDatabase();
+    const record = await db.get<Transaction>('transactions').find(id);
+    await db.write(async () => {
+      await record.update((t) => {
+        t.notes = notes;
+      });
+    });
     set((state) => ({
-      transactions: state.transactions.filter((t) => t.id !== _id),
+      transactions: state.transactions.map((t) =>
+        t.id === id ? { ...t, notes, updatedAt: Date.now() } : t
+      ),
     }));
   },
 
-  clearAllTransactions: () => {
+  updateTransaction: async (id, data) => {
+    const db = getDatabase();
+    const record = await db.get<Transaction>('transactions').find(id);
+    await db.write(async () => {
+      await record.update((t) => {
+        if (data.amount !== undefined) t.amount = data.amount;
+        if (data.currency !== undefined) t.currency = data.currency;
+        if (data.transactionType !== undefined) t.transactionType = data.transactionType;
+        if (data.merchantName !== undefined) t.merchantName = data.merchantName;
+        if (data.categoryId !== undefined) t.categoryId = data.categoryId;
+        if (data.accountName !== undefined) t.accountName = data.accountName;
+        if (data.accountNumberLast4 !== undefined) t.accountNumberLast4 = data.accountNumberLast4;
+        if (data.transactionDate !== undefined) t.transactionDate = data.transactionDate;
+        if (data.availableBalance !== undefined) t.availableBalance = data.availableBalance;
+        if (data.notes !== undefined) t.notes = data.notes;
+        if (data.isFlaggedForReview !== undefined) t.isFlaggedForReview = data.isFlaggedForReview;
+      });
+    });
+    const state = get();
+    await state.fetchTransactions(state.filters);
+  },
+
+  deleteTransaction: async (id) => {
+    const db = getDatabase();
+    const record = await db.get<Transaction>('transactions').find(id);
+    await db.write(async () => {
+      await record.destroyPermanently();
+    });
+    set((state) => ({
+      transactions: state.transactions.filter((t) => t.id !== id),
+    }));
+  },
+
+  clearAllTransactions: async () => {
+    const db = getDatabase();
+    await db.write(async () => {
+      await db.unsafeResetDatabase();
+    });
     set({ transactions: [] });
   },
 
-  setFilters: (_filters) => {
-    set({ filters: _filters });
+  setFilters: (filters) => {
+    set({ filters });
+    get().fetchTransactions(filters);
   },
 
   clearFilters: () => {
     set({ filters: {} });
+    get().fetchTransactions({});
   },
 }));
 
 export function useMonthlyBalances() {
   const transactions = useTransactionStore((s) => s.transactions);
-
   const thisMonth = transactions.filter((t) => t.transactionDate >= monthStartTs);
 
   const moneyIn = thisMonth
@@ -209,6 +296,5 @@ export function useMonthlyBalances() {
     .reduce((sum, t) => sum + t.amount, 0);
 
   const netBalance = moneyIn - moneyOut;
-
   return { moneyIn, moneyOut, netBalance, transactionCount: thisMonth.length };
 }

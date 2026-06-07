@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Colors, Typography, Shadows, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { formatCurrency } from '@/lib/utils';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -28,96 +31,46 @@ function formatMonthLabel(key: string): string {
   return `${MONTHS_FULL[idx] ?? match[1]} ${match[2]}`;
 }
 
-const MOCK_DATA: Record<string, {
-  spendingHealth: { percentage: number; subtext: string; vsPrevious: string };
-  topCategory: { name: string; amount: string; percentage: string; icon: 'restaurant' | 'shopping-cart' | 'local-gas-station' | 'business' };
-  biggestSpend: { merchant: string; amount: string; date: string };
-  mostFrequent: { merchant: string; count: number; firstLetter: string };
-  alerts: { icon: 'local-fire-department' | 'trending-up' | 'warning'; text: string }[];
-  behaviourPatterns: { icon: 'weekend' | 'storefront' | 'access-time'; text: string }[];
-  weeklyBreakdown: { best: { dateRange: string; amount: string }; worst: { dateRange: string; amount: string } };
-}> = {
-  may2026: {
-    spendingHealth: { percentage: 85, subtext: 'of income spent this month', vsPrevious: '+3% vs Apr' },
-    topCategory: { name: 'Food & Dining', amount: '₦45,000', percentage: '34% of spend', icon: 'restaurant' },
-    biggestSpend: { merchant: 'Dana Air', amount: '₦75,000', date: '24 May 2026' },
-    mostFrequent: { merchant: 'Shoprite', count: 12, firstLetter: 'S' },
-    alerts: [
-      { icon: 'trending-up', text: 'Transport spending increased by 22% this month' },
-      { icon: 'local-fire-department', text: 'You spent more than usual on food this week' },
-    ],
-    behaviourPatterns: [
-      { icon: 'weekend', text: 'Most spending happens on weekends' },
-      { icon: 'storefront', text: 'Shoprite is your most frequent merchant' },
-    ],
-    weeklyBreakdown: {
-      best: { dateRange: '08 May - 14 May', amount: '₦15,400' },
-      worst: { dateRange: '15 May - 21 May', amount: '₦48,200' },
-    },
-  },
-  apr2026: {
-    spendingHealth: { percentage: 72, subtext: 'of income spent this month', vsPrevious: '-5% vs Mar' },
-    topCategory: { name: 'Shopping', amount: '₦52,000', percentage: '31% of spend', icon: 'shopping-cart' },
-    biggestSpend: { merchant: 'Konga', amount: '₦62,000', date: '18 Apr 2026' },
-    mostFrequent: { merchant: 'Shoprite', count: 9, firstLetter: 'S' },
-    alerts: [
-      { icon: 'trending-up', text: 'Shopping doubled compared to last month' },
-      { icon: 'warning', text: 'You exceeded your dining budget by 18%' },
-    ],
-    behaviourPatterns: [
-      { icon: 'access-time', text: 'Most transactions happen between 6-9 PM' },
-      { icon: 'storefront', text: 'Shoprite is your most frequent merchant' },
-    ],
-    weeklyBreakdown: {
-      best: { dateRange: '05 Apr - 11 Apr', amount: '₦18,200' },
-      worst: { dateRange: '19 Apr - 25 Apr', amount: '₦41,500' },
-    },
-  },
-  mar2026: {
-    spendingHealth: { percentage: 88, subtext: 'of income spent this month', vsPrevious: '+6% vs Feb' },
-    topCategory: { name: 'Transport', amount: '₦38,000', percentage: '28% of spend', icon: 'local-gas-station' },
-    biggestSpend: { merchant: 'Total Energies', amount: '₦55,000', date: '15 Mar 2026' },
-    mostFrequent: { merchant: 'Uber', count: 16, firstLetter: 'U' },
-    alerts: [
-      { icon: 'trending-up', text: 'Fuel costs rose by 15% this month' },
-    ],
-    behaviourPatterns: [
-      { icon: 'weekend', text: 'Most spending happens on weekends' },
-      { icon: 'storefront', text: 'Uber is your most frequent merchant' },
-    ],
-    weeklyBreakdown: {
-      best: { dateRange: '07 Mar - 13 Mar', amount: '₦12,800' },
-      worst: { dateRange: '21 Mar - 27 Mar', amount: '₦52,100' },
-    },
-  },
-  feb2026: {
-    spendingHealth: { percentage: 65, subtext: 'of income spent this month', vsPrevious: '-10% vs Jan' },
-    topCategory: { name: 'Utilities', amount: '₦42,000', percentage: '30% of spend', icon: 'business' },
-    biggestSpend: { merchant: 'IKEDC', amount: '₦48,000', date: '10 Feb 2026' },
-    mostFrequent: { merchant: 'Shoprite', count: 7, firstLetter: 'S' },
-    alerts: [
-      { icon: 'warning', text: 'Utility bills are 25% higher than last month' },
-    ],
-    behaviourPatterns: [
-      { icon: 'access-time', text: 'Most transactions happen on weekdays' },
-      { icon: 'storefront', text: 'Shoprite is your most frequent merchant' },
-    ],
-    weeklyBreakdown: {
-      best: { dateRange: '01 Feb - 07 Feb', amount: '₦20,100' },
-      worst: { dateRange: '15 Feb - 21 Feb', amount: '₦38,600' },
-    },
-  },
-};
+function monthStartEnd(year: number, month: number): { start: number; end: number } {
+  const start = new Date(year, month - 1, 1).getTime();
+  const end = new Date(year, month, 0, 23, 59, 59, 999).getTime();
+  return { start, end };
+}
 
-const categoryColorOptions = [
-  { bg: '#E6EEFF', color: '#0B5CFF' },
-  { bg: '#F3F0FF', color: '#6B4EFF' },
-  { bg: '#EBF2FC', color: '#3377FF' },
-  { bg: '#E8F0FF', color: '#001A4D' },
-];
+function getWeekId(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d);
+  monday.setDate(diff);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (dt: Date) => `${String(dt.getDate()).padStart(2, '0')} ${MONTHS_SHORT[dt.getMonth()]}`;
+  return `${fmt(monday)} - ${fmt(sunday)}`;
+}
 
-function getCategoryStyle(index: number) {
-  return categoryColorOptions[index % categoryColorOptions.length];
+function formatDate(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function mapIcon(iconId: string | undefined): string {
+  const map: Record<string, string> = {
+    utensils: 'restaurant',
+    car: 'local-gas-station',
+    zap: 'bolt',
+    wifi: 'wifi',
+    'arrow-up-right': 'arrow-upward',
+    'arrow-down-left': 'arrow-downward',
+    briefcase: 'business',
+    'shopping-bag': 'shopping-bag',
+    clapperboard: 'movie',
+    stethoscope: 'medical-services',
+    'graduation-cap': 'school',
+    home: 'home',
+    'help-circle': 'help',
+  };
+  return map[iconId || ''] || 'help';
 }
 
 export default function InsightsScreen() {
@@ -131,12 +84,154 @@ export default function InsightsScreen() {
   const filterBtnRef = useRef<View>(null);
   const windowWidth = Dimensions.get('window').width;
 
-  const hasEnoughData = true;
-  const data = MOCK_DATA[selectedMonth];
-  const pct = data.spendingHealth.percentage;
+  const transactions = useTransactionStore((s) => s.transactions);
+  const categories = useCategoryStore((s) => s.categories);
+  const categoryMap = useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
+
+  const monthsWithData = useMemo(() => {
+    const s = new Set<string>();
+    transactions.forEach(t => {
+      const d = new Date(t.transactionDate);
+      s.add(getMonthKey(d.getFullYear(), d.getMonth() + 1));
+    });
+    return s;
+  }, [transactions]);
+
+  const selParsed = useMemo(() => {
+    const m = selectedMonth.match(/^([a-z]+)(\d{4})$/);
+    if (!m) return { year: 2026, month: 5, idx: 4 };
+    const idx = MONTHS_SHORT.findIndex(s => s.toLowerCase() === m[1]);
+    return { year: parseInt(m[2]), month: idx + 1, idx };
+  }, [selectedMonth]);
+
+  const monthTxs = useMemo(() => {
+    const { start, end } = monthStartEnd(selParsed.year, selParsed.month);
+    return transactions.filter(t => t.transactionDate >= start && t.transactionDate <= end);
+  }, [transactions, selParsed]);
+
+  const prevMonthParsed = useMemo(() => {
+    const { year, month } = selParsed;
+    if (month === 1) return { year: year - 1, month: 12 };
+    return { year, month: month - 1 };
+  }, [selParsed]);
+
+  const prevMonthTxs = useMemo(() => {
+    const { start, end } = monthStartEnd(prevMonthParsed.year, prevMonthParsed.month);
+    return transactions.filter(t => t.transactionDate >= start && t.transactionDate <= end);
+  }, [transactions, prevMonthParsed]);
+
+  const hasEnoughData = monthTxs.filter(t => t.transactionType === 'debit').length >= 3;
+
+  const insights = useMemo(() => {
+    if (!hasEnoughData) return null;
+
+    const credits = monthTxs.filter(t => t.transactionType === 'credit');
+    const debits = monthTxs.filter(t => t.transactionType === 'debit');
+    const totalCredits = credits.reduce((s, t) => s + t.amount, 0);
+    const totalDebits = debits.reduce((s, t) => s + t.amount, 0);
+    const pct = totalCredits > 0 ? Math.round((totalDebits / totalCredits) * 100) : 0;
+
+    const prevCredits = prevMonthTxs.filter(t => t.transactionType === 'credit');
+    const prevDebits = prevMonthTxs.filter(t => t.transactionType === 'debit');
+    const prevTotalCredits = prevCredits.reduce((s, t) => s + t.amount, 0);
+    const prevTotalDebits = prevDebits.reduce((s, t) => s + t.amount, 0);
+    const prevPct = prevTotalCredits > 0 ? Math.round((prevTotalDebits / prevTotalCredits) * 100) : 0;
+    const pctDiff = pct - prevPct;
+    const vsPrevious = prevMonthTxs.length > 0
+      ? `${pctDiff >= 0 ? '+' : ''}${pctDiff}% vs ${MONTHS_SHORT[prevMonthParsed.month - 1]}`
+      : '';
+
+    const catTotals: Record<string, number> = {};
+    debits.forEach(t => { catTotals[t.categoryId] = (catTotals[t.categoryId] || 0) + t.amount; });
+    const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+    const topCatId = sortedCats[0]?.[0] || '';
+    const topCatTotal = sortedCats[0]?.[1] || 0;
+    const topCat = categoryMap.get(topCatId);
+    const topCatPct = totalDebits > 0 ? Math.round((topCatTotal / totalDebits) * 100) : 0;
+
+    const biggest = debits.reduce((max, t) => t.amount > (max?.amount || 0) ? t : max, debits[0]);
+
+    const merchantCounts: Record<string, number> = {};
+    debits.forEach(t => {
+      const name = t.merchantName || 'Unknown';
+      merchantCounts[name] = (merchantCounts[name] || 0) + 1;
+    });
+    const sortedMerchants = Object.entries(merchantCounts).sort((a, b) => b[1] - a[1]);
+    const topMerchant = sortedMerchants[0]?.[0] || '';
+    const topMerchantCount = sortedMerchants[0]?.[1] || 0;
+
+    const prevCatTotals: Record<string, number> = {};
+    prevDebits.forEach(t => { prevCatTotals[t.categoryId] = (prevCatTotals[t.categoryId] || 0) + t.amount; });
+
+    const alerts: { icon: string; text: string }[] = [];
+    for (const [catId, total] of Object.entries(catTotals)) {
+      const prevTotal = prevCatTotals[catId] || 0;
+      if (prevTotal > 0) {
+        const change = Math.round(((total - prevTotal) / prevTotal) * 100);
+        if (change >= 20) {
+          const cat = categoryMap.get(catId);
+          alerts.push({ icon: 'trending-up', text: `${cat?.name || 'Category'} spending increased by ${change}% this month` });
+        }
+      }
+    }
+
+    const weeks: Record<string, number> = {};
+    debits.forEach(t => {
+      const wk = getWeekId(new Date(t.transactionDate));
+      weeks[wk] = (weeks[wk] || 0) + t.amount;
+    });
+    const weekEntries = Object.entries(weeks);
+    const avgWeekly = weekEntries.length > 0 ? totalDebits / weekEntries.length : 0;
+    const currentWeekKey = getWeekId(new Date());
+    const currentWeekTotal = weeks[currentWeekKey] || 0;
+    if (currentWeekTotal > avgWeekly * 1.2 && topCat && alerts.length < 3) {
+      alerts.push({ icon: 'local-fire-department', text: `You spent more than usual on ${topCat.name} this week` });
+    }
+
+    if (alerts.length === 0) {
+      alerts.push({ icon: 'trending-up', text: 'Your spending this month is within normal range' });
+    }
+
+    const patterns: { icon: string; text: string }[] = [];
+    if (topMerchant && topMerchantCount > 1) {
+      patterns.push({ icon: 'storefront', text: `${topMerchant} is your most frequent merchant` });
+    }
+    const weekendCount = debits.filter(t => {
+      const day = new Date(t.transactionDate).getDay();
+      return day === 0 || day === 6;
+    }).length;
+    const weekdayCount = debits.length - weekendCount;
+    patterns.push({
+      icon: weekendCount > weekdayCount ? 'weekend' : 'access-time',
+      text: weekendCount > weekdayCount ? 'Most spending happens on weekends' : 'Most transactions happen on weekdays',
+    });
+
+    const weekAmounts = weekEntries.map(([key, amt]) => ({ key, amount: amt }));
+    weekAmounts.sort((a, b) => a.amount - b.amount);
+    const best = weekAmounts[0];
+    const worst = weekAmounts[weekAmounts.length - 1];
+
+    return {
+      pct,
+      vsPrevious,
+      topCatName: topCat?.name || 'Uncategorized',
+      topCatAmount: formatCurrency(topCatTotal),
+      topCatPct: `${topCatPct}% of spend`,
+      topCatIcon: mapIcon(topCat?.iconIdentifier),
+      topCatColor: topCat?.colorHex || '#0B5CFF',
+      topCatBg: topCat?.colorHex ? `${topCat.colorHex}20` : '#E6EEFF',
+      biggestMerchant: biggest?.merchantName || 'N/A',
+      biggestAmount: formatCurrency(biggest?.amount || 0),
+      biggestDate: biggest ? formatDate(biggest.transactionDate) : '',
+      alerts,
+      patterns,
+      bestWeek: best ? { dateRange: best.key, amount: formatCurrency(best.amount) } : null,
+      worstWeek: worst ? { dateRange: worst.key, amount: formatCurrency(worst.amount) } : null,
+    };
+  }, [monthTxs, prevMonthTxs, hasEnoughData, categoryMap, prevMonthParsed]);
+
+  const pct = insights?.pct ?? 0;
   const healthColor = pct >= 70 ? theme.roles.error : pct >= 50 ? theme.roles.warning : theme.roles.success;
-  const selectedMonthIdx = Math.max(0, MONTHS_SHORT.findIndex(m => m.toLowerCase() === selectedMonth.replace(/\d/g, '')));
-  const catStyle = getCategoryStyle(selectedMonthIdx);
 
   const openFilter = () => {
     filterBtnRef.current?.measureInWindow((x, y, width, height) => {
@@ -179,16 +274,16 @@ export default function InsightsScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {hasEnoughData ? (
+          {hasEnoughData && insights ? (
             <View style={styles.activeLayout}>
               {/* 1. Financial Health Score */}
               <View style={[styles.card, styles.healthCard, Shadows.sm]}>
                 <Text style={styles.cardLabel}>Spending Health</Text>
                 <View style={styles.healthCenter}>
                   <Text style={[styles.healthPercentage, { color: healthColor }]}>
-                    {data.spendingHealth.percentage}%
+                    {insights.pct}%
                   </Text>
-                  <Text style={styles.healthSubtext}>{data.spendingHealth.subtext}</Text>
+                  <Text style={styles.healthSubtext}>of income spent this month</Text>
                 </View>
                 <View style={styles.progressBarBg}>
                   <View
@@ -199,26 +294,25 @@ export default function InsightsScreen() {
                   />
                 </View>
                 <Text style={[styles.vsPrevious, { color: healthColor }]}>
-                  {data.spendingHealth.vsPrevious}
+                  {insights.vsPrevious}
                 </Text>
               </View>
 
               {/* 2. Top Category & Biggest Spend */}
               <View style={styles.sideBySideContainer}>
-                <View style={[styles.sideCard, { backgroundColor: catStyle.bg }]}>
-                  <Text style={[styles.categoryLabel, { color: catStyle.color }]}>Top Category</Text>
+                <View style={[styles.sideCard, { backgroundColor: insights.topCatBg }]}>
+                  <Text style={[styles.categoryLabel, { color: insights.topCatColor }]}>Top Category</Text>
                   <View style={[styles.categoryIconCircle, { backgroundColor: '#FFFFFF' }]}>
-                    <MaterialIcons name={data.topCategory.icon} size={18} color={catStyle.color} />
+                    <MaterialIcons name={insights.topCatIcon} size={18} color={insights.topCatColor} />
                   </View>
                   <Text style={[styles.categoryName, { color: '#001133' }]} numberOfLines={1}>
-                    {data.topCategory.name}
+                    {insights.topCatName}
                   </Text>
                   <Text style={[styles.categoryAmount, { color: '#001133' }]} numberOfLines={1}>
-                    <Text style={styles.nairaSymbol}>₦</Text>
-                    {data.topCategory.amount.replace('₦', '')}
+                    {insights.topCatAmount}
                   </Text>
-                  <Text style={[styles.categorySubtext, { color: catStyle.color }]}>
-                    {data.topCategory.percentage}
+                  <Text style={[styles.categorySubtext, { color: insights.topCatColor }]}>
+                    {insights.topCatPct}
                   </Text>
                 </View>
 
@@ -228,13 +322,12 @@ export default function InsightsScreen() {
                     <MaterialIcons name="local-airport" size={18} color="#D30000" />
                   </View>
                   <Text style={styles.spendMerchant} numberOfLines={1}>
-                    {data.biggestSpend.merchant}
+                    {insights.biggestMerchant}
                   </Text>
                   <Text style={styles.spendAmount} numberOfLines={1}>
-                    <Text style={styles.nairaSymbol}>₦</Text>
-                    {data.biggestSpend.amount.replace('₦', '')}
+                    {insights.biggestAmount}
                   </Text>
-                  <Text style={styles.spendSubtext}>{data.biggestSpend.date}</Text>
+                  <Text style={styles.spendSubtext}>{insights.biggestDate}</Text>
                 </View>
               </View>
 
@@ -242,7 +335,7 @@ export default function InsightsScreen() {
               <View style={[styles.card, Shadows.sm]}>
                 <Text style={styles.cardLabel}>Alerts</Text>
                 <View style={styles.alertsContainer}>
-                  {data.alerts.map((alert, i) => (
+                  {insights.alerts.map((alert, i) => (
                     <View key={i} style={styles.alertRow}>
                       <View style={styles.alertIconCircle}>
                         <MaterialIcons name={alert.icon} size={16} color="#D30000" />
@@ -257,8 +350,8 @@ export default function InsightsScreen() {
               <View style={[styles.card, { backgroundColor: '#F1F2F6' }, Shadows.sm]}>
                 <Text style={styles.cardLabel}>Behaviour Patterns</Text>
                 <View style={styles.behaviourContainer}>
-                  {data.behaviourPatterns.map((pattern, i) => (
-                    <View key={i} style={[styles.behaviourRow, i < data.behaviourPatterns.length - 1 && styles.behaviourRowBorder]}>
+                  {insights.patterns.map((pattern, i) => (
+                    <View key={i} style={[styles.behaviourRow, i < insights.patterns.length - 1 && styles.behaviourRowBorder]}>
                       <View style={styles.behaviourIconCircle}>
                         <MaterialIcons name={pattern.icon} size={18} color="#0B5CFF" />
                       </View>
@@ -269,36 +362,36 @@ export default function InsightsScreen() {
               </View>
 
               {/* 5. Weekly Breakdown */}
-              <View style={[styles.card, styles.weeklyCard, Shadows.sm]}>
-                <Text style={styles.weeklyLabel}>Weekly Breakdown</Text>
-                <View style={styles.weeklyRow}>
-                  <View style={[styles.weeklyArrowCircle, { backgroundColor: '#E8F8EE' }]}>
-                    <MaterialIcons name="arrow-upward" size={16} color="#00BD00" />
+              {insights.bestWeek && insights.worstWeek && (
+                <View style={[styles.card, styles.weeklyCard, Shadows.sm]}>
+                  <Text style={styles.weeklyLabel}>Weekly Breakdown</Text>
+                  <View style={styles.weeklyRow}>
+                    <View style={[styles.weeklyArrowCircle, { backgroundColor: '#E8F8EE' }]}>
+                      <MaterialIcons name="arrow-upward" size={16} color="#00BD00" />
+                    </View>
+                    <View style={styles.weeklyRowDetails}>
+                      <Text style={styles.weeklyRowTitle}>Best Week</Text>
+                      <Text style={styles.weeklyRowDate}>{insights.bestWeek.dateRange}</Text>
+                    </View>
+                    <Text style={[styles.weeklyAmount, { color: '#00BD00' }]}>
+                      {insights.bestWeek.amount}
+                    </Text>
                   </View>
-                  <View style={styles.weeklyRowDetails}>
-                    <Text style={styles.weeklyRowTitle}>Best Week</Text>
-                    <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.best.dateRange}</Text>
+                  <View style={styles.weeklyDivider} />
+                  <View style={styles.weeklyRow}>
+                    <View style={[styles.weeklyArrowCircle, { backgroundColor: '#FDECEB' }]}>
+                      <MaterialIcons name="arrow-downward" size={16} color="#D30000" />
+                    </View>
+                    <View style={styles.weeklyRowDetails}>
+                      <Text style={styles.weeklyRowTitle}>Worst Week</Text>
+                      <Text style={styles.weeklyRowDate}>{insights.worstWeek.dateRange}</Text>
+                    </View>
+                    <Text style={[styles.weeklyAmount, { color: '#D30000' }]}>
+                      {insights.worstWeek.amount}
+                    </Text>
                   </View>
-                  <Text style={[styles.weeklyAmount, { color: '#00BD00' }]}>
-                    <Text style={styles.nairaSymbol}>₦</Text>
-                    {data.weeklyBreakdown.best.amount.replace('₦', '')}
-                  </Text>
                 </View>
-                <View style={styles.weeklyDivider} />
-                <View style={styles.weeklyRow}>
-                  <View style={[styles.weeklyArrowCircle, { backgroundColor: '#FDECEB' }]}>
-                    <MaterialIcons name="arrow-downward" size={16} color="#D30000" />
-                  </View>
-                  <View style={styles.weeklyRowDetails}>
-                    <Text style={styles.weeklyRowTitle}>Worst Week</Text>
-                    <Text style={styles.weeklyRowDate}>{data.weeklyBreakdown.worst.dateRange}</Text>
-                  </View>
-                  <Text style={[styles.weeklyAmount, { color: '#D30000' }]}>
-                    <Text style={styles.nairaSymbol}>₦</Text>
-                    {data.weeklyBreakdown.worst.amount.replace('₦', '')}
-                  </Text>
-                </View>
-              </View>
+              )}
             </View>
           ) : (
             <View style={[styles.emptyContainer, Shadows.sm]}>
@@ -335,28 +428,28 @@ export default function InsightsScreen() {
                 const monthNum = index + 1;
                 const monthKey = getMonthKey(viewYear, monthNum);
                 const isSelected = selectedMonth === monthKey;
-                const hasData = !!MOCK_DATA[monthKey];
+                const hasCalendarData = monthsWithData.has(monthKey);
                 return (
                   <TouchableOpacity
                     key={monthKey}
                     style={[
                       styles.calendarMonthBtn,
                       isSelected && styles.calendarMonthBtnActive,
-                      !hasData && styles.calendarMonthBtnDisabled,
+                      !hasCalendarData && styles.calendarMonthBtnDisabled,
                     ]}
                     onPress={() => {
-                      if (hasData) {
+                      if (hasCalendarData) {
                         setSelectedMonth(monthKey);
                         setShowFilter(false);
                       }
                     }}
-                    disabled={!hasData}
+                    disabled={!hasCalendarData}
                     activeOpacity={0.7}
                   >
                     <Text style={[
                       styles.calendarMonthLabel,
                       isSelected && styles.calendarMonthLabelActive,
-                      !hasData && styles.calendarMonthLabelDisabled,
+                      !hasCalendarData && styles.calendarMonthLabelDisabled,
                     ]}>
                       {label}
                     </Text>

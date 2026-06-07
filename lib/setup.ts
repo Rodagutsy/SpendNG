@@ -1,5 +1,9 @@
-export const SYSTEM_CATEGORIES = [];
-export const SYSTEM_RULES = [];
-export async function seedDatabase() {
-  console.log('Mock seeding: database is now static mock data.');
+import { initDatabase } from './db/database';
+import { seedDatabase } from './db/seed';
+import { useUIStore } from './stores/uiStore';
+
+export async function initializeApp(): Promise<void> {
+  await initDatabase();
+  await seedDatabase();
+  useUIStore.getState().setDbInitialized(true);
 }

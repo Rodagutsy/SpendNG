@@ -37,6 +37,11 @@ class ErrorHandler extends Component<{ children: React.ReactNode }, { error: Err
   }
 }
 
+import { initializeApp } from '../lib/setup';
+import { useUIStore } from '../lib/stores/uiStore';
+import { useCategoryStore } from '../lib/stores/categoryStore';
+import { useTransactionStore } from '../lib/stores/transactionStore';
+
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -45,14 +50,27 @@ export default function RootLayout() {
     'Poppins-Bold': Poppins_700Bold,
   });
   const [ready, setReady] = useState(false);
+  const dbInitialized = useUIStore((s) => s.dbInitialized);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      SplashScreen.hideAsync();
-      const timer = setTimeout(() => setReady(true), 100);
-      return () => clearTimeout(timer);
+    async function init() {
+      try {
+        await initializeApp();
+        await useCategoryStore.getState().fetchCategories();
+        await useTransactionStore.getState().fetchTransactions();
+      } catch (e) {
+        console.error('Initialization error:', e);
+      }
     }
-  }, [fontsLoaded, fontError]);
+    init();
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && dbInitialized) {
+      SplashScreen.hideAsync();
+      setReady(true);
+    }
+  }, [fontsLoaded, fontError, dbInitialized]);
 
   if (!ready) return null;
 
