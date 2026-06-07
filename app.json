@@ -7,7 +7,7 @@
     "icon": "./assets/images/icon.png",
     "scheme": "spendngapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -21,7 +21,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.rodagutsy.spendngapp",
-      "newArchEnabled": false
+      "newArchEnabled": true
     },
     "web": {
       "output": "static",
@@ -41,7 +41,9 @@
           }
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true

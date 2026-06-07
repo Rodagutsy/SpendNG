@@ -1,0 +1,151 @@
+# SpendNG — Strict SMS-First Implementation Plan
+
+We will proceed with a strict SMS-first MVP build, with email, sync, and export as secondary phases.
+
+---
+
+## Revised Build Order (MANDATORY)
+
+Do NOT implement all phases in parallel. Follow this order strictly:
+
+1. **Phase 1 — SMS Ingestion (CORE MVP)** ✅
+2. **Phase 2 — Local Database Stability** ✅
+3. **Phase 3 — Categorization Engine (Rule-based only)** ✅
+4. **Phase 4 — Minimal Insights** ✅
+5. **Phase 5 — Export (CSV first, then PDF)** ✅
+6. **Phase 6 — Email Ingestion (Gmail only)** ✅
+7. **Phase 7 — Sync (Supabase) - DEFERRED FOR NOW**
+
+---
+
+## Detailed Phases
+
+### Phase 1 — SMS Ingestion (CORE MVP) ✅
+
+Implement native Android SMS capabilities and local storage in WatermelonDB.
+
+#### [NEW] [SMSModule.kt](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/android/app/src/main/java/com/rodagutsy/spendngapp/sms/SMSModule.kt)
+- Create native React Native bridge module.
+- Query inbox via `ContentResolver` on `content://sms/inbox`.
+- Filter inbox scan results using basic transactional keywords (Debit, Credit, spent, received, etc.) to minimize overhead.
+
+#### [NEW] [SMSReceiver.kt](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/android/app/src/main/java/com/rodagutsy/spendngapp/sms/SMSReceiver.kt)
+- Register `BroadcastReceiver` for `android.provider.Telephony.SMS_RECEIVED`.
+- Emit events to JS using DeviceEventEmitter when new SMS arrives.
+
+#### [NEW] [SMSPackage.kt](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/android/app/src/main/java/com/rodagutsy/spendngapp/sms/SMSPackage.kt)
+- Package registering the module and emitter.
+
+#### [MODIFY] [MainApplication.kt](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/android/app/src/main/java/com/rodagutsy/spendngapp/MainApplication.kt)
+- Register `SMSPackage` in native build.
+
+#### [MODIFY] [AndroidManifest.xml](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/android/app/src/main/AndroidManifest.xml)
+- Add `<uses-permission android:name="android.permission.READ_SMS" />`
+- Add `<uses-permission android:name="android.permission.RECEIVE_SMS" />`
+- Register `SMSReceiver` receiver tag with corresponding intent-filters.
+
+#### [MODIFY] [sms-service.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/sms-service.ts)
+- Connect Android permission requests using `PermissionsAndroid`.
+- Register the React Native event listener listening to `onSMSReceived` from native and feeding it directly to `IngestionEngine`.
+- Implement `scanInbox()` calling native `SMSModule.getInboxMessages()`.
+
+#### [MODIFY] [ingestion-engine.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/ingestion-engine.ts)
+- Uncomment and re-enable `IngestionEngine`.
+- Implement deduplication using a hash lookup on `rawContent` and checks for identical amounts, merchants, and time windows (e.g., ±5 minutes).
+- Integrate parser logic for Nigerian bank SMS formats (debit, credit, POS).
+- Persist results directly to WatermelonDB `transactions` table.
+
+#### [MODIFY] [database.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/db/database.ts)
+- Uncomment and reactivate WatermelonDB initialization with keychain encryption.
+
+---
+
+### Phase 2 — Local Database Stability ✅
+
+Ensure the database schema, models, and Zustand state synchronization are completely stable.
+
+#### [MODIFY] [setup.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/setup.ts)
+- Initialize database on app startup and trigger DB seed function.
+
+#### [MODIFY] [seed.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/db/seed.ts)
+- Uncomment default categories and rules seed.
+
+#### [MODIFY] [transactionStore.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/stores/transactionStore.ts)
+- Refactor store from mock arrays to WatermelonDB queries.
+- Ensure app restart preserves state and queries SQLite correctly.
+
+#### [MODIFY] [categoryStore.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/stores/categoryStore.ts)
+- Refactor to load categories from WatermelonDB.
+
+---
+
+### Phase 3 — Categorization Engine (Rule-based only) ✅
+
+#### [MODIFY] [categorization-engine.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/categorization-engine.ts)
+- Implement pure rule-based matching: Merchant name -> rule keyword check.
+- Fallback category assignment for debit/credit if no rules match.
+- Explicitly exclude ML or scoring loops.
+
+---
+
+### Phase 4 — Minimal Insights ✅
+
+Update the UI to compute and display simple local aggregates:
+- Total income
+- Total expenses
+- Category breakdown list
+
+---
+
+### Phase 5 — Export (CSV first, then PDF) ✅
+
+#### [MODIFY] [export-service.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/export-service.ts)
+- Export from local SQLite DB only.
+- Implement CSV generation with 12 standard fields (Date, Amount, Currency, Type, Merchant, Category, Account Name, Account (Last 4), Available Balance, Source, Notes, Flagged).
+- Implement PDF generation using expo-print with SpendNG header, summary totals, and transaction table.
+- Share via expo-sharing native share sheet.
+
+#### Wired UIs:
+- **ExportModal** — configure/summary/download flow with real data
+- **Export tab** — date range + format selection with live progress bar
+- **Settings > Data & Export** — quick CSV/PDF export of all data
+
+---
+
+### Phase 6 — Email Ingestion (Gmail only) ✅
+
+#### [MODIFY] [email-service.ts](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/lib/email-service.ts)
+- Implement Google OAuth sign-in flow via expo-auth-session/providers/google.
+- Store OAuth tokens in device keychain via react-native-keychain.
+- Retrieve transaction emails from Gmail API (last 30 days, filtered by 10 financial senders).
+- Pass email bodies to IngestionEngine.processAlert() for parsing and storage.
+
+#### [MODIFY] [email-connection.tsx](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/app/\(onboarding)/email-connection.tsx)
+- Connect Gmail button triggers OAuth flow, stores tokens, runs initial email import.
+
+#### [NEW] [connected-accounts.tsx](file:///c:/Users/USER/Desktop/Antigravity%20projects/SpendNG/app/\(tabs)/settings/connected-accounts.tsx)
+- Settings screen showing Gmail connection status with Connect/Disconnect.
+
+**Note:** No background polling. Email import is manual only.
+
+---
+
+### Phase 7 — Sync (Supabase) - DEFERRED
+
+- All Supabase syncing (offline-first, table uploads, sync logs) is explicitly deferred until local system is fully verified.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Build test: `npx expo run:android` to compile native module.
+- Parser test: Run parsing rules on sample Nigerian bank alerts to verify transaction data extraction.
+
+### Manual Verification
+- Verify permission prompts on Android startup.
+- Validate that mock/real SMS triggers BroadcastReceiver, inserts to WatermelonDB, and persists across restarts.
+- Verify deduplication blocks duplicate transactions when identical SMS is received.
+- Verify Gmail OAuth login works and returns valid accessToken on device.
+- Confirm token is stored in Keychain and persists across app restart.
+- Execute a manual pollNewEmails() call and confirm at least one email is fetched, parsed, converted to transaction, stored in WatermelonDB, and rendered in UI.

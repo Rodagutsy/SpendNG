@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -6,8 +6,6 @@ import {
   ScrollView, 
   TouchableOpacity, 
   Alert, 
-  AppState, 
-  AppStateStatus 
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -16,9 +14,9 @@ import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { startOfMonth, endOfMonth, subDays, format } from 'date-fns';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-
-// Mock Export Format
-type ExportFormat = 'PDF' | 'CSV';
+import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { ExportService, ExportFormat } from '@/lib/export-service';
 
 export default function ExportScreen() {
   const colorScheme = useColorScheme() ?? 'light';
@@ -30,23 +28,55 @@ export default function ExportScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const handleExport = async () => {
+  const handleExport = useCallback(async () => {
     setIsGenerating(true);
     setProgress(0);
 
-    // Simulate generation progress
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsGenerating(false);
-          Alert.alert('Export Successful', `Your ${formatType} report has been generated.`);
-          return 100;
-        }
-        return prev + 10;
+    try {
+      const txStore = useTransactionStore.getState();
+      const catStore = useCategoryStore.getState();
+
+      await txStore.fetchTransactions({
+        startDate: startDate.getTime(),
+        endDate: endDate.getTime(),
       });
-    }, 300);
-  };
+      if (catStore.categories.length === 0) {
+        await catStore.fetchCategories();
+      }
+
+      const transactions = useTransactionStore.getState().transactions;
+      if (transactions.length === 0) {
+        Alert.alert('No Data', 'No transactions found in the selected date range.');
+        return;
+      }
+
+      const categoryNames: Record<string, string> = {};
+      for (const t of transactions) {
+        const cat = catStore.getCategoryById(t.categoryId);
+        if (cat) categoryNames[t.categoryId] = cat.name;
+      }
+
+      const filePath = await ExportService.exportData(
+        {
+          format: formatType,
+          startDate,
+          endDate,
+          transactions,
+          userName: 'User',
+          categoryNames,
+        },
+        (p) => setProgress(p),
+      );
+
+      await ExportService.shareFile(filePath);
+      Alert.alert('Export Successful', `Your ${formatType} report has been generated.`);
+    } catch (err: any) {
+      if (err.message === 'Export cancelled') return;
+      Alert.alert('Export Failed', err.message || 'An error occurred.');
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [startDate, endDate, formatType]);
 
   const QuickRangeButton = ({ label, getDates }: { label: string, getDates: () => [Date, Date] }) => (
     <TouchableOpacity 

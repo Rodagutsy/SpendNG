@@ -12,36 +12,22 @@ This is the most critical layer of SpendNG. Every other feature depends on this 
 
 ## 1. SMS Ingestion (Android)
 
-### 1.1 Background Service
+### 1.1 Native Bridge
 
-Use `react-native-sms-retriever` for real-time SMS monitoring combined with a one-time historical inbox scan.
+Uses a custom React Native native module (`SMSModule.kt`) with:
+- `getInboxMessages()` — queries `content://sms/inbox` via `ContentResolver`, filters by transactional keywords (debit, credit, spent, received, etc.) to minimize overhead
+- `SMSReceiver.kt` — `BroadcastReceiver` for `android.provider.Telephony.SMS_RECEIVED`, emits events to JS via `DeviceEventEmitter`
+- `SMSPackage.kt` — registers both in the React Native bridge
 
-The service must be registered as an Android Foreground Service to survive aggressive battery management on MIUI, ColorOS, EMUI, and other OEM Android skins.
+### 1.2 SMS Service (`sms-service.ts`)
 
-**Required persistent notification (cannot be removed):**
-```
-Title: SpendNG
-Body: Watching for new transactions
-Icon: SpendNG app icon (small, monochrome)
-Priority: LOW — collapsed by default, not intrusive
-```
-
-**Rule:** The persistent notification is an Android system requirement for foreground services. Never attempt to suppress or hide it. The copy must communicate value, not feel like system overhead.
-
-### 1.2 Historical Inbox Scan
-
-On first SMS permission grant, scan the full SMS inbox in reverse chronological order (newest first). Process in background. The UI must remain fully usable during this scan.
-
-Show progress on the onboarding import screen:
-- Number of alerts identified so far
-- Number successfully parsed
-- Estimated time remaining (based on current processing rate)
-
-**Rule:** The scan must be resumable. If interrupted (app backgrounded or killed), resume from the last processed message ID on next open — never restart from scratch.
+- `requestPermissions()` — requests `RECEIVE_SMS` and `READ_SMS` via `PermissionsAndroid`
+- `startMonitoring()` — registers `NativeEventEmitter` listener on `onSMSReceived`, pipes incoming messages to `IngestionEngine.processAlert`
+- `scanInbox()` — calls `SMSModule.getInboxMessages()`, iterates messages and delegates to `IngestionEngine.processAlert`
 
 ### 1.3 Sender Identification
 
-Before attempting to parse any SMS, validate the sender against the known sender list. Messages from unrecognized senders are discarded immediately without parsing.
+Sender validation is handled by the parser (`Parser.identifyBank`) using regex patterns against known Nigerian bank sender IDs.
 
 **Supported SMS Senders — Version 1 Launch:**
 
@@ -60,50 +46,45 @@ Before attempting to parse any SMS, validate the sender against the known sender
 | PalmPay | PALMPAY |
 | Wema Bank | WEMABANK, WEMA |
 
-**Unrecognized senders:** Store in a `pending_review` queue with the raw message hash and sender ID. Do not parse. Surface in a "Help improve SpendNG" section in Settings where users can identify their bank. Use this data to prioritize new sender support.
-
-### 1.4 Real-Time SMS Monitoring
-
-Register a `BroadcastReceiver` for `android.provider.Telephony.SMS_RECEIVED`. Process each incoming message through the sender filter immediately. If from a recognized sender, parse immediately and commit the transaction within 5 seconds of receipt.
+**Unrecognized senders:** Messages from unrecognized senders are discarded without parsing. They are not stored.
 
 ---
 
-## 2. Email Ingestion (Both Platforms)
+## 2. Email Ingestion (Gmail only)
 
 ### 2.1 OAuth Connection
 
-Present Gmail and Outlook connection during onboarding as strongly recommended but optional. Use the following OAuth scopes — never request broader access:
+Present Gmail connection during onboarding as strongly recommended but optional. Uses the following OAuth scope:
 
 - Gmail: `https://www.googleapis.com/auth/gmail.readonly`
-- Outlook: `Mail.Read`
 
-Store tokens in device keychain only (see `spendng-security-guardrails`).
+Uses `expo-auth-session/providers/google` with `useAuthRequest()`. The OAuth flow requires a Google Cloud project with the Gmail API enabled and a Web OAuth client ID.
+
+**Redirect URIs registered in Google Cloud Console:**
+- Expo Go (dev): `https://auth.expo.io/@YOUR_EXPO_USERNAME/spendng-app`
+- Standalone/production: `spendngapp://oauth`
+
+Tokens are stored in the device keychain via `react-native-keychain` using service name `spendng.gmail`.
 
 ### 2.2 Historical Email Scan
 
-On first OAuth connection, scan the inbox filtered by known financial sender addresses. Process in reverse chronological order (newest first). Run in background. The UI must be fully usable during this scan.
+On first OAuth connection, triggers a one-time manual scan of the inbox filtered by known financial sender addresses (last 30 days). Processed sequentially. The UI shows progress after scan completes.
 
 **Email filter query for Gmail:**
 ```
-from:(alerts@gtbank.com OR notifications@kuda.co OR alerts@opay.africa OR 
-      hello@grey.co OR notifications@geegpay.com OR transfers@lemfi.com OR 
-      noreply@piggyvest.com OR hello@cowrywise.com OR 
-      notifications@flutterwave.com OR notifications@paystack.com)
+from:(alerts@gtbank.com OR alerts@accessbankplc.com OR alert@firstbanknigeria.com OR 
+      alert@zenithbank.com OR alerts@ubagroup.com OR notifications@kuda.co OR 
+      alerts@opay.africa OR hello@grey.co OR notifications@geegpay.com OR 
+      transfers@lemfi.com)
 ```
 
-Build the equivalent filter for Outlook using the same sender list.
+Emails are fetched via the Gmail API:
+1. `GET /gmail/v1/users/me/messages?q=<query>&maxResults=50` — search messages
+2. `GET /gmail/v1/users/me/messages/{id}?format=full` — get full message with body
 
-### 2.3 Polling Service
+### 2.3 Polling
 
-Use `react-native-background-fetch` to poll for new emails at a default interval of 15 minutes. Make this configurable in Settings between 5 minutes and 1 hour.
-
-On each poll:
-1. Fetch emails received since the last successful poll timestamp
-2. Filter by recognized sender addresses
-3. For each matching email, pass to parser
-4. Update the last-poll timestamp on success
-
-**Rule:** If the device is offline, skip the poll silently. Do not queue poll attempts — simply poll at the next scheduled interval when connectivity is restored.
+No background polling in V1. Email import is triggered manually via the onboarding flow or Settings → Connected Accounts.
 
 ### 2.4 Supported Email Senders — Version 1 Launch
 
@@ -119,10 +100,6 @@ On each poll:
 | Grey | hello@grey.co |
 | Geegpay | notifications@geegpay.com |
 | Lemfi | transfers@lemfi.com |
-| Piggyvest | noreply@piggyvest.com |
-| Cowrywise | hello@cowrywise.com |
-| Flutterwave | notifications@flutterwave.com |
-| Paystack | notifications@paystack.com |
 
 ---
 
@@ -130,15 +107,7 @@ On each poll:
 
 ### 3.1 Parser Architecture
 
-The parser is a JavaScript engine that runs entirely on-device. It uses a library of sender-specific templates. Each template defines:
-
-- Regex patterns for each field
-- Field positions and delimiters
-- Currency symbol formats for that sender
-- Date format patterns for that sender
-- Expected transaction type indicators (debit keywords, credit keywords)
-
-Templates are bundled with the app and updated via Expo EAS OTA updates — no full App Store release needed to add new bank support.
+The parser is a JavaScript engine that runs entirely on-device. It uses sender-specific regex templates for SMS parsing and generic keyword-based extraction for email parsing.
 
 ### 3.2 Required vs Optional Fields
 
@@ -165,37 +134,15 @@ Templates are bundled with the app and updated via Expo EAS OTA updates — no f
 
 ### 3.4 Amount Normalization
 
-The parser must recognize and normalize all of the following as equivalent to `1000.00 NGN`:
+The parser strips commas, currency symbols, and whitespace before parsing the numeric value. Parses as float with 2 decimal places. If the amount cannot be parsed as a positive number, treat as parse failure.
 
-```
-₦1,000.00
-₦1000
-NGN 1,000.00
-NGN1000.00
-1,000.00 naira
-1000 Naira
-N1,000.00
-1,000NGN
-```
-
-**Rule:** Always strip commas, currency symbols, and whitespace before parsing the numeric value. Parse as float with 2 decimal places. If the amount cannot be parsed as a positive number, treat as parse failure.
+SMS amount extraction uses bank-specific regex patterns. Email amount extraction uses a generic `(?:NGN|₦|$|£|USD|GBP)\s*([\d,]+\.\d{2})` pattern.
 
 ### 3.5 Date Normalization
 
-The parser must handle all of the following date formats:
+The parser handles multiple date formats including DD/MM/YYYY, DD-Mon-YYYY, ISO 8601, and bank-specific formats.
 
-```
-27/04/2025          → DD/MM/YYYY
-04/27/2025          → MM/DD/YYYY (rare but used by some platforms)
-27-Apr-2025         → DD-Mon-YYYY
-April 27, 2025      → Month DD, YYYY
-27 Apr 2025         → DD Mon YYYY
-2025-04-27          → ISO 8601
-27/04/25            → DD/MM/YY
-Today               → Current date
-```
-
-Always store as Unix timestamp in the database. Always display as the user's local date format in the UI.
+Always stored as Unix timestamp in the database. Always displayed as user's local date format in the UI.
 
 ### 3.6 Transaction Type Detection
 
@@ -205,16 +152,12 @@ Always store as Unix timestamp in the database. Always display as the user's loc
 **Credit indicators (case-insensitive):**
 `credit`, `credited`, `received`, `deposit`, `transfer in`, `inflow`, `income`
 
-If both indicators are present (unusual but possible), prefer the more specific term. If neither is found, attempt to infer from context: if a merchant name is present and no direction indicator exists, classify as debit.
-
 ### 3.7 Duplicate Detection
 
-Before committing any transaction, check for an existing record matching all three:
-- `amount` within ±0.01
-- `transaction_date` within a 5-minute window
-- `account_name` matches (or both are null)
+Before committing any transaction, two checks run:
 
-If all three match, classify as duplicate. Do not commit. Log in `sync_logs` with `parse_status: 'duplicate'` and a reference to the original record ID.
+1. **Content hash check** — SHA-256 hash of the raw message body compared against `sync_logs.raw_content_hash`. If match found, classified as duplicate.
+2. **Amount + Merchant + Time window check** — Same amount (exact match), same merchant name, within ±5 minutes. If match found, classified as duplicate and logged with `parse_status: 'duplicate'`.
 
 **Rule:** False positive duplicate suppression is recoverable via manual entry. An actual duplicate appearing in the transaction list is a worse user experience than a suppressed legitimate transaction. Err on the side of deduplication.
 
@@ -227,43 +170,24 @@ When a parse fails:
 1. Do **not** create a transaction record
 2. Do **not** show any error or broken record in the UI
 3. Create a `sync_logs` entry with `parse_status: 'failed'` and the failure reason
-4. Create a `failed_parses` entry with sender identifier and failure reason (no raw content on device)
-5. Send the failure metadata (not raw content) to Supabase asynchronously for pattern analysis
-6. The user never sees a failed parse unless they navigate to Settings → Data Sources → View Failed Alerts
+4. Create a `failed_parses` entry with sender identifier and failure reason
+5. The user never sees a failed parse unless they navigate to Settings → Data Sources → View Failed Alerts
 
 ---
 
-## 5. Background Service Survival (Android)
+## 5. Connected Accounts UI
 
-These OEM Android skins aggressively kill background services. Address each one:
-
-**MIUI (Xiaomi):**
-- Prompt user to enable "Autostart" for SpendNG in MIUI Settings → Manage Apps
-- Prompt user to set battery optimization to "No restriction"
-- Show this prompt once during onboarding and once if SMS ingestion has been silent for 72 hours
-
-**ColorOS (OPPO/Realme):**
-- Prompt user to enable "Allow Auto Launch"
-- Prompt user to enable "Allow running in background"
-
-**EMUI (Huawei):**
-- Prompt user to add SpendNG to "Protected Apps" list
-
-**Samsung One UI:**
-- Generally permissive but prompt if battery optimization is set to "Restricted"
-
-**Implementation:** Detect the device manufacturer and model at runtime. If the device matches a known aggressive OEM, show the appropriate setup prompt during onboarding after SMS permission is granted. Store a flag so the prompt is shown at most once during onboarding and once per 30-day period if ingestion appears inactive.
+A "Connected Accounts" screen in Settings shows Gmail connection status with Connect/Disconnect buttons. Uses the same OAuth flow as onboarding.
 
 ---
 
 ## 6. iOS Constraints
 
-On iOS, background SMS reading is not permitted by the operating system. This is not a bug or a limitation to work around — it is a platform policy.
+On iOS, background SMS reading is not permitted by the operating system.
 
 **iOS ingestion strategy:**
 - Email ingestion via OAuth is the primary channel on iOS
 - Manual entry is the fallback for SMS-only banks
 - During onboarding on iOS, the SMS permission screen is never shown
-- The onboarding value explanation for iOS users emphasizes email connection
 
-**Rule:** Never attempt to use any iOS API or third-party library to read SMS on iOS in a way that violates App Store guidelines. Rejection from the App Store is a worse outcome than limited functionality on iOS.
+**Rule:** Never attempt to use any iOS API or third-party library to read SMS on iOS in a way that violates App Store guidelines.

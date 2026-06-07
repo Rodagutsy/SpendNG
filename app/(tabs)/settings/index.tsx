@@ -104,6 +104,7 @@ export default function SettingsScreen() {
         <MenuItem icon="bell" label="Notifications" onPress={() => router.push('/settings/notifications')} />
         <MenuItem icon="arrow.down.doc.fill" label="Data & Export" onPress={() => router.push('/settings/data-export')} />
         <MenuItem icon="lock.fill" label="Security" onPress={() => router.push('/settings/security')} />
+        <MenuItem icon="envelope.fill" label="Connected Accounts" onPress={() => router.push('/settings/connected-accounts' as any)} />
         <MenuItem icon="help-circle" label="Help" onPress={() => router.push('/settings/help')} />
       </View>
 

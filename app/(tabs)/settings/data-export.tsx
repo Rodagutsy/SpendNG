@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,6 +6,8 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { ExportService, ExportFormat } from '@/lib/export-service';
 
 export default function DataExportScreen() {
   const router = useRouter();
@@ -16,30 +18,57 @@ export default function DataExportScreen() {
 
   const [exporting, setExporting] = useState(false);
 
+  const doExport = useCallback(async (format: ExportFormat) => {
+    setExporting(true);
+    try {
+      const txStore = useTransactionStore.getState();
+      const catStore = useCategoryStore.getState();
+
+      await txStore.fetchTransactions();
+      if (catStore.categories.length === 0) {
+        await catStore.fetchCategories();
+      }
+
+      const transactions = useTransactionStore.getState().transactions;
+      if (transactions.length === 0) {
+        Alert.alert('No Data', 'There are no transactions to export.');
+        return;
+      }
+
+      const categoryNames: Record<string, string> = {};
+      for (const t of transactions) {
+        const cat = catStore.getCategoryById(t.categoryId);
+        if (cat) categoryNames[t.categoryId] = cat.name;
+      }
+
+      const startDate = new Date(transactions[transactions.length - 1].transactionDate);
+      const endDate = new Date(transactions[0].transactionDate);
+
+      const filePath = await ExportService.exportData(
+        { format, startDate, endDate, transactions, userName: 'User', categoryNames },
+        () => {},
+      );
+
+      await ExportService.shareFile(filePath);
+      Alert.alert('Export Successful', `Your data has been exported as ${format}.`);
+    } catch (err: any) {
+      if (err.message === 'Export cancelled') return;
+      Alert.alert('Export Failed', err.message || 'An error occurred.');
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
   const handleExportData = () => {
     Alert.alert(
       'Export All Data',
       'Choose the export format:',
       [
-        {
-          text: 'Export as CSV',
-          onPress: () => startSimulation('CSV'),
-        },
-        {
-          text: 'Export as PDF',
-          onPress: () => startSimulation('PDF'),
-        },
-        { text: 'Cancel', style: 'cancel' }
+        { text: 'Export as CSV', onPress: () => doExport('CSV') },
+        { text: 'Export as PDF', onPress: () => doExport('PDF') },
+        { text: 'Cancel', style: 'cancel' },
       ]
     );
-  };
-
-  const startSimulation = (format: string) => {
-    setExporting(true);
-    setTimeout(() => {
-      setExporting(false);
-      Alert.alert('Success', `Your transaction history has been exported as a ${format} file and saved to your device.`);
-    }, 1500);
   };
 
   const handleDownloadTaxReports = () => {

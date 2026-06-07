@@ -303,7 +303,7 @@ export default function InsightsScreen() {
                 <View style={[styles.sideCard, { backgroundColor: insights.topCatBg }]}>
                   <Text style={[styles.categoryLabel, { color: insights.topCatColor }]}>Top Category</Text>
                   <View style={[styles.categoryIconCircle, { backgroundColor: '#FFFFFF' }]}>
-                    <MaterialIcons name={insights.topCatIcon} size={18} color={insights.topCatColor} />
+                    <MaterialIcons name={insights.topCatIcon as any} size={18} color={insights.topCatColor} />
                   </View>
                   <Text style={[styles.categoryName, { color: '#001133' }]} numberOfLines={1}>
                     {insights.topCatName}
@@ -338,7 +338,7 @@ export default function InsightsScreen() {
                   {insights.alerts.map((alert, i) => (
                     <View key={i} style={styles.alertRow}>
                       <View style={styles.alertIconCircle}>
-                        <MaterialIcons name={alert.icon} size={16} color="#D30000" />
+                        <MaterialIcons name={alert.icon as any} size={16} color="#D30000" />
                       </View>
                       <Text style={styles.alertText}>{alert.text}</Text>
                     </View>
@@ -353,7 +353,7 @@ export default function InsightsScreen() {
                   {insights.patterns.map((pattern, i) => (
                     <View key={i} style={[styles.behaviourRow, i < insights.patterns.length - 1 && styles.behaviourRowBorder]}>
                       <View style={styles.behaviourIconCircle}>
-                        <MaterialIcons name={pattern.icon} size={18} color="#0B5CFF" />
+                        <MaterialIcons name={pattern.icon as any} size={18} color="#0B5CFF" />
                       </View>
                       <Text style={styles.behaviourText}>{pattern.text}</Text>
                     </View>

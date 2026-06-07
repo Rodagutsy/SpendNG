@@ -21,58 +21,44 @@ No additional formats in V1.
 
 ## 2. PDF Export Structure
 
-### Page 1 — Cover Page
+### Header Section
 
-Must contain:
-
+Contains:
+- SpendNG logo/name
 - User name
-- Export range
+- Export range (start date to end date)
 - Generated timestamp
+
+### Summary Section
+
+Must include:
 - Total income
 - Total expenses
 - Net flow
 
----
+### Transaction Table
 
-## 3. Summary Section
-
-Must include:
-
-- Category totals
-- Percentage breakdown
-- Month-over-month comparison
-
----
-
-## 4. Transaction Table
-
-Columns:
-
+Columns (fixed order):
 1. Date
-2. Type
-3. Merchant
-4. Category
-5. Currency
-6. Amount
-7. Balance
-
-This order is fixed.
+2. Amount
+3. Type
+4. Merchant
+5. Category
+6. Source
 
 ---
 
-## 5. CSV Format
+## 3. CSV Format
 
 Exact headers:
 
-Date,Type,Merchant,Category,Currency,Amount,Balance,Source
+Date,Amount,Currency,Type,Merchant,Category,Account Name,Account (Last 4),Available Balance,Source,Notes,Flagged for Review
 
-Date format:
-
-YYYY-MM-DD
+Date format: YYYY-MM-DD HH:mm:ss
 
 ---
 
-## 6. Currency Formatting
+## 4. Currency Formatting
 
 NGN:
 ₦5,000.00
@@ -85,49 +71,40 @@ GBP:
 
 ---
 
-## 7. File Naming
+## 5. File Naming
 
 Format:
 
-SpendNG_Export_YYYY-MM-DD_to_YYYY-MM-DD
+SpendNG_Export_YYYY-MM-DD_HHmmss.{ext}
 
-Example:
-
-SpendNG_Export_2026-01-01_to_2026-01-31
+Extension depends on format:
+- `.csv` for CSV
+- `.pdf` for PDF
 
 ---
 
-## 8. Generation Rules
+## 6. Generation
 
-### Preferred
+Generate on-device using:
+- **CSV**: `expo-file-system` writes UTF-8 CSV to cache directory
+- **PDF**: `expo-print.printToFileAsync()` renders HTML table, file moved to cache directory
 
-Generate on-device.
-
-### Fallback
-
-If dataset exceeds device memory:
-
-Fallback:
-
-CSV
+Files are placed in the app's cache directory and shared via the OS share sheet.
 
 Never upload for cloud rendering.
 
 ---
 
-## 9. Share Sheet
+## 7. Share Sheet
 
-Must always show:
-
+Uses `expo-sharing.shareAsync()` which opens the native OS share sheet, providing:
 - Save to device
 - Share via app
 - Email directly
 
-All three options are mandatory.
-
 ---
 
-## 10. Empty Range
+## 8. Empty Range
 
 Before generation:
 
@@ -136,39 +113,23 @@ Validate record count.
 If zero:
 
 Show:
-
 "No transactions found for this period."
 
 Do not generate empty file.
 
 ---
 
-## 11. Storage Check
+## 9. Interrupted Export
 
-Before generation:
+If export is cancelled:
+- AbortController cancels the in-progress generation
+- File is not written
 
-Estimate file size.
-
-If insufficient storage:
-
-Show:
-
-"Not enough space to create this file."
+Pause/resume is supported via `setPaused()`.
 
 ---
 
-## 12. Interrupted Export
-
-If app backgrounds:
-
-- Pause generation
-- Resume on foreground
-
-Never restart.
-
----
-
-## 13. Accessibility
+## 10. Accessibility
 
 Export progress must announce:
 
@@ -176,10 +137,9 @@ Export progress must announce:
 
 ---
 
-## 14. Testing
+## 11. Testing
 
 Test:
-
 - 1 transaction
 - 10,000 transactions
 - Low storage

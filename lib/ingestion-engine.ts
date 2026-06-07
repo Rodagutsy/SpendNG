@@ -1,8 +1,8 @@
 import * as Crypto from 'expo-crypto';
 import { Parser } from './parser';
 import { CategorizationEngine } from './categorization-engine';
-import { getDatabase } from './db/database';
-import { Transaction, SyncLog, FailedParse } from '../model_legacy/models';
+import { db, transactions, syncLogs, failedParses } from './db';
+import { eq, and, gte, lte } from 'drizzle-orm';
 import { useTransactionStore } from './stores/transactionStore';
 
 export class IngestionEngine {
@@ -56,35 +56,29 @@ export class IngestionEngine {
         parseResult.transactionDate,
       );
 
-      const db = getDatabase();
-      const record = await db.write(async () => {
-        const collection = db.get<Transaction>('transactions');
-        return collection.create((t) => {
-          t.amount = parseResult.amount;
-          t.currency = parseResult.currency;
-          t.transactionType = parseResult.transactionType;
-          t.merchantName = parseResult.merchantName;
-          t.categoryId = category.categoryId;
-          t.accountName = parseResult.accountName;
-          t.accountNumberLast4 = parseResult.accountNumberLast4;
-          t.transactionDate = parseResult.transactionDate;
-          t.availableBalance = parseResult.availableBalance;
-          t.sourceChannel = parseResult.sourceChannel;
-          t.rawSourceText = parseResult.rawSourceText || null;
-          t.parseConfidence = parseResult.parseConfidence;
-          t.isDuplicate = false;
-          t.isFlaggedForReview = category.isFlagged || isSelfTransfer;
-          t.notes = isSelfTransfer ? 'Internal Transfer' : null;
-          t.isSynced = false;
-        });
+      // Use the store to add the transaction and update UI automatically
+      const newTransaction = await useTransactionStore.getState().addTransaction({
+        amount: parseResult.amount,
+        currency: parseResult.currency,
+        transactionType: parseResult.transactionType,
+        merchantName: parseResult.merchantName,
+        categoryId: category.categoryId,
+        accountName: parseResult.accountName,
+        accountNumberLast4: parseResult.accountNumberLast4,
+        transactionDate: parseResult.transactionDate,
+        availableBalance: parseResult.availableBalance,
+        sourceChannel: parseResult.sourceChannel,
+        originalMessage: parseResult.rawSourceText || null,
+        isFlaggedForReview: category.isFlagged || isSelfTransfer,
+        notes: isSelfTransfer ? 'Internal Transfer' : null,
+        taxClassification: null,
+        confidenceLevel: null,
+        receiptImageUri: null,
       });
 
-      await this.logSyncEvent(sourceChannel, sender, rawBody, 'success', record.id);
+      await this.logSyncEvent(sourceChannel, sender, rawBody, 'success', newTransaction.id);
 
-      // Trigger store fetch to update UI
-      await useTransactionStore.getState().fetchTransactions();
-
-      return { success: true, transactionId: record.id };
+      return { success: true, transactionId: newTransaction.id };
     } catch (error) {
       console.error('Ingestion engine error:', error);
       await this.logFailedParse(sourceChannel, sender, `Error: ${error}`, rawBody);
@@ -112,11 +106,7 @@ export class IngestionEngine {
 
   private static async isContentDuplicate(hash: string): Promise<boolean> {
     try {
-      const db = getDatabase();
-      const { Q } = require('@nozbe/watermelondb');
-      const matches = await db.get<SyncLog>('sync_logs').query(
-        Q.where('raw_content_hash', hash)
-      ).fetch();
+      const matches = await db.select().from(syncLogs).where(eq(syncLogs.rawContentHash, hash));
       return matches.length > 0;
     } catch {
       return false;
@@ -129,17 +119,16 @@ export class IngestionEngine {
     transactionDate: number
   ): Promise<boolean> {
     try {
-      const db = getDatabase();
-      const { Q } = require('@nozbe/watermelondb');
       const fiveMinutes = 5 * 60 * 1000;
 
-      let query = db.get<Transaction>('transactions').query(
-        Q.where('amount', amount),
-        Q.where('transaction_date', Q.gte(transactionDate - fiveMinutes)),
-        Q.where('transaction_date', Q.lte(transactionDate + fiveMinutes))
+      const matches = await db.select().from(transactions).where(
+        and(
+          eq(transactions.amount, amount),
+          gte(transactions.transactionDate, transactionDate - fiveMinutes),
+          lte(transactions.transactionDate, transactionDate + fiveMinutes)
+        )
       );
 
-      const matches = await query.fetch();
       if (!merchantName) {
         return matches.length > 0;
       }
@@ -159,19 +148,16 @@ export class IngestionEngine {
     transactionId?: string,
   ): Promise<void> {
     try {
-      const db = getDatabase();
       const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawContent);
 
-      await db.write(async () => {
-        const collection = db.get<SyncLog>('sync_logs');
-        await collection.create((log) => {
-          log.sourceChannel = sourceChannel;
-          log.senderIdentifier = senderIdentifier;
-          log.rawContentHash = hash;
-          log.parseStatus = parseStatus;
-          log.transactionId = transactionId || null;
-          log.failureReason = null;
-        });
+      await db.insert(syncLogs).values({
+        id: Crypto.randomUUID(),
+        sourceChannel,
+        senderIdentifier,
+        rawContentHash: hash,
+        parseStatus,
+        transactionId: transactionId || null,
+        processedAt: new Date(),
       });
     } catch (error) {
       console.error('Failed to log sync event:', error);
@@ -185,16 +171,14 @@ export class IngestionEngine {
     rawContent: string,
   ): Promise<void> {
     try {
-      const db = getDatabase();
-      await db.write(async () => {
-        const collection = db.get<FailedParse>('failed_parses');
-        await collection.create((fp) => {
-          fp.sourceChannel = sourceChannel;
-          fp.senderIdentifier = senderIdentifier;
-          fp.failureReason = failureReason;
-          fp.isReviewed = false;
-          fp.reviewedAt = null;
-        });
+      await db.insert(failedParses).values({
+        id: Crypto.randomUUID(),
+        sourceChannel,
+        senderIdentifier,
+        failureReason,
+        rawSourceText: rawContent,
+        isReviewed: false,
+        createdAt: new Date(),
       });
     } catch (error) {
       console.error('Failed to log parse failure:', error);

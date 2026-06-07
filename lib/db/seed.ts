@@ -1,5 +1,6 @@
-import { getDatabase } from './database';
-import { Category, Rule } from '../../model_legacy/models';
+import { db, categories, rules } from '.';
+import { count } from 'drizzle-orm';
+import * as Crypto from 'expo-crypto';
 
 export const DEFAULT_CATEGORIES = [
   { id: 'cat-01', name: 'Food & Dining', type: 'debit', icon: 'utensils', color: '#FF6B35' },
@@ -43,45 +44,42 @@ const SYSTEM_RULES: Array<{ keyword: string; matchType: 'contains'; categoryId: 
 ];
 
 export async function seedDatabase(): Promise<void> {
-  const database = getDatabase();
+  const catCountResult = await db.select({ value: count() }).from(categories);
+  const catCount = catCountResult[0]?.value || 0;
 
-  const categoriesCollection = database.get<Category>('categories');
-  const count = await categoriesCollection.query().fetchCount();
-
-  if (count === 0) {
-    await database.write(async () => {
-      await Promise.all(
-        DEFAULT_CATEGORIES.map(cat =>
-          categoriesCollection.create((record) => {
-            record._raw.id = cat.id;
-            record.name = cat.name;
-            record.transactionTypeHint = cat.type as any;
-            record.iconIdentifier = cat.icon;
-            record.colorHex = cat.color;
-            record.isSystem = true;
-          })
-        )
-      );
-    });
+  if (catCount === 0) {
+    const now = new Date();
+    await db.insert(categories).values(
+      DEFAULT_CATEGORIES.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        iconIdentifier: cat.icon,
+        colorHex: cat.color,
+        transactionTypeHint: cat.type as 'credit' | 'debit' | 'both',
+        isSystem: true,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    );
   }
 
-  const rulesCollection = database.get<Rule>('rules');
-  const ruleCount = await rulesCollection.query().fetchCount();
+  const ruleCountResult = await db.select({ value: count() }).from(rules);
+  const ruleCount = ruleCountResult[0]?.value || 0;
 
   if (ruleCount === 0) {
-    await database.write(async () => {
-      await Promise.all(
-        SYSTEM_RULES.map((rule, index) =>
-          rulesCollection.create((record) => {
-            record.keyword = rule.keyword;
-            record.matchType = rule.matchType;
-            record.categoryId = rule.categoryId;
-            record.priority = 50 - index;
-            record.isSystem = true;
-          })
-        )
-      );
-    });
+    const now = new Date();
+    await db.insert(rules).values(
+      SYSTEM_RULES.map((rule, index) => ({
+        id: Crypto.randomUUID(),
+        keyword: rule.keyword,
+        matchType: rule.matchType,
+        categoryId: rule.categoryId,
+        priority: 50 - index,
+        isSystem: true,
+        createdAt: now,
+        updatedAt: now,
+      }))
+    );
   }
 }
 

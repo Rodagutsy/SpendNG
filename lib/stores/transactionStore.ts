@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { Q } from '@nozbe/watermelondb';
-import { getDatabase } from '../db/database';
-import { Transaction } from '../../model_legacy/models';
+import { db, transactions } from '../db';
+import { eq, or, like, desc, and, gte, lte } from 'drizzle-orm';
+import * as Crypto from 'expo-crypto';
 
 export interface TransactionRecord {
   id: string;
@@ -70,57 +70,54 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchTransactions: async (filters) => {
     set({ loading: true, error: null });
     try {
-      const db = getDatabase();
       const activeFilters = filters || get().filters;
-      let query = db.get<Transaction>('transactions').query();
-
       const clauses: any[] = [];
+
       if (activeFilters.categoryId) {
-        clauses.push(Q.where('category_id', activeFilters.categoryId));
+        clauses.push(eq(transactions.categoryId, activeFilters.categoryId));
       }
       if (activeFilters.transactionType) {
-        clauses.push(Q.where('transaction_type', activeFilters.transactionType));
+        clauses.push(eq(transactions.transactionType, activeFilters.transactionType));
       }
       if (activeFilters.startDate) {
-        clauses.push(Q.where('transaction_date', Q.gte(activeFilters.startDate)));
+        clauses.push(gte(transactions.transactionDate, activeFilters.startDate));
       }
       if (activeFilters.endDate) {
-        clauses.push(Q.where('transaction_date', Q.lte(activeFilters.endDate)));
+        clauses.push(lte(transactions.transactionDate, activeFilters.endDate));
       }
       if (activeFilters.sourceChannel) {
-        clauses.push(Q.where('source_channel', activeFilters.sourceChannel));
+        clauses.push(eq(transactions.sourceChannel, activeFilters.sourceChannel));
       }
       if (activeFilters.needsReview !== undefined) {
-        clauses.push(Q.where('is_flagged_for_review', activeFilters.needsReview));
+        clauses.push(eq(transactions.isFlaggedForReview, activeFilters.needsReview));
       }
       if (activeFilters.keyword) {
+        const k = `%${activeFilters.keyword}%`;
         clauses.push(
-          Q.or(
-            Q.where('merchant_name', Q.like(`%${Q.sanitizeLikeString(activeFilters.keyword)}%`)),
-            Q.where('notes', Q.like(`%${Q.sanitizeLikeString(activeFilters.keyword)}%`))
+          or(
+            like(transactions.merchantName, k),
+            like(transactions.notes, k)
           )
         );
       }
       
-      if (clauses.length > 0) {
-        query = db.get<Transaction>('transactions').query(...clauses);
-      }
+      const records = await db.select()
+        .from(transactions)
+        .where(clauses.length > 0 ? and(...clauses) : undefined)
+        .orderBy(desc(transactions.transactionDate));
 
-      query = query.extend(Q.sortBy('transaction_date', Q.desc));
-      const records = await query.fetch();
-
-      const transactions: TransactionRecord[] = records.map((r) => ({
+      const txs: TransactionRecord[] = records.map((r) => ({
         id: r.id,
         amount: r.amount,
         currency: r.currency,
-        transactionType: r.transactionType,
+        transactionType: r.transactionType as 'credit' | 'debit',
         merchantName: r.merchantName,
         categoryId: r.categoryId,
         accountName: r.accountName,
         accountNumberLast4: r.accountNumberLast4,
         transactionDate: r.transactionDate,
         availableBalance: r.availableBalance,
-        sourceChannel: r.sourceChannel,
+        sourceChannel: r.sourceChannel as 'sms' | 'email' | 'manual',
         parseConfidence: r.parseConfidence,
         taxClassification: null,
         confidenceLevel: null,
@@ -134,64 +131,50 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
         updatedAt: r.updatedAt.getTime(),
       }));
 
-      set({ transactions, loading: false });
+      set({ transactions: txs, loading: false });
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch transactions', loading: false });
     }
   },
 
   addTransaction: async (data) => {
-    const db = getDatabase();
-    let newRecord: Transaction | null = null;
-    await db.write(async () => {
-      newRecord = await db.get<Transaction>('transactions').create((t) => {
-        t.amount = data.amount;
-        t.currency = data.currency;
-        t.transactionType = data.transactionType;
-        t.merchantName = data.merchantName;
-        t.categoryId = data.categoryId;
-        t.accountName = data.accountName;
-        t.accountNumberLast4 = data.accountNumberLast4;
-        t.transactionDate = data.transactionDate;
-        t.availableBalance = data.availableBalance;
-        t.sourceChannel = data.sourceChannel;
-        t.rawSourceText = data.originalMessage;
-        t.parseConfidence = null;
-        t.isDuplicate = false;
-        t.isFlaggedForReview = data.isFlaggedForReview || false;
-        t.notes = data.notes;
-        t.isSynced = false;
-      });
+    const newId = Crypto.randomUUID();
+    const nowTs = new Date();
+    
+    await db.insert(transactions).values({
+      id: newId,
+      amount: data.amount,
+      currency: data.currency,
+      transactionType: data.transactionType,
+      merchantName: data.merchantName,
+      categoryId: data.categoryId,
+      accountName: data.accountName,
+      accountNumberLast4: data.accountNumberLast4,
+      transactionDate: data.transactionDate,
+      availableBalance: data.availableBalance,
+      sourceChannel: data.sourceChannel,
+      rawSourceText: data.originalMessage,
+      parseConfidence: null,
+      isDuplicate: false,
+      isFlaggedForReview: data.isFlaggedForReview || false,
+      notes: data.notes,
+      isSynced: false,
+      createdAt: nowTs,
+      updatedAt: nowTs,
     });
 
-    if (!newRecord) {
-      throw new Error('Failed to create transaction record');
-    }
-
-    const rec = newRecord as Transaction;
     const added: TransactionRecord = {
-      id: rec.id,
-      amount: rec.amount,
-      currency: rec.currency,
-      transactionType: rec.transactionType,
-      merchantName: rec.merchantName,
-      categoryId: rec.categoryId,
-      accountName: rec.accountName,
-      accountNumberLast4: rec.accountNumberLast4,
-      transactionDate: rec.transactionDate,
-      availableBalance: rec.availableBalance,
-      sourceChannel: rec.sourceChannel,
-      parseConfidence: rec.parseConfidence,
+      ...data,
+      id: newId,
+      parseConfidence: null,
       taxClassification: null,
       confidenceLevel: null,
-      originalMessage: rec.rawSourceText,
-      isDuplicate: rec.isDuplicate,
-      isFlaggedForReview: rec.isFlaggedForReview,
-      notes: rec.notes,
+      isDuplicate: false,
+      isFlaggedForReview: data.isFlaggedForReview || false,
       receiptImageUri: null,
-      isSynced: rec.isSynced,
-      createdAt: rec.createdAt.getTime(),
-      updatedAt: rec.updatedAt.getTime(),
+      isSynced: false,
+      createdAt: nowTs.getTime(),
+      updatedAt: nowTs.getTime(),
     };
 
     set((state) => ({
@@ -202,13 +185,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   updateCategory: async (id, categoryId) => {
-    const db = getDatabase();
-    const record = await db.get<Transaction>('transactions').find(id);
-    await db.write(async () => {
-      await record.update((t) => {
-        t.categoryId = categoryId;
-      });
-    });
+    await db.update(transactions)
+      .set({ categoryId, updatedAt: new Date() })
+      .where(eq(transactions.id, id));
+      
     set((state) => ({
       transactions: state.transactions.map((t) =>
         t.id === id ? { ...t, categoryId, updatedAt: Date.now() } : t
@@ -217,13 +197,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   updateNotes: async (id, notes) => {
-    const db = getDatabase();
-    const record = await db.get<Transaction>('transactions').find(id);
-    await db.write(async () => {
-      await record.update((t) => {
-        t.notes = notes;
-      });
-    });
+    await db.update(transactions)
+      .set({ notes, updatedAt: new Date() })
+      .where(eq(transactions.id, id));
+
     set((state) => ({
       transactions: state.transactions.map((t) =>
         t.id === id ? { ...t, notes, updatedAt: Date.now() } : t
@@ -232,43 +209,36 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   updateTransaction: async (id, data) => {
-    const db = getDatabase();
-    const record = await db.get<Transaction>('transactions').find(id);
-    await db.write(async () => {
-      await record.update((t) => {
-        if (data.amount !== undefined) t.amount = data.amount;
-        if (data.currency !== undefined) t.currency = data.currency;
-        if (data.transactionType !== undefined) t.transactionType = data.transactionType;
-        if (data.merchantName !== undefined) t.merchantName = data.merchantName;
-        if (data.categoryId !== undefined) t.categoryId = data.categoryId;
-        if (data.accountName !== undefined) t.accountName = data.accountName;
-        if (data.accountNumberLast4 !== undefined) t.accountNumberLast4 = data.accountNumberLast4;
-        if (data.transactionDate !== undefined) t.transactionDate = data.transactionDate;
-        if (data.availableBalance !== undefined) t.availableBalance = data.availableBalance;
-        if (data.notes !== undefined) t.notes = data.notes;
-        if (data.isFlaggedForReview !== undefined) t.isFlaggedForReview = data.isFlaggedForReview;
-      });
-    });
+    const updateData: any = { updatedAt: new Date() };
+    if (data.amount !== undefined) updateData.amount = data.amount;
+    if (data.currency !== undefined) updateData.currency = data.currency;
+    if (data.transactionType !== undefined) updateData.transactionType = data.transactionType;
+    if (data.merchantName !== undefined) updateData.merchantName = data.merchantName;
+    if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
+    if (data.accountName !== undefined) updateData.accountName = data.accountName;
+    if (data.accountNumberLast4 !== undefined) updateData.accountNumberLast4 = data.accountNumberLast4;
+    if (data.transactionDate !== undefined) updateData.transactionDate = data.transactionDate;
+    if (data.availableBalance !== undefined) updateData.availableBalance = data.availableBalance;
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    if (data.isFlaggedForReview !== undefined) updateData.isFlaggedForReview = data.isFlaggedForReview;
+
+    await db.update(transactions)
+      .set(updateData)
+      .where(eq(transactions.id, id));
+
     const state = get();
     await state.fetchTransactions(state.filters);
   },
 
   deleteTransaction: async (id) => {
-    const db = getDatabase();
-    const record = await db.get<Transaction>('transactions').find(id);
-    await db.write(async () => {
-      await record.destroyPermanently();
-    });
+    await db.delete(transactions).where(eq(transactions.id, id));
     set((state) => ({
       transactions: state.transactions.filter((t) => t.id !== id),
     }));
   },
 
   clearAllTransactions: async () => {
-    const db = getDatabase();
-    await db.write(async () => {
-      await db.unsafeResetDatabase();
-    });
+    await db.delete(transactions);
     set({ transactions: [] });
   },
 

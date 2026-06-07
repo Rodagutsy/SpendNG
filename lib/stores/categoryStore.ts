@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import { getDatabase } from '../db/database';
-import { Category } from '../../model_legacy/models';
+import { db, categories as categoriesTable } from '../db';
 
 export interface CategoryRecord {
   id: string;
@@ -28,14 +27,13 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   fetchCategories: async () => {
     set({ loading: true, error: null });
     try {
-      const db = getDatabase();
-      const records = await db.get<Category>('categories').query().fetch();
+      const records = await db.select().from(categoriesTable);
       const categories: CategoryRecord[] = records.map((r) => ({
         id: r.id,
         name: r.name,
         iconIdentifier: r.iconIdentifier,
         colorHex: r.colorHex,
-        transactionTypeHint: r.transactionTypeHint,
+        transactionTypeHint: r.transactionTypeHint as 'credit' | 'debit' | 'both',
         isSystem: r.isSystem,
       }));
       set({ categories, loading: false });

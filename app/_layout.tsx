@@ -50,6 +50,7 @@ export default function RootLayout() {
     'Poppins-Bold': Poppins_700Bold,
   });
   const [ready, setReady] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
   const dbInitialized = useUIStore((s) => s.dbInitialized);
 
   useEffect(() => {
@@ -59,7 +60,9 @@ export default function RootLayout() {
         await useCategoryStore.getState().fetchCategories();
         await useTransactionStore.getState().fetchTransactions();
       } catch (e) {
-        console.error('Initialization error:', e);
+        const msg = e instanceof Error ? e.message : 'Initialization failed';
+        console.error('Init error:', msg);
+        setInitError(msg);
       }
     }
     init();
@@ -71,6 +74,15 @@ export default function RootLayout() {
       setReady(true);
     }
   }, [fontsLoaded, fontError, dbInitialized]);
+
+  if (initError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#fff' }}>
+        <Text style={{ color: 'red', fontSize: 16, marginBottom: 10 }}>Startup Error</Text>
+        <Text style={{ color: '#333', textAlign: 'center' }}>{initError}</Text>
+      </View>
+    );
+  }
 
   if (!ready) return null;
 

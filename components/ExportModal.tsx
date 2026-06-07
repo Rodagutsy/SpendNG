@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,17 @@ import {
   ScrollView,
   Modal,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CalendarModal } from '@/components/CalendarModal';
+import { ExportService, ExportFormat } from '@/lib/export-service';
+import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { formatCurrency } from '@/lib/utils';
 
 const EXPORT_TYPES = [
   { key: 'tax-report', label: 'Tax Report' },
@@ -49,8 +55,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
   const [exportType, setExportType] = useState<string>('');
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [fileFormat, setFileFormat] = useState<string>('pdf');
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
-  const needsReview = false; // placeholder - would come from store
+  const [summaryData, setSummaryData] = useState<{
+    transactions: TransactionRecord[];
+    moneyIn: number;
+    moneyOut: number;
+    flaggedCount: number;
+  } | null>(null);
+
+  const needsReview = (summaryData?.flaggedCount ?? 0) > 0;
 
   useMemo(() => {
     if (visible) {
@@ -59,19 +74,84 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
       setEndDate(null);
       setExportType('');
       setFileFormat('pdf');
+      setSummaryData(null);
+      setExporting(false);
+      setExportProgress(0);
     }
   }, [visible]);
 
-  const handleContinue = () => {
-    if (exportType && fileFormat) {
-      setStep('summary');
+  const handleContinue = async () => {
+    if (!exportType || !fileFormat) return;
+
+    const transactionStore = useTransactionStore.getState();
+    const categoryStore = useCategoryStore.getState();
+
+    if (categoryStore.categories.length === 0) {
+      await categoryStore.fetchCategories();
     }
+
+    const filters: any = {};
+    if (startDate) filters.startDate = startDate.getTime();
+    if (endDate) filters.endDate = endDate.getTime();
+
+    if (exportType === 'business-expenses') {
+      filters.transactionType = 'debit';
+    }
+
+    await transactionStore.fetchTransactions(filters);
+    const txns = useTransactionStore.getState().transactions;
+
+    const moneyIn = txns.filter(t => t.transactionType === 'credit').reduce((s, t) => s + t.amount, 0);
+    const moneyOut = txns.filter(t => t.transactionType === 'debit').reduce((s, t) => s + t.amount, 0);
+    const flaggedCount = txns.filter(t => t.isFlaggedForReview).length;
+
+    setSummaryData({ transactions: txns, moneyIn, moneyOut, flaggedCount });
+    setStep('summary');
   };
 
   const handleClose = () => {
+    setExporting(false);
+    setExportProgress(0);
+    setSummaryData(null);
     setStep('configure');
     onClose();
   };
+
+  const handleDownload = useCallback(async () => {
+    if (!summaryData || !startDate || !endDate) return;
+    setExporting(true);
+    setExportProgress(0);
+
+    try {
+      const categoryStore = useCategoryStore.getState();
+      const categoryNames: Record<string, string> = {};
+      for (const t of summaryData.transactions) {
+        const cat = categoryStore.getCategoryById(t.categoryId);
+        if (cat) categoryNames[t.categoryId] = cat.name;
+      }
+
+      const filePath = await ExportService.exportData(
+        {
+          format: fileFormat.toUpperCase() as ExportFormat,
+          startDate,
+          endDate,
+          transactions: summaryData.transactions,
+          userName: 'User',
+          categoryNames,
+        },
+        (progress) => setExportProgress(progress),
+      );
+
+      await ExportService.shareFile(filePath);
+      handleClose();
+    } catch (err: any) {
+      if (err.message === 'Export cancelled') return;
+      Alert.alert('Export Failed', err.message || 'An error occurred during export');
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
+    }
+  }, [summaryData, startDate, endDate, fileFormat]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
@@ -154,18 +234,22 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
                 <View style={[styles.summaryCard, { backgroundColor: theme.surfaceContainerLow }]}>
                   <View style={styles.summaryRow}>
                     <Text style={[styles.summaryLabel, { color: theme.onBackground }]}>Total Money In</Text>
-                    <Text style={[styles.summaryValue, { color: theme.success }]}>₦145,790</Text>
+                    <Text style={[styles.summaryValue, { color: theme.success }]}>
+                      {summaryData ? formatCurrency(summaryData.moneyIn, 'NGN') : '—'}
+                    </Text>
                   </View>
                   <View style={[styles.summaryDivider, { backgroundColor: theme.outlineVariant }]} />
                   <View style={styles.summaryRow}>
                     <Text style={[styles.summaryLabel, { color: theme.onBackground }]}>Total Money Out</Text>
-                    <Text style={[styles.summaryValue, { color: theme.error }]}>₦31,580</Text>
+                    <Text style={[styles.summaryValue, { color: theme.error }]}>
+                      {summaryData ? formatCurrency(summaryData.moneyOut, 'NGN') : '—'}
+                    </Text>
                   </View>
                 </View>
 
-                {needsReview ? (
+                {summaryData && summaryData.flaggedCount > 0 ? (
                   <Text style={[styles.reviewNote, { color: theme.warning }]}>
-                    2 transactions need review
+                    {summaryData.flaggedCount} transaction(s) need review
                   </Text>
                 ) : (
                   <View style={styles.noReviewBanner}>
@@ -202,8 +286,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
                   <TouchableOpacity style={styles.primaryBtn} onPress={handleClose} activeOpacity={0.8}>
                     <Text style={styles.primaryBtnText}>Review</Text>
                   </TouchableOpacity>
+                ) : exporting ? (
+                  <View style={[styles.primaryBtn, { flexDirection: 'row', gap: 8 }]}>
+                    <ActivityIndicator size="small" color={theme.onPrimary} />
+                    <Text style={styles.primaryBtnText}>{exportProgress}%</Text>
+                  </View>
                 ) : (
-                  <TouchableOpacity style={styles.primaryBtn} onPress={handleClose} activeOpacity={0.8}>
+                  <TouchableOpacity style={styles.primaryBtn} onPress={handleDownload} activeOpacity={0.8}>
                     <Text style={styles.primaryBtnText}>Download</Text>
                   </TouchableOpacity>
                 )}

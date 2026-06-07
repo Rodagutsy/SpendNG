@@ -1,50 +1,71 @@
-# Welcome to your Expo app 👋
+# SpendNG — Financial Tracker
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Track spending, categorize transactions, and gain financial insights — all on your phone.
 
-## Get started
+## Problem
 
-1. Install dependencies
+Manually tracking expenses is tedious and easy to forget. SpendNG automatically organizes transactions from SMS/email and gives you a clear picture of your finances.
 
-   ```bash
-   npm install
-   ```
+## Tech Stack
 
-2. Start the app
+- **Framework**: Expo (React Native) — SDK 54
+- **Navigation**: Expo Router v3 (file-based)
+- **Database**: SQLite via `expo-sqlite` + Drizzle ORM
+- **State**: Zustand
+- **Auth**: Supabase (with mock client for dev)
+- **UI**: Custom components, `expo-linear-gradient`, `@expo/vector-icons`
+- **Animations**: `react-native-reanimated` 4 + `react-native-worklets`
+- **Fonts**: Poppins (`@expo-google-fonts/poppins`)
 
-   ```bash
-   npx expo start
-   ```
+## Features
 
-In the output, you'll find options to open the app in a
+- **Auto-categorization** — Rules match merchant names to categories (Shoprite → Food, Uber → Transport, etc.)
+- **Dashboard** — Monthly balance, money in/out, recent activity, quick actions
+- **Transaction modal** — Manual entry with receipt upload (image parsing)
+- **Export** — Income/expense records for tax filing
+- **Onboarding** — Walkthrough screens, account creation, sign in
+- **Notifications** — Bell icon with unread count and dropdown
+- **Dark mode** — System-aware theming via `use-color-scheme`
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Database
 
-## Get a fresh project
-
-When you're ready, run:
+Schema is in `lib/db/schema.ts`. Generate and apply migrations:
 
 ```bash
-npm run reset-project
+npx drizzle-kit generate
+npx drizzle-kit push
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Build
 
-## Learn more
+```bash
+npx eas build --platform android --profile apkPreview
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Project Structure
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```
+app/                  — Expo Router pages (file-based routing)
+  _layout.tsx         — Root layout (fonts, DB init, error boundary)
+  (onboarding)/       — Welcome, sign-in, account creation
+  (tabs)/             — Home, Activity, Insights, Profile
+components/           — Reusable UI (Button, TextInput, Modal, etc.)
+lib/
+  db/                 — Drizzle schema, seed data, migrations
+  stores/             — Zustand stores (transactions, categories, UI)
+  supabase.ts         — Supabase client (or mock)
+assets/images/        — Icons and splash images
+```
 
-## Join the community
+## What I Learned
 
-Join our community of developers creating universal apps.
+- Integrating Drizzle ORM with `expo-sqlite` on React Native
+- File-based routing with Expo Router v3
+- New Architecture (Fabric) with Reanimated 4 and Worklets
+- Supabase auth in a mobile context
+- Zustand for lightweight client-state management
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+*Built with Expo and React Native.*

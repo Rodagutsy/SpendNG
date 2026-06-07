@@ -1,6 +1,5 @@
-import { getDatabase } from './db/database';
-import { Q } from '@nozbe/watermelondb';
-import { Rule, Transaction } from '../model_legacy/models';
+import { db, rules, transactions } from './db';
+import { eq, and, gte, lte, desc, count } from 'drizzle-orm';
 
 export interface CategorizationResult {
   categoryId: string;
@@ -20,14 +19,10 @@ export class CategorizationEngine {
     if (!merchantName) return this.fallback(transactionType);
 
     try {
-      const db = getDatabase();
-      const rules = await db.get<Rule>('rules')
-        .query(Q.sortBy('priority', Q.desc))
-        .fetch();
-
+      const ruleRecords = await db.select().from(rules).orderBy(desc(rules.priority));
       const lowerMerchant = merchantName.trim().toLowerCase();
 
-      for (const rule of rules) {
+      for (const rule of ruleRecords) {
         const keyword = rule.keyword.trim().toLowerCase();
         let matched = false;
 
@@ -78,13 +73,14 @@ export class CategorizationEngine {
     transactionDate: number,
   ): Promise<boolean> {
     try {
-      const db = getDatabase();
-      const oneDay = 24 * 60 * 60 * 1000;
-      const matches = await db.get<Transaction>('transactions').query(
-        Q.where('amount', amount),
-        Q.where('transaction_date', Q.gte(transactionDate - oneDay)),
-        Q.where('transaction_date', Q.lte(transactionDate + oneDay)),
-      ).fetch();
+      const fiveMinutes = 5 * 60 * 1000;
+      const matches = await db.select().from(transactions).where(
+        and(
+          eq(transactions.amount, amount),
+          gte(transactions.transactionDate, transactionDate - fiveMinutes),
+          lte(transactions.transactionDate, transactionDate + fiveMinutes)
+        )
+      );
 
       return matches.length > 0;
     } catch {
@@ -98,11 +94,11 @@ export class CategorizationEngine {
     _newCategoryId: string,
   ): Promise<{ showPrompt: boolean }> {
     try {
-      const db = getDatabase();
-      const otherCount = await db.get<Transaction>('transactions').query(
-        Q.where('merchant_name', merchantName),
-      ).fetchCount();
-
+      const result = await db.select({ value: count() })
+        .from(transactions)
+        .where(eq(transactions.merchantName, merchantName));
+        
+      const otherCount = result[0]?.value || 0;
       return { showPrompt: otherCount > 1 };
     } catch {
       return { showPrompt: false };
@@ -111,20 +107,9 @@ export class CategorizationEngine {
 
   static async applyCorrectionToAll(merchantName: string, newCategoryId: string): Promise<void> {
     try {
-      const db = getDatabase();
-      const records = await db.get<Transaction>('transactions').query(
-        Q.where('merchant_name', merchantName),
-      ).fetch();
-
-      await db.write(async () => {
-        await Promise.all(
-          records.map((t) =>
-            t.update((record) => {
-              record.categoryId = newCategoryId;
-            })
-          )
-        );
-      });
+      await db.update(transactions)
+        .set({ categoryId: newCategoryId, updatedAt: new Date() })
+        .where(eq(transactions.merchantName, merchantName));
     } catch (err) {
       console.error('[CategorizationEngine] applyCorrectionToAll failed:', err);
     }
