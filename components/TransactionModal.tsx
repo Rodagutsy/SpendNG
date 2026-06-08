@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -69,7 +70,9 @@ interface TransactionModalProps {
 export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onClose, transaction }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { height: windowHeight } = useWindowDimensions();
+  const step2MaxHeight = windowHeight * 0.9 - 180;
+  const styles = useMemo(() => createStyles(theme, step2MaxHeight), [theme, step2MaxHeight]);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
   const updateTransaction = useTransactionStore((s) => s.updateTransaction);
   const isEditing = !!transaction;
@@ -138,20 +141,20 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     onClose();
   };
 
-  const handleUploadReceipt = () => {
+  const handleUploadReceipt = async () => {
     setReceiptUploading(true);
-    setTimeout(() => {
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setReceiptUri(result.assets[0].uri);
       setType('debit');
-      setName('Shoprite');
-      setAmount('15790');
-      setCategory('shopping');
-      setPaymentMethod('card');
-      setDescription('Weekly groceries');
-      setDateText('24/05/2026');
-      setReceiptUri('https://placehold.co/400x300/0B5CFF/FFFFFF/png?text=Receipt');
-      setReceiptUploading(false);
       setStep(2);
-    }, 1200);
+    }
+    setReceiptUploading(false);
   };
 
   const pickReceiptImage = async () => {
@@ -296,10 +299,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                   {receiptUploading ? 'Parsing receipt...' : 'Upload Receipt'}
                 </Text>
               </TouchableOpacity>
-              <Text style={styles.uploadHint}>We'll extract the details automatically</Text>
-
-              {/* Spacer to push footer down */}
-              <View style={{ flex: 1 }} />
+              <Text style={styles.uploadHint}>We&apos;ll extract the details automatically</Text>
             </View>
           ) : (
             <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
@@ -487,7 +487,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
 
 type Theme = (typeof Colors)['light'];
 
-const createStyles = (theme: Theme) => StyleSheet.create({
+const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -544,8 +544,8 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   // Step 1
   step1Body: {
-    flex: 1,
     paddingHorizontal: Spacing[5],
+    paddingBottom: Spacing[4],
     alignItems: 'center',
   },
   step1Subtitle: {
@@ -631,7 +631,7 @@ const createStyles = (theme: Theme) => StyleSheet.create({
   },
   // Step 2
   body: {
-    flex: 2,
+    maxHeight: step2MaxHeight,
   },
   bodyContent: {
     paddingHorizontal: Spacing[5],

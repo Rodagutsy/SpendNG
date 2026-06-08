@@ -1,11 +1,13 @@
 import * as Keychain from 'react-native-keychain';
 import { IngestionEngine } from './ingestion-engine';
 
-const KEYCHAIN_SERVICE = 'spendng.gmail';
+const KEYCHAIN_PREFIX = 'spendng.gmail';
+const ACCOUNTS_LIST_KEY = 'spendng.gmail.accounts';
 
 export interface GmailTokens {
   accessToken: string;
   refreshToken?: string;
+  email?: string;
 }
 
 export class EmailService {
@@ -22,26 +24,82 @@ export class EmailService {
     'transfers@lemfi.com',
   ];
 
-  static async getStoredTokens(): Promise<GmailTokens | null> {
+  private static keyForEmail(email: string): string {
+    return `${KEYCHAIN_PREFIX}:${email}`;
+  }
+
+  private static async getAccountList(): Promise<string[]> {
     try {
-      const credentials = await Keychain.getGenericPassword({ service: KEYCHAIN_SERVICE });
-      if (!credentials) return null;
-      return JSON.parse(credentials.password) as GmailTokens;
+      const creds = await Keychain.getGenericPassword({ service: ACCOUNTS_LIST_KEY });
+      if (!creds) return [];
+      return JSON.parse(creds.password) as string[];
+    } catch {
+      return [];
+    }
+  }
+
+  private static async saveAccountList(emails: string[]): Promise<void> {
+    await Keychain.setGenericPassword('accounts', JSON.stringify(emails), { service: ACCOUNTS_LIST_KEY });
+  }
+
+  static async getAccountEmail(accessToken: string): Promise<string | null> {
+    try {
+      const res = await fetch('https://www.googleapis.com/gmail/v1/users/me/profile', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.emailAddress || null;
     } catch {
       return null;
     }
   }
 
-  static async storeTokens(tokens: GmailTokens): Promise<void> {
-    await Keychain.setGenericPassword('gmail', JSON.stringify(tokens), { service: KEYCHAIN_SERVICE });
+  static async connectAccount(tokens: GmailTokens): Promise<string | null> {
+    const email = tokens.email || await this.getAccountEmail(tokens.accessToken);
+    if (!email) return null;
+
+    const key = this.keyForEmail(email);
+    await Keychain.setGenericPassword('gmail', JSON.stringify(tokens), { service: key });
+
+    const accounts = await this.getAccountList();
+    if (!accounts.includes(email)) {
+      accounts.push(email);
+      await this.saveAccountList(accounts);
+    }
+
+    return email;
   }
 
-  static async clearTokens(): Promise<void> {
-    await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE });
+  static async getConnectedAccounts(): Promise<{ email: string; tokens: GmailTokens }[]> {
+    const emails = await this.getAccountList();
+    const results: { email: string; tokens: GmailTokens }[] = [];
+
+    for (const email of emails) {
+      try {
+        const creds = await Keychain.getGenericPassword({ service: this.keyForEmail(email) });
+        if (creds) {
+          results.push({ email, tokens: JSON.parse(creds.password) as GmailTokens });
+        }
+      } catch {
+        // stale entry, clean up later
+      }
+    }
+
+    return results;
   }
 
-  static async pollNewEmails(accessToken: string): Promise<{ processed: number; failed: number }> {
-    const senderQuery = this.FINANCIAL_SENDERS.map(s => `from:${s}`).join(' OR ');
+  static async removeAccount(email: string): Promise<void> {
+    await Keychain.resetGenericPassword({ service: this.keyForEmail(email) });
+    const accounts = await this.getAccountList();
+    const filtered = accounts.filter((e) => e !== email);
+    if (filtered.length !== accounts.length) {
+      await this.saveAccountList(filtered);
+    }
+  }
+
+  static async pollAccount(accessToken: string): Promise<{ processed: number; failed: number }> {
+    const senderQuery = this.FINANCIAL_SENDERS.map((s) => `from:${s}`).join(' OR ');
     const after = new Date();
     after.setDate(after.getDate() - 30);
     const afterStr = after.toISOString().split('T')[0];
@@ -91,8 +149,48 @@ export class EmailService {
     return { processed: success, failed };
   }
 
+  static async pollAllAccounts(): Promise<{ processed: number; failed: number; accounts: number }> {
+    const accounts = await this.getConnectedAccounts();
+    let totalProcessed = 0;
+    let totalFailed = 0;
+
+    for (const { tokens } of accounts) {
+      try {
+        const result = await this.pollAccount(tokens.accessToken);
+        totalProcessed += result.processed;
+        totalFailed += result.failed;
+      } catch (e) {
+        console.warn(`Failed to poll account:`, e);
+        totalFailed += 50;
+      }
+    }
+
+    return { processed: totalProcessed, failed: totalFailed, accounts: accounts.length };
+  }
+
   static isConnected(): Promise<boolean> {
-    return this.getStoredTokens().then(t => t !== null);
+    return this.getAccountList().then((list) => list.length > 0);
+  }
+
+  static async getStoredTokens(): Promise<GmailTokens | null> {
+    const accounts = await this.getConnectedAccounts();
+    return accounts.length > 0 ? accounts[0].tokens : null;
+  }
+
+  static async storeTokens(tokens: GmailTokens): Promise<void> {
+    await this.connectAccount(tokens);
+  }
+
+  static async clearTokens(): Promise<void> {
+    const accounts = await this.getAccountList();
+    for (const email of accounts) {
+      await Keychain.resetGenericPassword({ service: this.keyForEmail(email) });
+    }
+    await Keychain.resetGenericPassword({ service: ACCOUNTS_LIST_KEY });
+  }
+
+  static async pollNewEmails(accessToken: string): Promise<{ processed: number; failed: number }> {
+    return this.pollAccount(accessToken);
   }
 
   private static extractEmailData(message: any): { body: string | null; sender: string | null; timestamp: number } {

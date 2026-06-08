@@ -3,6 +3,7 @@ import { Parser } from './parser';
 import { CategorizationEngine } from './categorization-engine';
 import { supabase } from './supabase';
 import { useTransactionStore } from './stores/transactionStore';
+import { useUIStore } from './stores/uiStore';
 
 export class IngestionEngine {
   static isTransactionAlert(rawBody: string): boolean {
@@ -88,12 +89,17 @@ export class IngestionEngine {
     let success = 0;
     let failed = 0;
 
+    useUIStore.getState().setImportProgress({ found: alerts.length, processed: 0 });
+
     for (let i = 0; i < alerts.length; i++) {
       const alert = alerts[i];
       const result = await this.processAlert(alert.body, alert.sender, alert.timestamp, alert.sourceChannel);
       if (result.success) success++;
       else failed++;
-      onProgress?.(i + 1, alerts.length);
+
+      const processed = i + 1;
+      useUIStore.getState().setImportProgress({ found: alerts.length, processed });
+      onProgress?.(processed, alerts.length);
     }
 
     return { success, failed };

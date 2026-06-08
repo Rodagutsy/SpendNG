@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,17 +6,16 @@ import {
   FlatList,
   TouchableOpacity,
   StatusBar,
-  Pressable,
   Platform,
-  Dimensions
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Colors, Typography, Shadows, Radius, Spacing } from '@/constants/Tokens';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Typography, Shadows, Spacing } from '@/constants/Tokens';
 import { BellIcon, ExportIcon, LightningIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { useMonthlyBalances } from '@/lib/stores/transactionStore';
+import { useMonthlyBalances, useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useAuth } from '@/context/AuthContext';
 import { TransactionModal } from '@/components/TransactionModal';
 import { ExportModal } from '@/components/ExportModal';
 
@@ -45,7 +44,6 @@ interface CustomTransactionProps {
   amount: string;
   category: string;
   isDebit: boolean;
-  iconType: 'shoprite' | 'salary';
   onPress?: () => void;
 }
 
@@ -55,7 +53,6 @@ const CustomTransactionItem = ({
   amount,
   category,
   isDebit,
-  iconType,
   onPress
 }: CustomTransactionProps) => {
   return (
@@ -65,14 +62,13 @@ const CustomTransactionItem = ({
       activeOpacity={0.7}
     >
       {/* Icon Circle */}
-      {iconType === 'shoprite' ? (
+      {isDebit ? (
         <View style={[styles.iconCircle, { backgroundColor: '#E31B23' }]}>
-          {/* Shoprite trolly cart icon */}
           <MaterialIcons name="shopping-cart" size={22} color="#FFFFFF" />
         </View>
       ) : (
         <View style={[styles.iconCircle, { backgroundColor: '#E8F8EE' }]}>
-          <Text style={styles.salaryIconText}>S</Text>
+          <MaterialIcons name="arrow-downward" size={22} color="#007D3A" />
         </View>
       )}
 
@@ -94,9 +90,9 @@ const CustomTransactionItem = ({
             { color: isDebit ? '#D30000' : '#00BD00' }
           ]}
         >
-          {amount.startsWith('-') || amount.startsWith('+') ? amount.charAt(0) : ''}
+          {isDebit ? '-' : '+'}
           <Text style={styles.nairaSymbol}>₦</Text>
-          {amount.replace(/^[+-]?₦/, '')}
+          {amount}
         </Text>
         <Text style={styles.categoryText} numberOfLines={1}>
           {category}
@@ -109,31 +105,16 @@ const CustomTransactionItem = ({
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
   const { moneyIn, moneyOut, netBalance, transactionCount } = useMonthlyBalances();
+  const transactions = useTransactionStore((s) => s.transactions);
+  const { user } = useAuth();
 
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const bellRef = useRef<View>(null);
   const [showTxModal, setShowTxModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const unreadCount = 2;
-  const windowWidth = Dimensions.get('window').width;
 
-  const mockNotifications = [
-    { id: 'n1', text: 'New transaction of ₦15,790 at Shoprite', time: '2 min ago' },
-    { id: 'n2', text: 'Monthly salary of ₦350,000 received', time: '1 hour ago' },
-  ];
-
-  const openNotifications = () => {
-    bellRef.current?.measureInWindow((x, y, width, height) => {
-      setBellPos({ top: y + height + 4, right: windowWidth - x - width });
-      setShowNotifications(true);
-    });
-  };
-
-  const closeNotifications = () => setShowNotifications(false);
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const recentTransactions = transactions.slice(0, 10);
 
   const formatNaira = (amount: number) => {
     const abs = Math.abs(amount);
@@ -144,36 +125,24 @@ export default function HomeScreen() {
     return abs.toLocaleString('en-US');
   };
 
-  // Exact data from Home screen.png
-  const mockActivity = [
-    {
-      id: 'act1',
-      merchant: 'Shoprite',
-      bankAndDate: 'GT Bank • 24 May 2026',
-      amount: '-₦15,790',
-      category: 'Shopping',
-      isDebit: true,
-      iconType: 'shoprite' as const,
-    },
-    {
-      id: 'act2',
-      merchant: 'Monthly Salary',
-      bankAndDate: 'Kuda MFB • 30 May 2026',
-      amount: '+₦15,790',
-      category: 'Shopping', // In the screenshot, both Shoprite and Salary seem to have "Shopping" listed under category, or it could be Salary. Let's make it look exactly like image! Wait, looking at the image Shoprite is "Shopping", and Salary has "Shopping" under it as well! Wait, let's look at the image: it says "+₦15,790" and below it is "+₦15,790"? No, below the second amount "+₦15,790", it's partially cut off but it says "Shopping"? Ah, wait, no, the third item is Shoprite with amount -₦15,790 and category Shopping. In the second item "Monthly Salary", the category says "Salary" or "Income" but it is actually obscured by the FAB. Wait, let's keep "Shopping" or "Salary" - let's make it "Shopping" if it matches, or "Salary" to be logical. The image shows the first item's category is "Shopping". The second item's category is cut off by the blue FAB. The third item has "Shopping". Let's write "Salary" for the salary item just to be standard, but actually "Shopping" in the image's third item. Let's make it exactly as shown.
-      isDebit: false,
-      iconType: 'salary' as const,
-    },
-    {
-      id: 'act3',
-      merchant: 'Shoprite',
-      bankAndDate: 'GT Bank • 24 May 2026',
-      amount: '-₦15,790',
-      category: 'Shopping',
-      isDebit: true,
-      iconType: 'shoprite' as const,
-    }
-  ];
+  const formatDate = (ts: number) => {
+    const d = new Date(ts);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
+  const getCategoryName = (categoryId: string) => {
+    const cat = useCategoryStore.getState().getCategoryById(categoryId);
+    return cat?.name || categoryId;
+  };
+
+  const getAccountLabel = (tx: (typeof transactions)[0]) => {
+    return tx.accountName || 'Account';
+  };
+
+  const openNotifications = useCallback(() => {
+    // Notification feature to be implemented
+  }, []);
 
   const headerElement = useMemo(() => (
     <View style={styles.headerContainer}>
@@ -182,7 +151,7 @@ export default function HomeScreen() {
         <View style={styles.welcomeRow}>
           <View>
             <Text style={styles.welcomeLabel}>Welcome</Text>
-            <Text style={styles.welcomeName}>Obayemi!</Text>
+            <Text style={styles.welcomeName}>{userName}</Text>
           </View>
           <TouchableOpacity
             ref={bellRef}
@@ -191,11 +160,6 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <BellIcon size={24} color="#001133" />
-            {unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{unreadCount}</Text>
-              </View>
-            )}
           </TouchableOpacity>
         </View>
 
@@ -219,20 +183,12 @@ export default function HomeScreen() {
         <View style={[styles.moneyHalf, styles.moneyInHalf]}>
           <Text style={styles.moneyLabelGreen}>Money In</Text>
           <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyIn)}</Text>
-          <View style={styles.trendRow}>
-            <MaterialIcons name="trending-up" size={14} color="#007D3A" />
-            <Text style={styles.trendTextGreen}>12.5% vs last month</Text>
-          </View>
         </View>
 
         {/* Money Out Card */}
         <View style={[styles.moneyHalf, styles.moneyOutHalf]}>
           <Text style={styles.moneyLabelRed}>Money Out</Text>
           <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyOut)}</Text>
-          <View style={styles.trendRow}>
-            <MaterialIcons name="trending-down" size={14} color="#D30000" />
-            <Text style={styles.trendTextRed}>8% vs last month</Text>
-          </View>
         </View>
       </View>
 
@@ -263,7 +219,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
     </View>
-  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, showNotifications, openNotifications]);
+  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications]);
 
   return (
     <>
@@ -271,20 +227,25 @@ export default function HomeScreen() {
         <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
         <FlatList
-          data={mockActivity}
+          data={recentTransactions}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <CustomTransactionItem
-              merchant={item.merchant}
-              bankAndDate={item.bankAndDate}
-              amount={item.amount}
-              category={item.category}
-              isDebit={item.isDebit}
-              iconType={item.iconType}
+              merchant={item.merchantName || 'Unknown'}
+              bankAndDate={`${getAccountLabel(item)} • ${formatDate(item.transactionDate)}`}
+              amount={formatNaira(item.amount)}
+              category={getCategoryName(item.categoryId)}
+              isDebit={item.transactionType === 'debit'}
               onPress={() => router.push(`/transactions/${item.id}` as any)}
             />
           )}
           ListHeaderComponent={headerElement}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No transactions yet</Text>
+              <Text style={styles.emptyStateSubtext}>Tap the + button to add your first transaction</Text>
+            </View>
+          }
           ItemSeparatorComponent={() => <View style={styles.separator} />}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -302,24 +263,6 @@ export default function HomeScreen() {
         <TransactionModal visible={showTxModal} onClose={() => setShowTxModal(false)} />
         <ExportModal visible={showExportModal} onClose={() => setShowExportModal(false)} />
       </View>
-
-      {showNotifications && (
-        <TouchableOpacity
-          style={styles.notifOverlay}
-          activeOpacity={1}
-          onPress={closeNotifications}
-        >
-          <View style={[styles.notifDropdown, { top: bellPos.top, right: bellPos.right, width: windowWidth / 2 }]}>
-            <Text style={styles.notifHeader}>Notifications</Text>
-            {mockNotifications.map((n, i) => (
-              <View key={n.id} style={[styles.notifItem, i < mockNotifications.length - 1 && styles.notifItemBorder]}>
-                <Text style={styles.notifText}>{n.text}</Text>
-                <Text style={styles.notifTime}>{n.time}</Text>
-              </View>
-            ))}
-          </View>
-        </TouchableOpacity>
-      )}
     </>
   );
 }
@@ -509,10 +452,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 16,
   },
-  salaryIconText: {
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 24,
+  },
+  emptyStateText: {
     fontFamily: Typography.fonts.display,
     fontSize: 18,
-    color: '#007D3A',
+    color: '#001133',
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 14,
+    color: '#7B786F',
+    textAlign: 'center',
   },
   transactionMiddle: {
     flex: 1,

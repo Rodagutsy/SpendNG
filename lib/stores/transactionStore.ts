@@ -137,9 +137,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   addTransaction: async (data) => {
     const newId = Crypto.randomUUID();
     const nowTs = Date.now();
+    const { data: { user } } = await supabase.auth.getUser();
 
     const { error } = await supabase.from('transactions').insert({
       id: newId,
+      user_id: user?.id,
       amount: data.amount,
       currency: data.currency,
       transaction_type: data.transactionType,

@@ -29,8 +29,9 @@ export default function AccountCreationScreen() {
           'Verification Required',
           'Please check your email for a verification link to activate your account.'
         );
+        return;
       }
-      router.replace('/(tabs)');
+      router.replace('/(onboarding)/sms-permission');
     } catch (error: any) {
       Alert.alert('Signup Error', error.message);
     } finally {

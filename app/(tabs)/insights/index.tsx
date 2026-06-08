@@ -473,13 +473,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderBottomColor: '#F0F0F0',
     ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.03,
-        shadowRadius: 5,
-      },
-      android: { elevation: 2 },
     }),
   },
   headerRow: {
