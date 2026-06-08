@@ -1,8 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import { Parser } from './parser';
 import { CategorizationEngine } from './categorization-engine';
-import { db, transactions, syncLogs, failedParses } from './db';
-import { eq, and, gte, lte } from 'drizzle-orm';
+import { supabase } from './supabase';
 import { useTransactionStore } from './stores/transactionStore';
 
 export class IngestionEngine {
@@ -41,7 +40,6 @@ export class IngestionEngine {
 
       if (await this.isDuplicate(parseResult.amount, parseResult.merchantName, parseResult.transactionDate)) {
         console.log(`[IngestionEngine] Duplicate transaction detected (amount+merchant+time window)`);
-        await this.logSyncEvent(sourceChannel, sender, rawBody, 'duplicate');
         return { success: false };
       }
 
@@ -56,7 +54,6 @@ export class IngestionEngine {
         parseResult.transactionDate,
       );
 
-      // Use the store to add the transaction and update UI automatically
       const newTransaction = await useTransactionStore.getState().addTransaction({
         amount: parseResult.amount,
         currency: parseResult.currency,
@@ -75,8 +72,6 @@ export class IngestionEngine {
         confidenceLevel: null,
         receiptImageUri: null,
       });
-
-      await this.logSyncEvent(sourceChannel, sender, rawBody, 'success', newTransaction.id);
 
       return { success: true, transactionId: newTransaction.id };
     } catch (error) {
@@ -106,8 +101,12 @@ export class IngestionEngine {
 
   private static async isContentDuplicate(hash: string): Promise<boolean> {
     try {
-      const matches = await db.select().from(syncLogs).where(eq(syncLogs.rawContentHash, hash));
-      return matches.length > 0;
+      const { data } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('raw_source_text', hash);
+
+      return (data?.length || 0) > 0;
     } catch {
       return false;
     }
@@ -121,46 +120,23 @@ export class IngestionEngine {
     try {
       const fiveMinutes = 5 * 60 * 1000;
 
-      const matches = await db.select().from(transactions).where(
-        and(
-          eq(transactions.amount, amount),
-          gte(transactions.transactionDate, transactionDate - fiveMinutes),
-          lte(transactions.transactionDate, transactionDate + fiveMinutes)
-        )
-      );
+      const { data: matches } = await supabase
+        .from('transactions')
+        .select('id, merchant_name')
+        .eq('amount', amount)
+        .gte('transaction_date', transactionDate - fiveMinutes)
+        .lte('transaction_date', transactionDate + fiveMinutes);
+
+      if (!matches || matches.length === 0) return false;
 
       if (!merchantName) {
         return matches.length > 0;
       }
 
       const targetMerchant = merchantName.trim().toLowerCase();
-      return matches.some(m => m.merchantName && m.merchantName.trim().toLowerCase() === targetMerchant);
+      return matches.some(m => m.merchant_name && m.merchant_name.trim().toLowerCase() === targetMerchant);
     } catch {
       return false;
-    }
-  }
-
-  private static async logSyncEvent(
-    sourceChannel: string,
-    senderIdentifier: string,
-    rawContent: string,
-    parseStatus: string,
-    transactionId?: string,
-  ): Promise<void> {
-    try {
-      const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawContent);
-
-      await db.insert(syncLogs).values({
-        id: Crypto.randomUUID(),
-        sourceChannel,
-        senderIdentifier,
-        rawContentHash: hash,
-        parseStatus,
-        transactionId: transactionId || null,
-        processedAt: new Date(),
-      });
-    } catch (error) {
-      console.error('Failed to log sync event:', error);
     }
   }
 
@@ -171,14 +147,14 @@ export class IngestionEngine {
     rawContent: string,
   ): Promise<void> {
     try {
-      await db.insert(failedParses).values({
+      await supabase.from('failed_parses').insert({
         id: Crypto.randomUUID(),
-        sourceChannel,
-        senderIdentifier,
-        failureReason,
-        rawSourceText: rawContent,
-        isReviewed: false,
-        createdAt: new Date(),
+        source_channel: sourceChannel,
+        sender_identifier: senderIdentifier,
+        failure_reason: failureReason,
+        raw_source_text: rawContent,
+        is_reviewed: false,
+        created_at: Date.now(),
       });
     } catch (error) {
       console.error('Failed to log parse failure:', error);

@@ -1,5 +1,4 @@
-import { db, rules, transactions } from './db';
-import { eq, and, gte, lte, desc, count } from 'drizzle-orm';
+import { supabase } from './supabase';
 
 export interface CategorizationResult {
   categoryId: string;
@@ -19,14 +18,18 @@ export class CategorizationEngine {
     if (!merchantName) return this.fallback(transactionType);
 
     try {
-      const ruleRecords = await db.select().from(rules).orderBy(desc(rules.priority));
+      const { data: ruleRecords } = await supabase
+        .from('rules')
+        .select('*')
+        .order('priority', { ascending: false });
+
       const lowerMerchant = merchantName.trim().toLowerCase();
 
-      for (const rule of ruleRecords) {
+      for (const rule of (ruleRecords || [])) {
         const keyword = rule.keyword.trim().toLowerCase();
         let matched = false;
 
-        switch (rule.matchType) {
+        switch (rule.match_type) {
           case 'contains':
             matched = lowerMerchant.includes(keyword);
             break;
@@ -47,7 +50,7 @@ export class CategorizationEngine {
 
         if (matched) {
           return {
-            categoryId: rule.categoryId,
+            categoryId: rule.category_id,
             isFlagged: false,
             matchedRule: rule.keyword,
           };
@@ -74,15 +77,14 @@ export class CategorizationEngine {
   ): Promise<boolean> {
     try {
       const fiveMinutes = 5 * 60 * 1000;
-      const matches = await db.select().from(transactions).where(
-        and(
-          eq(transactions.amount, amount),
-          gte(transactions.transactionDate, transactionDate - fiveMinutes),
-          lte(transactions.transactionDate, transactionDate + fiveMinutes)
-        )
-      );
+      const { data: matches } = await supabase
+        .from('transactions')
+        .select('id')
+        .eq('amount', amount)
+        .gte('transaction_date', transactionDate - fiveMinutes)
+        .lte('transaction_date', transactionDate + fiveMinutes);
 
-      return matches.length > 0;
+      return (matches?.length || 0) > 0;
     } catch {
       return false;
     }
@@ -94,12 +96,12 @@ export class CategorizationEngine {
     _newCategoryId: string,
   ): Promise<{ showPrompt: boolean }> {
     try {
-      const result = await db.select({ value: count() })
-        .from(transactions)
-        .where(eq(transactions.merchantName, merchantName));
-        
-      const otherCount = result[0]?.value || 0;
-      return { showPrompt: otherCount > 1 };
+      const { count } = await supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('merchant_name', merchantName);
+
+      return { showPrompt: (count || 0) > 1 };
     } catch {
       return { showPrompt: false };
     }
@@ -107,9 +109,11 @@ export class CategorizationEngine {
 
   static async applyCorrectionToAll(merchantName: string, newCategoryId: string): Promise<void> {
     try {
-      await db.update(transactions)
-        .set({ categoryId: newCategoryId, updatedAt: new Date() })
-        .where(eq(transactions.merchantName, merchantName));
+      const nowTs = Date.now();
+      await supabase
+        .from('transactions')
+        .update({ category_id: newCategoryId, updated_at: nowTs })
+        .eq('merchant_name', merchantName);
     } catch (err) {
       console.error('[CategorizationEngine] applyCorrectionToAll failed:', err);
     }

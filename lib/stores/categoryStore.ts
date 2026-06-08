@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db, categories as categoriesTable } from '../db';
+import { supabase } from '../supabase';
 
 export interface CategoryRecord {
   id: string;
@@ -27,15 +27,22 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   fetchCategories: async () => {
     set({ loading: true, error: null });
     try {
-      const records = await db.select().from(categoriesTable);
-      const categories: CategoryRecord[] = records.map((r) => ({
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('id', { ascending: true });
+
+      if (error) throw error;
+
+      const categories: CategoryRecord[] = (data || []).map((r: any) => ({
         id: r.id,
         name: r.name,
-        iconIdentifier: r.iconIdentifier,
-        colorHex: r.colorHex,
-        transactionTypeHint: r.transactionTypeHint as 'credit' | 'debit' | 'both',
-        isSystem: r.isSystem,
+        iconIdentifier: r.icon_identifier,
+        colorHex: r.color_hex,
+        transactionTypeHint: r.transaction_type_hint as 'credit' | 'debit' | 'both',
+        isSystem: r.is_system,
       }));
+
       set({ categories, loading: false });
     } catch (err: any) {
       set({ error: err.message || 'Failed to fetch categories', loading: false });

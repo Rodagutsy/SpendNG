@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Component } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import { Slot } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import {
@@ -10,6 +10,8 @@ import {
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import { AuthProvider } from '@/context/AuthContext';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useTransactionStore } from '@/lib/stores/transactionStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -37,11 +39,6 @@ class ErrorHandler extends Component<{ children: React.ReactNode }, { error: Err
   }
 }
 
-import { initializeApp } from '../lib/setup';
-import { useUIStore } from '../lib/stores/uiStore';
-import { useCategoryStore } from '../lib/stores/categoryStore';
-import { useTransactionStore } from '../lib/stores/transactionStore';
-
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'Poppins': Poppins_400Regular,
@@ -50,39 +47,25 @@ export default function RootLayout() {
     'Poppins-Bold': Poppins_700Bold,
   });
   const [ready, setReady] = useState(false);
-  const [initError, setInitError] = useState<string | null>(null);
-  const dbInitialized = useUIStore((s) => s.dbInitialized);
 
   useEffect(() => {
     async function init() {
       try {
-        await initializeApp();
         await useCategoryStore.getState().fetchCategories();
         await useTransactionStore.getState().fetchTransactions();
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Initialization failed';
-        console.error('Init error:', msg);
-        setInitError(msg);
+        console.error('Data fetch error:', e);
       }
     }
     init();
   }, []);
 
   useEffect(() => {
-    if ((fontsLoaded || fontError) && dbInitialized) {
+    if (fontsLoaded || fontError) {
       SplashScreen.hideAsync();
       setReady(true);
     }
-  }, [fontsLoaded, fontError, dbInitialized]);
-
-  if (initError) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#fff' }}>
-        <Text style={{ color: 'red', fontSize: 16, marginBottom: 10 }}>Startup Error</Text>
-        <Text style={{ color: '#333', textAlign: 'center' }}>{initError}</Text>
-      </View>
-    );
-  }
+  }, [fontsLoaded, fontError]);
 
   if (!ready) return null;
 

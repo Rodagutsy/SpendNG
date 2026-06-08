@@ -45,9 +45,34 @@ const mockSession: MockSession = {
 function makeMockClient() {
   const listeners: Array<(event: string, session: any) => void> = [];
 
+  const mockQuery = {
+    select: () => mockQuery,
+    insert: () => mockQuery,
+    update: () => mockQuery,
+    delete: () => mockQuery,
+    eq: () => mockQuery,
+    neq: () => mockQuery,
+    gt: () => mockQuery,
+    gte: () => mockQuery,
+    lt: () => mockQuery,
+    lte: () => mockQuery,
+    like: () => mockQuery,
+    ilike: () => mockQuery,
+    is: () => mockQuery,
+    in: () => mockQuery,
+    order: () => mockQuery,
+    limit: () => mockQuery,
+    range: () => mockQuery,
+    single: () => mockQuery,
+    maybeSingle: () => mockQuery,
+    then: (resolve: any) => Promise.resolve({ data: [], error: null }),
+    values: () => mockQuery,
+  };
+
   return {
     auth: {
       getSession: async () => ({ data: { session: null }, error: null }),
+      getUser: async () => ({ data: { user: null }, error: null }),
       onAuthStateChange: (callback: (event: string, session: any) => void) => {
         listeners.push(callback);
         return {
@@ -80,6 +105,7 @@ function makeMockClient() {
       startAutoRefresh: async () => {},
       stopAutoRefresh: () => {},
     },
+    from: (_table: string) => mockQuery,
   };
 }
 
