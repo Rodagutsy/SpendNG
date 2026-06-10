@@ -5,6 +5,12 @@ import { File, Paths } from 'expo-file-system/next';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
 
+interface CategoryGroup {
+  name: string;
+  total: number;
+  count: number;
+}
+
 export type ExportFormat = 'PDF' | 'CSV';
 
 export interface ExportOptions {
@@ -130,6 +136,454 @@ export class ExportService {
     return filePath;
   }
 
+  private static aggregateByCategory(
+    txns: TransactionRecord[],
+    categoryNames?: Record<string, string>,
+  ): CategoryGroup[] {
+    const map = new Map<string, { total: number; count: number }>();
+    for (const t of txns) {
+      const cat = categoryNames?.[t.categoryId] || t.categoryId || 'Uncategorized';
+      const existing = map.get(cat) || { total: 0, count: 0 };
+      existing.total += t.amount;
+      existing.count += 1;
+      map.set(cat, existing);
+    }
+    return Array.from(map.entries())
+      .map(([name, { total, count }]) => ({ name, total, count }))
+      .sort((a, b) => b.total - a.total);
+  }
+
+  private static generatePDFHtml(options: ExportOptions): string {
+    const { transactions, startDate, endDate, userName, categoryNames } = options;
+
+    const incomeTxns = transactions.filter(t => t.transactionType === 'credit');
+    const expenseTxns = transactions.filter(t => t.transactionType === 'debit');
+    const totalIn = incomeTxns.reduce((s, t) => s + t.amount, 0);
+    const totalOut = expenseTxns.reduce((s, t) => s + t.amount, 0);
+    const net = totalIn - totalOut;
+
+    const currency = transactions.length > 0 ? transactions[0].currency : 'NGN';
+
+    const incomeByCat = this.aggregateByCategory(incomeTxns, categoryNames);
+    const expenseByCat = this.aggregateByCategory(expenseTxns, categoryNames);
+
+    const sortedTxns = [...transactions].sort((a, b) => a.transactionDate - b.transactionDate);
+
+    const flaggedItems = transactions.filter(t => t.isFlaggedForReview);
+
+    const receiptTxns = transactions.filter(t => t.receiptImageUri);
+
+    const allSameCurrency = transactions.every(t => t.currency === currency);
+
+    const esc = (v: unknown) => this.escapeHTML(v);
+
+    const fmtDate = (ts: number) => format(new Date(ts), 'MMM dd, yyyy');
+    const fmtDateTime = (ts: number) => format(new Date(ts), 'MMM dd, yyyy HH:mm');
+
+    const fmtAmount = (amount: number) => formatCurrency(amount, currency);
+
+    const metricsBlock = (label: string, value: string, color?: string) => `
+      <tr>
+        <td class="metric-label">${esc(label)}</td>
+        <td class="metric-value"${color ? ` style="color:${color}"` : ''}>${value}</td>
+      </tr>`;
+
+    function typeRowTint(type: string): string {
+      if (type === 'credit') return 'background-color:#f0fdf4;';  // subtle green
+      if (type === 'debit') return 'background-color:#fef2f2;';   // subtle red
+      return 'background-color:#f5f5f5;'; // grey for transfer
+    }
+
+    function typeLabel(type: string): string {
+      if (type === 'credit') return 'Income';
+      if (type === 'debit') return 'Expense';
+      return 'Transfer';
+    }
+
+    function flagIcons(t: TransactionRecord): string {
+      const flags: string[] = [];
+      if (t.isFlaggedForReview) flags.push('[Review]');
+      if (t.isDuplicate) flags.push('[Duplicate]');
+      if (t.taxClassification) flags.push(`[${esc(t.taxClassification)}]`);
+      return flags.length > 0 ? flags.join(' ') : '—';
+    }
+
+    const ledgerRows = sortedTxns.map(t => {
+      const catName = categoryNames?.[t.categoryId] || t.categoryId || 'Uncategorized';
+      const tint = typeRowTint(t.transactionType);
+      return `<tr style="${tint}">
+        <td class="cell">${fmtDate(t.transactionDate)}</td>
+        <td class="cell">${esc(t.merchantName || t.originalMessage || '-')}</td>
+        <td class="cell">${typeLabel(t.transactionType)}</td>
+        <td class="cell">${esc(catName)}</td>
+        <td class="cell amt">${fmtAmount(t.amount)}</td>
+        <td class="cell">${esc(t.accountName || '-')}</td>
+        <td class="cell flag-col">${flagIcons(t)}</td>
+      </tr>`;
+    }).join('');
+
+    const incomeSummaryRows = incomeByCat.map(c => {
+      const pct = totalIn > 0 ? ((c.total / totalIn) * 100).toFixed(1) : '0.0';
+      return `<tr>
+        <td class="cell">${esc(c.name)}</td>
+        <td class="cell amt">${fmtAmount(c.total)}</td>
+        <td class="cell amt">${pct}%</td>
+      </tr>`;
+    }).join('');
+
+    const expenseSummaryRows = expenseByCat.map(c => {
+      const pct = totalOut > 0 ? ((c.total / totalOut) * 100).toFixed(1) : '0.0';
+      return `<tr>
+        <td class="cell">${esc(c.name)}</td>
+        <td class="cell amt">${fmtAmount(c.total)}</td>
+        <td class="cell amt">${pct}%</td>
+      </tr>`;
+    }).join('');
+
+    const flaggedRows = flaggedItems.map(t => {
+      const reasons: string[] = [];
+      if (t.isFlaggedForReview) reasons.push('Flagged for review');
+      if (t.isDuplicate) reasons.push('Possible duplicate');
+      if (!t.categoryId || t.categoryId === 'uncategorized') reasons.push('Needs classification');
+      if (!t.taxClassification) reasons.push('Missing tax classification');
+      const actions: string[] = [];
+      if (t.isDuplicate) actions.push('Review & remove duplicate');
+      else if (t.transactionType === 'debit' && t.amount > 50000) actions.push('Verify deductible eligibility');
+      else actions.push('Confirm classification');
+      return `<tr>
+        <td class="cell">${fmtDate(t.transactionDate)} — ${esc(t.merchantName || '-')} (${fmtAmount(t.amount)})</td>
+        <td class="cell">${esc(reasons.join('; '))}</td>
+        <td class="cell">${esc(actions.join('; '))}</td>
+      </tr>`;
+    }).join('');
+
+    const documentRows = receiptTxns.map(t => {
+      const docType = t.receiptImageUri?.match(/\.(pdf|jpg|jpeg|png)$/i)?.[1]?.toUpperCase() || 'Receipt';
+      return `<tr>
+        <td class="cell">${esc(t.id)}</td>
+        <td class="cell">${docType}</td>
+        <td class="cell">Attached</td>
+      </tr>`;
+    }).join('');
+
+    const dataSources = [...new Set(transactions.map(t => t.sourceChannel).filter(Boolean))];
+    const bankAccounts = [...new Set(transactions.map(t => t.accountName).filter(Boolean))];
+    const importMethod = dataSources.length > 0 ? dataSources.join(', ') : 'API Sync';
+    const categorizationMethod = 'AI-assisted';
+
+    const txCount = transactions.length;
+    const reportTitle = 'Tax Review Report';
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page {
+      margin: 15mm;
+      @bottom-center {
+        content: "${esc(reportTitle)}";
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 8px;
+        color: #9ca3af;
+      }
+      @bottom-right {
+        content: "Page " counter(page);
+        font-family: Helvetica, Arial, sans-serif;
+        font-size: 8px;
+        color: #9ca3af;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      color: #1f2937;
+      font-size: 10px;
+      line-height: 1.5;
+    }
+    .page-break { page-break-before: always; }
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #001133;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.3px;
+    }
+    .section-sub {
+      font-size: 10px;
+      color: #6b7280;
+      margin: 0 0 16px 0;
+    }
+
+    /* Cover page */
+    .cover {
+      text-align: center;
+      padding-top: 60px;
+    }
+    .cover-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #001133;
+      letter-spacing: -0.5px;
+      margin: 0 0 6px 0;
+    }
+    .cover-period {
+      font-size: 13px;
+      color: #6b7280;
+      margin: 0 0 4px 0;
+    }
+    .cover-client {
+      font-size: 12px;
+      color: #374151;
+      margin: 0 0 2px 0;
+    }
+    .cover-meta {
+      font-size: 10px;
+      color: #6b7280;
+      margin: 0 0 24px 0;
+    }
+    .cover-divider {
+      width: 60px;
+      height: 2px;
+      background: #001133;
+      margin: 20px auto 24px auto;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    th {
+      background-color: #f3f4f6;
+      padding: 6px 8px;
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      text-align: left;
+      color: #6b7280;
+      border-bottom: 1.5px solid #d1d5db;
+    }
+    th.amt { text-align: right; }
+    td.cell {
+      padding: 5px 8px;
+      font-size: 9px;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: top;
+    }
+    td.amt {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    td.flag-col { font-size: 8px; }
+    .bold-row td {
+      font-weight: 700;
+      border-top: 1.5px solid #001133;
+      border-bottom: 1.5px solid #001133;
+    }
+
+    /* Metrics table (compact) */
+    .metrics-table { width: auto; margin: 0 auto; }
+    .metrics-table td { padding: 4px 16px; border: none; font-size: 10px; }
+    .metric-label { text-align: left; color: #6b7280; }
+    .metric-value { text-align: right; font-weight: 700; }
+
+    /* Data source block */
+    .data-source {
+      margin-top: 20px;
+      padding: 10px 14px;
+      background: #f9fafb;
+      border-radius: 4px;
+      font-size: 9px;
+      color: #374151;
+    }
+    .data-source p { margin: 2px 0; }
+
+    /* Disclaimer */
+    .disclaimer {
+      margin-top: 20px;
+      padding: 10px 14px;
+      background: #fef2f2;
+      border: 1px solid #fca5a5;
+      border-radius: 4px;
+      font-size: 8px;
+      color: #991b1b;
+      line-height: 1.6;
+    }
+    .disclaimer strong { font-size: 9px; }
+    .disclaimer p { margin: 3px 0; }
+
+    /* Grid layout for metadata */
+    .meta-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 24px;
+      margin-bottom: 16px;
+    }
+    .meta-item { width: calc(50% - 12px); }
+    .meta-label { font-size: 8px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.3px; }
+    .meta-value { font-size: 10px; font-weight: 600; color: #1f2937; }
+
+    /* Color accents */
+    .text-green { color: #16a34a; }
+    .text-red { color: #dc2626; }
+  </style>
+</head>
+<body>
+
+  <!-- PAGE 1 - COVER / REPORT SUMMARY -->
+  <div class="cover">
+    <div class="cover-title">${esc(reportTitle)}</div>
+    <div class="cover-period">${fmtDate(startDate.getTime())} – ${fmtDate(endDate.getTime())}</div>
+    <div class="cover-client">${esc(userName)}</div>
+    <div class="cover-meta">Currency: ${currency}${allSameCurrency ? '' : ' (mixed)'} &nbsp;|&nbsp; Prepared by SpendNG</div>
+    <div class="cover-divider"></div>
+
+    <table class="metrics-table">
+      ${metricsBlock('Total Income', fmtAmount(totalIn), '#16a34a')}
+      ${metricsBlock('Total Expenses', fmtAmount(totalOut), '#dc2626')}
+      ${metricsBlock('Net Income', fmtAmount(net), net >= 0 ? '#16a34a' : '#dc2626')}
+      ${metricsBlock('Number of Transactions', String(txCount))}
+      ${metricsBlock('Number of Income Entries', String(incomeTxns.length))}
+      ${metricsBlock('Number of Expense Entries', String(expenseTxns.length))}
+    </table>
+
+    <div class="data-source">
+      <p><strong>Data Sources</strong></p>
+      <p>Bank Accounts: ${bankAccounts.length > 0 ? bankAccounts.join(', ') : 'Not specified'}</p>
+      <p>Cards: —</p>
+      <p>Import Method: ${esc(importMethod)}</p>
+    </div>
+  </div>
+
+  <!-- PAGE 2+ - TRANSACTION LEDGER -->
+  <div class="page-break"></div>
+  <div class="section-title">Transaction Ledger</div>
+  <div class="section-sub">Chronological order • All transactions in ${currency}</div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th><th>Description</th><th>Type</th><th>Category (Suggested)</th><th class="amt">Amount</th><th>Account</th><th>Flags</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${ledgerRows || '<tr><td class="cell" colspan="7" style="text-align:center;color:#9ca3af;">No transactions found</td></tr>'}
+    </tbody>
+  </table>
+
+  <!-- INCOME SUMMARY -->
+  <div class="page-break"></div>
+  <div class="section-title">Income Breakdown</div>
+  <div class="section-sub">Aggregated by source type</div>
+
+  <table>
+    <thead>
+      <tr><th>Source Type</th><th class="amt">Amount</th><th class="amt">Percentage</th></tr>
+    </thead>
+    <tbody>
+      ${incomeSummaryRows || '<tr><td class="cell" colspan="3" style="text-align:center;color:#9ca3af;">No income entries</td></tr>'}
+      <tr class="bold-row">
+        <td class="cell">Total Income</td>
+        <td class="cell amt text-green">${fmtAmount(totalIn)}</td>
+        <td class="cell amt">100%</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- EXPENSE SUMMARY -->
+  <div class="section-title" style="margin-top:24px;">Expense Breakdown</div>
+  <div class="section-sub">Aggregated by category</div>
+
+  <table>
+    <thead>
+      <tr><th>Category</th><th class="amt">Amount</th><th class="amt">Percentage</th></tr>
+    </thead>
+    <tbody>
+      ${expenseSummaryRows || '<tr><td class="cell" colspan="3" style="text-align:center;color:#9ca3af;">No expense entries</td></tr>'}
+      <tr class="bold-row">
+        <td class="cell">Total Expenses</td>
+        <td class="cell amt text-red">${fmtAmount(totalOut)}</td>
+        <td class="cell amt">100%</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- TAX FLAGS & REVIEW NOTES -->
+  ${flaggedItems.length > 0 ? `
+  <div class="page-break"></div>
+  <div class="section-title">Items Requiring Review</div>
+  <div class="section-sub">Transactions flagged for accountant attention</div>
+  <table>
+    <thead>
+      <tr><th>Transaction</th><th>Reason Flagged</th><th>Suggested Action</th></tr>
+    </thead>
+    <tbody>
+      ${flaggedRows}
+    </tbody>
+  </table>` : ''}
+
+  <!-- SUPPORTING DOCUMENT INDEX -->
+  ${receiptTxns.length > 0 ? `
+  <div class="page-break"></div>
+  <div class="section-title">Receipts &amp; Documents</div>
+  <div class="section-sub">Supporting documents attached to transactions</div>
+  <table>
+    <thead>
+      <tr><th>Transaction ID</th><th>Document Type</th><th>File Name / Link</th></tr>
+    </thead>
+    <tbody>
+      ${documentRows}
+    </tbody>
+  </table>` : ''}
+
+  <!-- FINAL PAGE - METADATA & DECLARATION -->
+  <div class="page-break"></div>
+  <div class="section-title">Report Metadata</div>
+  <div class="section-sub">Report generation details</div>
+
+  <div class="meta-grid">
+    <div class="meta-item">
+      <div class="meta-label">Total Transactions Processed</div>
+      <div class="meta-value">${txCount}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Date Range Coverage</div>
+      <div class="meta-value">${fmtDate(startDate.getTime())} – ${fmtDate(endDate.getTime())}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Data Sources Used</div>
+      <div class="meta-value">${esc(dataSources.join(', ') || 'API Sync')}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Last Updated</div>
+      <div class="meta-value">${fmtDateTime(Date.now())}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Categorization Method</div>
+      <div class="meta-value">${categorizationMethod}</div>
+    </div>
+    <div class="meta-item">
+      <div class="meta-label">Confidence Indicator</div>
+      <div class="meta-value">High</div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    <strong>Disclaimer</strong>
+    <p>This report is for tax preparation assistance only. It is generated based on transaction data synced from linked accounts and does not constitute professional tax advice.</p>
+    <p>Final tax classification must be confirmed by a licensed accountant or tax authority guidelines. Tax liability may vary based on applicable local laws, deductions, and exemptions.</p>
+    <p>No tax filing is performed automatically. This document serves as a working summary for your accountant or for your own record-keeping.</p>
+  </div>
+
+</body>
+</html>`;
+  }
+
   private static async generatePDF(
     options: ExportOptions,
     filePath: string,
@@ -138,91 +592,9 @@ export class ExportService {
   ): Promise<string> {
     if (signal.aborted) throw new Error('Export cancelled');
 
-    const totalIn = options.transactions
-      .filter(t => t.transactionType === 'credit')
-      .reduce((s, t) => s + t.amount, 0);
-    const totalOut = options.transactions
-      .filter(t => t.transactionType === 'debit')
-      .reduce((s, t) => s + t.amount, 0);
-    const net = totalIn - totalOut;
+    onProgress(20);
 
-    onProgress(10);
-
-    const rows = options.transactions.map(t => {
-      const categoryName = options.categoryNames?.[t.categoryId] || t.categoryId;
-      const date = format(new Date(t.transactionDate), 'MMM dd, yyyy HH:mm');
-      const amount = formatCurrency(t.amount, t.currency);
-      const typeColor = t.transactionType === 'credit' ? '#16a34a' : '#dc2626';
-      const typeLabel = t.transactionType === 'credit' ? 'Credit' : 'Debit';
-      const merchant = t.merchantName ? this.escapeHTML(t.merchantName) : '-';
-      return `<tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${date}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;text-align:right;">${amount}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;color:${typeColor};">${typeLabel}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${merchant}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${this.escapeHTML(categoryName)}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px;">${t.sourceChannel}</td>
-      </tr>`;
-    }).join('\n');
-
-    onProgress(40);
-
-    const html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <style>
-    @page { margin: 20px; }
-    body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; color: #1f2937; }
-    .header { text-align: center; margin-bottom: 24px; }
-    .header h1 { font-size: 24px; margin: 0; color: #001133; letter-spacing: -0.5px; }
-    .header p { font-size: 12px; color: #6b7280; margin: 4px 0; }
-    .summary { display: flex; justify-content: center; gap: 40px; margin-bottom: 24px; }
-    .summary-item { text-align: center; }
-    .summary-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }
-    .summary-value { font-size: 18px; font-weight: 700; margin-top: 4px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    th { background-color: #f3f4f6; padding: 10px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; text-align: left; color: #6b7280; border-bottom: 2px solid #e5e7eb; }
-    th.amount { text-align: right; }
-    td { padding: 8px; border-bottom: 1px solid #e5e7eb; font-size: 12px; }
-    .footer { text-align: center; margin-top: 24px; font-size: 10px; color: #9ca3af; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>SpendNG</h1>
-    <p>Transaction Report</p>
-    <p>${this.escapeHTML(options.userName)} &mdash; ${format(options.startDate, 'MMM dd, yyyy')} to ${format(options.endDate, 'MMM dd, yyyy')}</p>
-  </div>
-  <div class="summary">
-    <div class="summary-item">
-      <div class="summary-label">Total Income</div>
-      <div class="summary-value" style="color:#16a34a">${formatCurrency(totalIn, 'NGN')}</div>
-    </div>
-    <div class="summary-item">
-      <div class="summary-label">Total Expenses</div>
-      <div class="summary-value" style="color:#dc2626">${formatCurrency(totalOut, 'NGN')}</div>
-    </div>
-    <div class="summary-item">
-      <div class="summary-label">Net</div>
-      <div class="summary-value" style="color:${net >= 0 ? '#16a34a' : '#dc2626'}">${formatCurrency(net, 'NGN')}</div>
-    </div>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Date</th><th class="amount">Amount</th><th>Type</th><th>Merchant</th><th>Category</th><th>Source</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-    </tbody>
-  </table>
-  <div class="footer">
-    Generated by SpendNG on ${format(new Date(), 'MMMM dd, yyyy HH:mm')} &mdash; ${options.transactions.length} transaction(s)
-  </div>
-</body>
-</html>`;
+    const html = this.generatePDFHtml(options);
 
     onProgress(50);
     const { uri } = await Print.printToFileAsync({ html });

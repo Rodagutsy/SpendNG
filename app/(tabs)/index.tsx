@@ -88,7 +88,7 @@ const CustomTransactionItem = ({
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { moneyIn, moneyOut, netBalance, transactionCount } = useMonthlyBalances();
@@ -96,7 +96,23 @@ export default function HomeScreen() {
   const { user } = useAuth();
 
   const bellRef = useRef<View>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const [showTxModal, setShowTxModal] = useState(false);
+
+  const [notifications, setNotifications] = useState([
+    { id: 'n1', text: 'New transaction of ₦15,790 at Shoprite', time: '2 min ago' },
+    { id: 'n2', text: 'Monthly salary of ₦350,000 received', time: '1 hour ago' },
+    { id: 'n3', text: 'Grocery payment of ₦8,500 at Spar', time: '3 hours ago' },
+    { id: 'n4', text: 'Airtime recharge of ₦1,000', time: '5 hours ago' },
+  ]);
+
+  const closeNotifications = () => setShowNotifications(false);
+
+  const clearAllNotifications = () => {
+    setNotifications([]);
+    setShowNotifications(false);
+  };
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
   const recentTransactions = transactions.slice(0, 10);
@@ -154,8 +170,11 @@ export default function HomeScreen() {
   };
 
   const openNotifications = useCallback(() => {
-    router.push('/transactions' as any);
-  }, [router]);
+    bellRef.current?.measureInWindow((x, y, width, height) => {
+      setBellPos({ top: y + height + 4, right: screenWidth - (x + width / 2) });
+      setShowNotifications(true);
+    });
+  }, [screenWidth]);
 
   const headerElement = useMemo(() => (
     <View style={styles.headerContainer}>
@@ -168,16 +187,18 @@ export default function HomeScreen() {
           </View>
           <TouchableOpacity
             ref={bellRef}
-            style={[styles.notificationBtn, Shadows.sm]}
+            style={[styles.notificationBtn]}
             onPress={openNotifications}
             activeOpacity={0.8}
           >
-            <BellIcon size={24} color={theme.onSurface} />
-            {flaggedCount > 0 && (
-              <View style={styles.bellBadge}>
-                <Text style={styles.bellBadgeText}>{flaggedCount > 9 ? '9+' : flaggedCount}</Text>
-              </View>
-            )}
+            <View>
+              <BellIcon size={24} color={theme.onSurface} />
+              {notifications.length > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>{notifications.length > 9 ? '9+' : notifications.length}</Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -276,6 +297,38 @@ export default function HomeScreen() {
             ))}
           </View>
         </ScrollView>
+
+        {showNotifications && (
+          <TouchableOpacity
+            style={styles.notifOverlay}
+            activeOpacity={1}
+            onPress={closeNotifications}
+          >
+            <View style={[styles.notifDropdown, { top: bellPos.top, right: bellPos.right, width: screenWidth / 2 }]}>
+              <Text style={styles.notifHeader}>Notifications</Text>
+              <ScrollView style={{ maxHeight: screenHeight * 0.35 }} nestedScrollEnabled>
+                {notifications.map((n, i) => (
+                  <TouchableOpacity
+                    key={n.id}
+                    onPress={() => {
+                      closeNotifications();
+                      router.push('/transactions' as any);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.notifItem, i < notifications.length - 1 && styles.notifItemBorder]}>
+                      <Text style={styles.notifText}>{n.text}</Text>
+                      <Text style={styles.notifTime}>{n.time}</Text>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity style={styles.notifClearBtn} onPress={clearAllNotifications} activeOpacity={0.7}>
+                <Text style={styles.notifClearText}>Clear all notifications</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Floating Action Button (FAB) exactly as in image */}
         <TouchableOpacity
@@ -579,7 +632,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     backgroundColor: Colors.light.surface,
     borderRadius: 12,
-    paddingVertical: 4,
+    paddingVertical: 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
@@ -594,12 +647,12 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.display,
     fontSize: 14,
     color: Colors.light.onSurface,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 2,
   },
   notifItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
   },
   notifItemBorder: {
     borderBottomWidth: 1,
@@ -615,7 +668,18 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: 11,
     color: Colors.light.outline,
-    marginTop: 4,
+    marginTop: 2,
+  },
+  notifClearBtn: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.surfaceContainer,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  notifClearText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 13,
+    color: Colors.light.primary,
   },
   fab: {
     position: 'absolute',
@@ -632,15 +696,14 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontWeight: '500',
   },
-  // notification styles - Keep if you intend to add a proper notification section later
   bellBadge: {
     position: 'absolute',
-    top: 2,
-    right: 2,
+    top: -6,
+    right: -6,
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: Colors.light.error,
+    backgroundColor: Colors.main.error,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
