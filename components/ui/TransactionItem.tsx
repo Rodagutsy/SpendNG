@@ -82,9 +82,8 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: Spacing[3],
-    paddingHorizontal: Spacing[4],
-    height: 72,
+    paddingVertical: Spacing[2],
+    height: 'auto',
   },
   flagIndicator: {
     width: 18,
@@ -101,12 +100,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   iconContainer: {
-    width: 48,
-    height: 48,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Spacing[3],
+    marginRight: Spacing[2],
   },
   avatarLetter: {
     fontFamily: Typography.fonts.display,
@@ -128,7 +127,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.title,
     fontSize: Typography.sizes.bodyM,
     fontWeight: '500',
-    marginBottom: 2,
   },
   detail: {
     fontFamily: Typography.fonts.body,
@@ -141,8 +139,7 @@ const styles = StyleSheet.create({
   amount: {
     fontFamily: Typography.fonts.title,
     fontSize: Typography.sizes.bodyM,
-    fontWeight: '500',
-    marginBottom: 2,
+    fontWeight: '600',
   },
   category: {
     fontFamily: Typography.fonts.body,
