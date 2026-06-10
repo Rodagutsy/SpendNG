@@ -218,8 +218,8 @@ export default function InsightsScreen() {
       topCatAmount: formatCurrency(topCatTotal),
       topCatPct: `${topCatPct}% of spend`,
       topCatIcon: mapIcon(topCat?.iconIdentifier),
-      topCatColor: topCat?.colorHex || '#0B5CFF',
-      topCatBg: topCat?.colorHex ? `${topCat.colorHex}20` : '#E6EEFF',
+      topCatColor: topCat?.colorHex || theme.roles.primary,
+      topCatBg: topCat?.colorHex ? `${topCat.colorHex}20` : theme.primaryContainer,
       biggestMerchant: biggest?.merchantName || 'N/A',
       biggestAmount: formatCurrency(biggest?.amount || 0),
       biggestDate: biggest ? formatDate(biggest.transactionDate) : '',
@@ -228,10 +228,10 @@ export default function InsightsScreen() {
       bestWeek: best ? { dateRange: best.key, amount: formatCurrency(best.amount) } : null,
       worstWeek: worst ? { dateRange: worst.key, amount: formatCurrency(worst.amount) } : null,
     };
-  }, [monthTxs, prevMonthTxs, hasEnoughData, categoryMap, prevMonthParsed]);
+  }, [monthTxs, prevMonthTxs, hasEnoughData, categoryMap, prevMonthParsed, theme]);
 
   const pct = insights?.pct ?? 0;
-  const healthColor = pct >= 70 ? theme.roles.error : pct >= 50 ? theme.roles.warning : theme.roles.success;
+  const healthColor = pct >= 70 ? theme.roles.error : pct >= 50 ? theme.roles.warning : pct >= 0 ? theme.roles.success : theme.roles.error;
 
   const openFilter = () => {
     filterBtnRef.current?.measureInWindow((x, y, width, height) => {
@@ -247,24 +247,24 @@ export default function InsightsScreen() {
 
   return (
     <>
-      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: '#F9FAFC' }}>
+      <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: theme.background }}>
         <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-        <View style={[styles.headerContainer, { paddingTop: 16 }]}>
+        <View style={[styles.headerContainer, { paddingTop: 16, borderBottomColor: theme.ripple }]}>
           <View style={styles.headerRow}>
             <View>
-              <Text style={styles.headerTitle}>Insights</Text>
+              <Text style={[styles.headerTitle, { color: theme.roles.onSurface }]}>Insights</Text>
             </View>
             <TouchableOpacity
               ref={filterBtnRef}
-              style={styles.filterDropdownBtn}
+              style={[styles.filterDropdownBtn, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.outlineVariant, borderWidth: 1 }]}
               onPress={openFilter}
               activeOpacity={0.8}
             >
-              <Text style={styles.filterDropdownText}>
+              <Text style={[styles.filterDropdownText, { color: theme.roles.onSurface }]}>
                 {formatMonthLabel(selectedMonth)}
               </Text>
-              <MaterialIcons name="expand-more" size={18} color="#001133" />
+              <MaterialIcons name="expand-more" size={18} color={theme.roles.onSurface} />
             </TouchableOpacity>
           </View>
         </View>
@@ -277,15 +277,15 @@ export default function InsightsScreen() {
           {hasEnoughData && insights ? (
             <View style={styles.activeLayout}>
               {/* 1. Financial Health Score */}
-              <View style={[styles.card, styles.healthCard, Shadows.sm]}>
-                <Text style={styles.cardLabel}>Spending Health</Text>
+              <View style={[styles.card, styles.healthCard, { backgroundColor: theme.onPrimary }]}>
+                <Text style={[styles.cardLabel, { color: theme.outline }]}>Spending Health</Text>
                 <View style={styles.healthCenter}>
                   <Text style={[styles.healthPercentage, { color: healthColor }]}>
                     {insights.pct}%
                   </Text>
-                  <Text style={styles.healthSubtext}>of income spent this month</Text>
+                  <Text style={[styles.healthSubtext, { color: theme.outline }]}>of income spent this month</Text>
                 </View>
-                <View style={styles.progressBarBg}>
+                <View style={[styles.progressBarBg, { backgroundColor: theme.ripple }]}>
                   <View
                     style={[
                       styles.progressBarFill,
@@ -300,62 +300,62 @@ export default function InsightsScreen() {
 
               {/* 2. Top Category & Biggest Spend */}
               <View style={styles.sideBySideContainer}>
-                <View style={[styles.sideCard, { backgroundColor: insights.topCatBg }]}>
-                  <Text style={[styles.categoryLabel, { color: insights.topCatColor }]}>Top Category</Text>
-                  <View style={[styles.categoryIconCircle, { backgroundColor: '#FFFFFF' }]}>
-                    <MaterialIcons name={insights.topCatIcon as any} size={18} color={insights.topCatColor} />
+                <View style={[styles.sideCard, { backgroundColor: Colors.light.primaryContainer }]}>
+                  <Text style={[styles.categoryLabel, { color: Colors.light.primary }]}>Top Category</Text>
+                  <View style={[styles.categoryIconCircle, { backgroundColor: theme.roles.surface }]}>
+                    <MaterialIcons name={insights.topCatIcon as any} size={18} color={Colors.light.primary} />
                   </View>
-                  <Text style={[styles.categoryName, { color: '#001133' }]} numberOfLines={1}>
+                  <Text style={[styles.categoryName, { color: theme.roles.onSurface }]} numberOfLines={1}>
                     {insights.topCatName}
                   </Text>
-                  <Text style={[styles.categoryAmount, { color: '#001133' }]} numberOfLines={1}>
+                  <Text style={[styles.categoryAmount, { color: theme.roles.onSurface }]} numberOfLines={1}>
                     {insights.topCatAmount}
                   </Text>
-                  <Text style={[styles.categorySubtext, { color: insights.topCatColor }]}>
+                  <Text style={[styles.categorySubtext, { color: Colors.light.primary }]}>
                     {insights.topCatPct}
                   </Text>
                 </View>
 
-                <View style={[styles.sideCard, styles.spendCard]}>
-                  <Text style={styles.spendLabel}>Biggest Spend</Text>
-                  <View style={styles.spendIconCircle}>
-                    <MaterialIcons name="local-airport" size={18} color="#D30000" />
+                <View style={[styles.sideCard, styles.spendCard, { backgroundColor: theme.error }]}>
+                  <Text style={[styles.spendLabel, { color: theme.roles.error }]}>Biggest Spend</Text>
+                  <View style={[styles.spendIconCircle, { backgroundColor: theme.roles.surface }]}>
+                    <MaterialIcons name="local-airport" size={18} color={theme.roles.error} />
                   </View>
-                  <Text style={styles.spendMerchant} numberOfLines={1}>
+                  <Text style={[styles.spendMerchant, { color: theme.roles.onSurface }]} numberOfLines={1}>
                     {insights.biggestMerchant}
                   </Text>
-                  <Text style={styles.spendAmount} numberOfLines={1}>
+                  <Text style={[styles.spendAmount, { color: theme.roles.error }]} numberOfLines={1}>
                     {insights.biggestAmount}
                   </Text>
-                  <Text style={styles.spendSubtext}>{insights.biggestDate}</Text>
+                  <Text style={[styles.spendSubtext, { color: theme.roles.error }]}>{insights.biggestDate}</Text>
                 </View>
               </View>
 
               {/* 3. Alerts */}
-              <View style={[styles.card, Shadows.sm]}>
-                <Text style={styles.cardLabel}>Alerts</Text>
+              <View style={[styles.card, { backgroundColor: theme.roles.surface, outlineWidth: 1, outlineColor: theme.surfaceContainer }]}>
+                <Text style={[styles.cardLabel, { color: theme.outline }]}>Alerts</Text>
                 <View style={styles.alertsContainer}>
                   {insights.alerts.map((alert, i) => (
                     <View key={i} style={styles.alertRow}>
-                      <View style={styles.alertIconCircle}>
-                        <MaterialIcons name={alert.icon as any} size={16} color="#D30000" />
+                      <View style={[styles.alertIconCircle, { backgroundColor: theme.error }]}>
+                        <MaterialIcons name={alert.icon as any} size={16} color={theme.roles.error} />
                       </View>
-                      <Text style={styles.alertText}>{alert.text}</Text>
+                      <Text style={[styles.alertText, { color: theme.roles.onSurface }]}>{alert.text}</Text>
                     </View>
                   ))}
                 </View>
               </View>
 
               {/* 4. Behaviour Patterns */}
-              <View style={[styles.card, { backgroundColor: '#F1F2F6' }, Shadows.sm]}>
-                <Text style={styles.cardLabel}>Behaviour Patterns</Text>
+              <View style={[styles.card, { backgroundColor: theme.primary }]}>
+                <Text style={[styles.cardLabel, { color: theme.primaryContainer }]}>Behaviour Patterns</Text>
                 <View style={styles.behaviourContainer}>
                   {insights.patterns.map((pattern, i) => (
-                    <View key={i} style={[styles.behaviourRow, i < insights.patterns.length - 1 && styles.behaviourRowBorder]}>
-                      <View style={styles.behaviourIconCircle}>
-                        <MaterialIcons name={pattern.icon as any} size={18} color="#0B5CFF" />
+                    <View key={i} style={[styles.behaviourRow, i < insights.patterns.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.ripple }]}>
+                      <View style={[styles.behaviourIconCircle, { backgroundColor: theme.roles.surface }]}>
+                        <MaterialIcons name={pattern.icon as any} size={18} color={theme.roles.primary} />
                       </View>
-                      <Text style={styles.behaviourText}>{pattern.text}</Text>
+                      <Text style={[styles.behaviourText, { color: theme.onPrimary }]}>{pattern.text}</Text>
                     </View>
                   ))}
                 </View>
@@ -363,30 +363,30 @@ export default function InsightsScreen() {
 
               {/* 5. Weekly Breakdown */}
               {insights.bestWeek && insights.worstWeek && (
-                <View style={[styles.card, styles.weeklyCard, Shadows.sm]}>
-                  <Text style={styles.weeklyLabel}>Weekly Breakdown</Text>
+                <View style={[styles.card, styles.weeklyCard, { backgroundColor: theme.roles.surface, outlineWidth: 1, outlineColor: theme.surfaceContainer }]}>
+                  <Text style={[styles.weeklyLabel, { color: theme.outline }]}>Weekly Breakdown</Text>
                   <View style={styles.weeklyRow}>
-                    <View style={[styles.weeklyArrowCircle, { backgroundColor: '#E8F8EE' }]}>
-                      <MaterialIcons name="arrow-upward" size={16} color="#00BD00" />
+                    <View style={[styles.weeklyArrowCircle, { backgroundColor: theme.success }]}>
+                      <MaterialIcons name="arrow-upward" size={16} color={theme.roles.success} />
                     </View>
                     <View style={styles.weeklyRowDetails}>
-                      <Text style={styles.weeklyRowTitle}>Best Week</Text>
-                      <Text style={styles.weeklyRowDate}>{insights.bestWeek.dateRange}</Text>
+                      <Text style={[styles.weeklyRowTitle, { color: theme.roles.onSurface }]}>Best Week</Text>
+                      <Text style={[styles.weeklyRowDate, { color: theme.outline }]}>{insights.bestWeek.dateRange}</Text>
                     </View>
-                    <Text style={[styles.weeklyAmount, { color: '#00BD00' }]}>
+                    <Text style={[styles.weeklyAmount, { color: theme.roles.success }]}>
                       {insights.bestWeek.amount}
                     </Text>
                   </View>
-                  <View style={styles.weeklyDivider} />
+                  <View style={[styles.weeklyDivider, { backgroundColor: theme.ripple }]} />
                   <View style={styles.weeklyRow}>
-                    <View style={[styles.weeklyArrowCircle, { backgroundColor: '#FDECEB' }]}>
-                      <MaterialIcons name="arrow-downward" size={16} color="#D30000" />
+                    <View style={[styles.weeklyArrowCircle, { backgroundColor: theme.error }]}>
+                      <MaterialIcons name="arrow-downward" size={16} color={theme.roles.error} />
                     </View>
                     <View style={styles.weeklyRowDetails}>
-                      <Text style={styles.weeklyRowTitle}>Worst Week</Text>
-                      <Text style={styles.weeklyRowDate}>{insights.worstWeek.dateRange}</Text>
+                      <Text style={[styles.weeklyRowTitle, { color: theme.roles.onSurface }]}>Worst Week</Text>
+                      <Text style={[styles.weeklyRowDate, { color: theme.outline }]}>{insights.worstWeek.dateRange}</Text>
                     </View>
-                    <Text style={[styles.weeklyAmount, { color: '#D30000' }]}>
+                    <Text style={[styles.weeklyAmount, { color: theme.roles.error }]}>
                       {insights.worstWeek.amount}
                     </Text>
                   </View>
@@ -394,12 +394,12 @@ export default function InsightsScreen() {
               )}
             </View>
           ) : (
-            <View style={[styles.emptyContainer, Shadows.sm]}>
-              <View style={styles.emptyIconWrapper}>
-                <MaterialIcons name="bar-chart" size={56} color="#C5C3BF" />
+            <View style={[styles.emptyContainer, Shadows.sm, { backgroundColor: theme.roles.surface }]}>
+              <View style={[styles.emptyIconWrapper, { backgroundColor: theme.surfaceContainerLow }]}>
+                <MaterialIcons name="bar-chart" size={56} color={theme.outlineVariant} />
               </View>
-              <Text style={styles.emptyTitle}>Insights Unavailable</Text>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyTitle, { color: theme.roles.onSurface }]}>Insights Unavailable</Text>
+              <Text style={[styles.emptyText, { color: theme.outline }]}>
                 Not enough data yet. Keep using SpendNG and insights will appear here.
               </Text>
             </View>
@@ -413,14 +413,14 @@ export default function InsightsScreen() {
           activeOpacity={1}
           onPress={() => setShowFilter(false)}
         >
-          <View style={[styles.calendarDropdown, { top: filterPos.top, left: filterPos.left }]}>
+          <View style={[styles.calendarDropdown, { top: filterPos.top, left: filterPos.left, backgroundColor: theme.roles.surface }]}>
             <View style={styles.calendarYearRow}>
               <TouchableOpacity onPress={() => setViewYear(viewYear - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <MaterialIcons name="chevron-left" size={22} color="#001133" />
+                <MaterialIcons name="chevron-left" size={22} color={theme.roles.onSurface} />
               </TouchableOpacity>
-              <Text style={styles.calendarYearText}>{viewYear}</Text>
+              <Text style={[styles.calendarYearText, { color: theme.roles.onSurface }]}>{viewYear}</Text>
               <TouchableOpacity onPress={() => setViewYear(viewYear + 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <MaterialIcons name="chevron-right" size={22} color="#001133" />
+                <MaterialIcons name="chevron-right" size={22} color={theme.roles.onSurface} />
               </TouchableOpacity>
             </View>
             <View style={styles.calendarGrid}>
@@ -434,7 +434,7 @@ export default function InsightsScreen() {
                     key={monthKey}
                     style={[
                       styles.calendarMonthBtn,
-                      isSelected && styles.calendarMonthBtnActive,
+                      isSelected && { backgroundColor: theme.roles.primary },
                       !hasCalendarData && styles.calendarMonthBtnDisabled,
                     ]}
                     onPress={() => {
@@ -448,8 +448,8 @@ export default function InsightsScreen() {
                   >
                     <Text style={[
                       styles.calendarMonthLabel,
-                      isSelected && styles.calendarMonthLabelActive,
-                      !hasCalendarData && styles.calendarMonthLabelDisabled,
+                      isSelected && { color: theme.onPrimary, fontFamily: Typography.fonts.medium },
+                      !hasCalendarData && { color: theme.outlineVariant },
                     ]}>
                       {label}
                     </Text>
@@ -467,29 +467,24 @@ export default function InsightsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F9FAFC',
   },
   headerContainer: {
     paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 16,
+    paddingBottom: 8,
   },
   headerTitle: {
-    fontFamily: Typography.fonts.medium, // 500 font weight
-    fontSize: Typography.sizes.titleL, // 20px similar font size
-    color: '#001133',
-
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.titleL,
   },
   filterDropdownBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F2F6',
     borderRadius: Radius.full,
     paddingVertical: 8,
     paddingHorizontal: 14,
@@ -499,7 +494,6 @@ const styles = StyleSheet.create({
   filterDropdownText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 13,
-    color: '#001133',
   },
   modalOverlay: {
     position: 'absolute',
@@ -511,7 +505,6 @@ const styles = StyleSheet.create({
   },
   calendarDropdown: {
     position: 'absolute',
-    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 16,
     width: 280,
@@ -535,21 +528,17 @@ const styles = StyleSheet.create({
   calendarYearText: {
     fontFamily: Typography.fonts.display,
     fontSize: 18,
-    color: '#001133',
   },
   calendarGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   calendarMonthBtn: {
-    width: '25%',
+    width: '20%',
     aspectRatio: 1.4,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 10,
-  },
-  calendarMonthBtnActive: {
-    backgroundColor: '#0B5CFF',
+    borderRadius: Radius.full,
   },
   calendarMonthBtnDisabled: {
     opacity: 0.3,
@@ -557,14 +546,6 @@ const styles = StyleSheet.create({
   calendarMonthLabel: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
-    color: '#001133',
-  },
-  calendarMonthLabelActive: {
-    color: '#FFFFFF',
-    fontFamily: Typography.fonts.medium,
-  },
-  calendarMonthLabelDisabled: {
-    color: '#ADAAA4',
   },
   scrollContainer: {
     flex: 1,
@@ -578,14 +559,13 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   card: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
+    marginBottom: 8,
   },
   cardLabel: {
     fontFamily: Typography.fonts.display,
     fontSize: 14,
-    color: '#7B786F',
     marginBottom: 12,
   },
   healthCard: {
@@ -594,7 +574,7 @@ const styles = StyleSheet.create({
   healthCenter: {
     alignItems: 'center',
     width: '100%',
-    marginVertical: 12,
+    marginVertical: 4,
   },
   healthPercentage: {
     fontFamily: Typography.fonts.display,
@@ -604,13 +584,12 @@ const styles = StyleSheet.create({
   healthSubtext: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
-    color: '#7B786F',
   },
   progressBarBg: {
     width: '100%',
-    height: 8,
-    backgroundColor: '#F0F0F0',
+    height: 16,
     borderRadius: 3,
+    alignSelf: 'center',
     overflow: 'hidden',
     marginTop: 6,
   },
@@ -626,13 +605,14 @@ const styles = StyleSheet.create({
   sideBySideContainer: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 8,
   },
   sideCard: {
     flex: 1,
     borderRadius: 12,
-    padding: 14,
+    padding: 16,
     justifyContent: 'space-between',
-    height: 156,
+    height: 'auto',
   },
   categoryLabel: {
     fontFamily: Typography.fonts.display,
@@ -647,57 +627,52 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   categoryName: {
-    fontFamily: Typography.fonts.display,
+    fontFamily: Typography.fonts.medium,
     fontSize: 15,
   },
   categoryAmount: {
     fontFamily: Typography.fonts.display,
-    fontSize: 18,
-    marginTop: 2,
+    fontSize: 20,
+    marginTop: -3,
   },
   categorySubtext: {
     fontFamily: Typography.fonts.body,
     fontSize: 11,
     opacity: 0.8,
-    marginTop: 2,
+    marginTop: -3,
   },
   spendCard: {
-    backgroundColor: '#FDECEB',
   },
   spendLabel: {
     fontFamily: Typography.fonts.display,
     fontSize: 12,
-    color: '#D30000',
   },
   spendIconCircle: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 8,
   },
   spendMerchant: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 15,
-    color: '#001133',
+    fontFamily: Typography.fonts.medium,
+    fontSize: 14,
   },
   spendAmount: {
     fontFamily: Typography.fonts.display,
-    fontSize: 18,
-    color: '#D30000',
-    marginTop: 2,
+    fontSize: 20,
+    marginTop: -3,
   },
   spendSubtext: {
     fontFamily: Typography.fonts.body,
     fontSize: 11,
-    color: '#D30000',
     opacity: 0.8,
-    marginTop: 2,
+    marginTop: -3,
   },
   alertsContainer: {
     gap: 12,
+    marginBottom: 8,
   },
   alertRow: {
     flexDirection: 'row',
@@ -708,44 +683,38 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#FDECEB',
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 1,
   },
   alertText: {
     flex: 1,
-    fontFamily: Typography.fonts.body,
-    fontSize: 13,
-    color: '#001133',
+    fontFamily: Typography.fonts.medium,
+    fontSize: 14,
     lineHeight: 18,
   },
   behaviourContainer: {
     gap: 0,
+    marginBottom: 8,
+    height: 'auto'
   },
   behaviourRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 0,
     gap: 12,
-  },
-  behaviourRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
   },
   behaviourIconCircle: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   behaviourText: {
     flex: 1,
-    fontFamily: Typography.fonts.body,
-    fontSize: 14,
-    color: '#001133',
+    fontFamily: Typography.fonts.medium,
+    fontSize: 16,
   },
   weeklyCard: {
     paddingBottom: 8,
@@ -753,7 +722,6 @@ const styles = StyleSheet.create({
   weeklyLabel: {
     fontFamily: Typography.fonts.display,
     fontSize: 14,
-    color: '#7B786F',
     marginBottom: 16,
   },
   weeklyRow: {
@@ -775,12 +743,10 @@ const styles = StyleSheet.create({
   weeklyRowTitle: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
-    color: '#001133',
   },
   weeklyRowDate: {
     fontFamily: Typography.fonts.body,
     fontSize: 12,
-    color: '#7B786F',
     marginTop: 2,
   },
   weeklyAmount: {
@@ -790,11 +756,9 @@ const styles = StyleSheet.create({
   },
   weeklyDivider: {
     height: 1,
-    backgroundColor: '#F0F0F0',
     marginLeft: 48,
   },
   emptyContainer: {
-    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 32,
     alignItems: 'center',
@@ -805,7 +769,6 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#F4F5F7',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
@@ -813,13 +776,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: Typography.fonts.display,
     fontSize: 18,
-    color: '#001133',
     marginBottom: 8,
   },
   emptyText: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
-    color: '#7B786F',
     textAlign: 'center',
     lineHeight: 22,
   },

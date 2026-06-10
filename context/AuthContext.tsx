@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { SMSService } from '@/lib/sms-service';
+import { EmailService } from '@/lib/email-service';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -20,12 +22,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }: any) => {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      if (session?.user) {
+        if (Platform.OS === 'android') {
+          SMSService.rescanMissedAlerts();
+        }
+        EmailService.rescanMissedEmails();
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
@@ -36,6 +46,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleAppState = (state: AppStateStatus) => {
       if (state === 'active') {
         supabase.auth.startAutoRefresh();
+        if (sessionRef.current?.user) {
+          if (Platform.OS === 'android') {
+            SMSService.rescanMissedAlerts();
+          }
+          EmailService.rescanMissedEmails();
+        }
       } else {
         supabase.auth.stopAutoRefresh();
       }

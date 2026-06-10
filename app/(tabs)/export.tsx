@@ -5,10 +5,10 @@ import {
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  Alert, 
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
@@ -21,6 +21,7 @@ import { ExportService, ExportFormat } from '@/lib/export-service';
 export default function ExportScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { showAlert } = useAlert();
 
   const [startDate, setStartDate] = useState(startOfMonth(new Date()));
   const [endDate, setEndDate] = useState(new Date());
@@ -46,7 +47,7 @@ export default function ExportScreen() {
 
       const transactions = useTransactionStore.getState().transactions;
       if (transactions.length === 0) {
-        Alert.alert('No Data', 'No transactions found in the selected date range.');
+        showAlert({ title: 'No Data', message: 'No transactions found in the selected date range.' });
         return;
       }
 
@@ -69,10 +70,10 @@ export default function ExportScreen() {
       );
 
       await ExportService.shareFile(filePath);
-      Alert.alert('Export Successful', `Your ${formatType} report has been generated.`);
+      showAlert({ title: 'Export Successful', message: `Your ${formatType} report has been generated.` });
     } catch (err: any) {
       if (err.message === 'Export cancelled') return;
-      Alert.alert('Export Failed', err.message || 'An error occurred.');
+      showAlert({ title: 'Export Failed', message: err.message || 'An error occurred.' });
     } finally {
       setIsGenerating(false);
     }

@@ -1,10 +1,12 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Modal, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { ExportService, ExportFormat } from '@/lib/export-service';
@@ -14,9 +16,11 @@ export default function DataExportScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { showAlert } = useAlert();
   const clearAllTransactions = useTransactionStore((s) => s.clearAllTransactions);
 
   const [exporting, setExporting] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const doExport = useCallback(async (format: ExportFormat) => {
     setExporting(true);
@@ -31,7 +35,7 @@ export default function DataExportScreen() {
 
       const transactions = useTransactionStore.getState().transactions;
       if (transactions.length === 0) {
-        Alert.alert('No Data', 'There are no transactions to export.');
+        showAlert({ title: 'No Data', message: 'There are no transactions to export.' });
         return;
       }
 
@@ -50,78 +54,44 @@ export default function DataExportScreen() {
       );
 
       await ExportService.shareFile(filePath);
-      Alert.alert('Export Successful', `Your data has been exported as ${format}.`);
+      showAlert({ title: 'Export Successful', message: `Your data has been exported as ${format}.` });
     } catch (err: any) {
       if (err.message === 'Export cancelled') return;
-      Alert.alert('Export Failed', err.message || 'An error occurred.');
+      showAlert({ title: 'Export Failed', message: err.message || 'An error occurred.' });
     } finally {
       setExporting(false);
     }
   }, []);
 
   const handleExportData = () => {
-    Alert.alert(
-      'Export All Data',
-      'Choose the export format:',
-      [
-        { text: 'Export as CSV', onPress: () => doExport('CSV') },
-        { text: 'Export as PDF', onPress: () => doExport('PDF') },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
-  };
-
-  const handleDownloadTaxReports = () => {
-    Alert.alert(
-      'Download Tax Reports',
-      'Choose the tax year:',
-      [
-        {
-          text: 'FY 2025/2026',
-          onPress: () => startDownloadSimulation('FY 2025/2026'),
-        },
-        {
-          text: 'FY 2024/2025',
-          onPress: () => startDownloadSimulation('FY 2024/2025'),
-        },
-        { text: 'Cancel', style: 'cancel' }
-      ]
-    );
-  };
-
-  const startDownloadSimulation = (year: string) => {
-    setExporting(true);
-    setTimeout(() => {
-      setExporting(false);
-      Alert.alert('Success', `Tax report for ${year} has been downloaded successfully.`);
-    }, 1500);
+    setShowExportModal(true);
   };
 
   const handleDeleteAllData = () => {
-    Alert.alert(
-      'Delete All Data',
-      'WARNING: This will permanently delete all transaction records. This action cannot be undone. Do you wish to proceed?',
-      [
+    showAlert({
+      title: 'Delete All Data',
+      message: 'WARNING: This will permanently delete all transaction records. This action cannot be undone. Do you wish to proceed?',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete Everything',
           style: 'destructive',
           onPress: () => {
             clearAllTransactions();
-            Alert.alert('Data Cleared', 'All local transaction data has been permanently deleted.');
-          }
-        }
-      ]
-    );
+            showAlert({ title: 'Data Cleared', message: 'All local transaction data has been permanently deleted.' });
+          },
+        },
+      ],
+    });
   };
 
   const MenuItem = ({ icon, label, onPress, destructive = false }: { icon: string; label: string; onPress: () => void; destructive?: boolean }) => (
     <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.menuItemLeft}>
         <View style={[styles.iconContainer, { backgroundColor: destructive ? '#FDECEB' : theme.primaryContainer }]}>
-          <IconSymbol name={icon as any} size={16} color={destructive ? theme.error : theme.primary} />
+          <IconSymbol name={icon as any} size={16} color={destructive ? Colors.main.error : theme.primary} />
         </View>
-        <Text style={[styles.menuItemLabel, { color: destructive ? theme.error : theme.onBackground }]}>{label}</Text>
+        <Text style={[styles.menuItemLabel, { color: destructive ? Colors.main.error : theme.onBackground }]}>{label}</Text>
       </View>
       <IconSymbol name="chevron.right" size={16} color={theme.outline} />
     </TouchableOpacity>
@@ -143,7 +113,6 @@ export default function DataExportScreen() {
 
         <View style={styles.section}>
           <MenuItem icon="export" label="Export all data (CSV/PDF)" onPress={handleExportData} />
-          <MenuItem icon="arrow.down.doc.fill" label="Download tax reports" onPress={handleDownloadTaxReports} />
           <MenuItem icon="trash.fill" label="Delete all data" onPress={handleDeleteAllData} destructive />
         </View>
       </ScrollView>
@@ -156,6 +125,36 @@ export default function DataExportScreen() {
           </View>
         </View>
       )}
+
+      <Modal visible={showExportModal} transparent animationType="slide" onRequestClose={() => setShowExportModal(false)}>
+        <View style={styles.exportOverlay}>
+          <TouchableOpacity style={styles.exportOverlayBg} activeOpacity={1} onPress={() => setShowExportModal(false)} />
+          <View style={[styles.exportSheet, { backgroundColor: theme.surface }]}>
+            <View style={styles.exportSheetHeader}>
+              <Text style={[styles.exportSheetTitle, { color: theme.onBackground }]}>Export All Data</Text>
+              <TouchableOpacity onPress={() => setShowExportModal(false)} style={styles.exportCloseBtn} activeOpacity={0.7}>
+                <MaterialIcons name="close" size={22} color={theme.onBackground} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.exportButtonRow}>
+              <TouchableOpacity
+                style={[styles.exportBtn, styles.exportBtnSecondary, { borderColor: theme.outlineVariant }]}
+                onPress={() => { setShowExportModal(false); doExport('CSV'); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.exportBtnText, { color: theme.onBackground }]}>Export as CSV</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.exportBtn, styles.exportBtnPrimary, { backgroundColor: theme.primary }]}
+                onPress={() => { setShowExportModal(false); doExport('PDF'); }}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.exportBtnText, { color: theme.onPrimary }]}>Export as PDF</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -227,5 +226,62 @@ const styles = StyleSheet.create({
   loaderText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
+  },
+  exportOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  exportOverlayBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  exportSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: Spacing[2],
+    paddingBottom: Platform.OS === 'ios' ? 34 : Spacing[5],
+    paddingHorizontal: Spacing[5],
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 16,
+  },
+  exportSheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing[4],
+  },
+  exportSheetTitle: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.titleS,
+  },
+  exportCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exportButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: Spacing[4],
+  },
+  exportBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exportBtnPrimary: {},
+  exportBtnSecondary: {
+    borderWidth: 1.5,
+  },
+  exportBtnText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.buttonM,
   },
 });

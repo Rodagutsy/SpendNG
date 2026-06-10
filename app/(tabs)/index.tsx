@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   StatusBar,
   Platform,
@@ -47,16 +47,12 @@ const CustomTransactionItem = ({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      {/* Icon Circle */}
-      {isDebit ? (
-        <View style={[styles.iconCircle, { backgroundColor: theme.error }]}>
-          <MaterialIcons name="shopping-cart" size={22} color={theme.onPrimary} />
-        </View>
-      ) : (
-        <View style={[styles.iconCircle, { backgroundColor: Palette.neutral[96] }]}>
-          <MaterialIcons name="arrow-downward" size={22} color={theme.success} />
-        </View>
-      )}
+      {/* Avatar Letter */}
+      <View style={[styles.iconCircle, { backgroundColor: isDebit ? Colors.main.error : Colors.main.success }]}>
+        <Text style={styles.avatarLetter}>
+          {(merchant || '?')[0].toUpperCase()}
+        </Text>
+      </View>
 
       {/* Middle Content */}
       <View style={styles.transactionMiddle}>
@@ -73,7 +69,7 @@ const CustomTransactionItem = ({
         <Text
           style={[
             styles.amountText,
-            { color: isDebit ? theme.error : theme.success }
+            { color: isDebit ? Colors.main.error : Colors.main.success }
           ]}
         >
           {isDebit ? '-' : '+'}
@@ -102,6 +98,7 @@ export default function HomeScreen() {
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
   const recentTransactions = transactions.slice(0, 10);
+  const flaggedCount = transactions.filter((tx) => tx.isFlaggedForReview).length;
 
   const formatNaira = (amount: number) => {
     const abs = Math.abs(amount);
@@ -128,8 +125,8 @@ export default function HomeScreen() {
   };
 
   const openNotifications = useCallback(() => {
-    // Notification feature to be implemented
-  }, []);
+    router.push('/transactions' as any);
+  }, [router]);
 
   const headerElement = useMemo(() => (
     <View style={styles.headerContainer}>
@@ -147,6 +144,11 @@ export default function HomeScreen() {
             activeOpacity={0.8}
           >
             <BellIcon size={24} color={theme.onSurface} />
+            {flaggedCount > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{flaggedCount > 9 ? '9+' : flaggedCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -169,13 +171,13 @@ export default function HomeScreen() {
         {/* Money In Card */}
         <View style={[styles.moneyHalf, styles.moneyInHalf]}>
           <Text style={styles.moneyLabelGreen}>Money In</Text>
-          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyIn)}</Text>
+          <Text style={styles.moneyInvalue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyIn)}</Text>
         </View>
 
         {/* Money Out Card */}
         <View style={[styles.moneyHalf, styles.moneyOutHalf]}>
           <Text style={styles.moneyLabelRed}>Money Out</Text>
-          <Text style={styles.moneyValue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyOut)}</Text>
+          <Text style={styles.moneyOutvalue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyOut)}</Text>
         </View>
       </View>
 
@@ -198,45 +200,47 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </ImageBackground>
 
-      {/* Recent Activity Header */}
-      <View style={styles.recentActivityHeader}>
-        <Text style={styles.sectionTitle}>Recent Activity</Text>
-        <TouchableOpacity onPress={() => router.push('/transactions' as any)}>
-          <Text style={styles.seeAllText}>View all</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications]);
 
   return (
     <>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: theme.background }]}>
         <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
-        <FlatList
-          data={recentTransactions}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <CustomTransactionItem
-              merchant={item.merchantName || 'Unknown'}
-              bankAndDate={`${getAccountLabel(item)} • ${formatDate(item.transactionDate)}`}
-              amount={formatNaira(item.amount)}
-              category={getCategoryName(item.categoryId)}
-              isDebit={item.transactionType === 'debit'}
-              onPress={() => router.push(`/transactions/${item.id}` as any)}
-            />
-          )}
-          ListHeaderComponent={headerElement}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No transactions yet</Text>
-              <Text style={styles.emptyStateSubtext}>Tap the + button to add your first transaction</Text>
-            </View>
-          }
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        <ScrollView
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-        />
+        >
+          {headerElement}
+
+          <View style={[styles.recentActivityContainer, { backgroundColor: theme.onPrimary }]}>
+            <View style={styles.recentActivityHeader}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => router.push('/transactions' as any)}>
+                <Text style={styles.seeAllText}>View all</Text>
+              </TouchableOpacity>
+            </View>
+            {recentTransactions.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No transactions yet</Text>
+                <Text style={styles.emptyStateSubtext}>Tap the + button to add your first transaction</Text>
+              </View>
+            ) : recentTransactions.map((item, index) => (
+              <React.Fragment key={item.id}>
+                {index > 0 && <View style={styles.separator} />}
+                <CustomTransactionItem
+                  merchant={item.merchantName || 'Unknown'}
+                  bankAndDate={`${getAccountLabel(item)} • ${formatDate(item.transactionDate)}`}
+                  amount={formatNaira(item.amount)}
+                  category={getCategoryName(item.categoryId)}
+                  isDebit={item.transactionType === 'debit'}
+                  onPress={() => router.push(`/transactions/${item.id}` as any)}
+                />
+              </React.Fragment>
+            ))}
+          </View>
+        </ScrollView>
 
         {/* Floating Action Button (FAB) exactly as in image */}
         <TouchableOpacity
@@ -256,13 +260,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.light.surface,
   },
   listContent: {
     paddingBottom: Platform.OS === 'ios' ? 110 : 90,
   },
   headerContainer: {
-    backgroundColor: Colors.light.surface,
+    backgroundColor: Colors.light.background,
   },
   blueHeader: {
     backgroundColor: Colors.main.primary,
@@ -339,30 +342,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   moneyInHalf: {
-    backgroundColor: Colors.light.success,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    backgroundColor: Colors.light.onPrimary,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
   },
   moneyOutHalf: {
-    backgroundColor: Colors.light.error,
+    backgroundColor: Colors.light.onPrimary,
     borderTopRightRadius: 12,
     borderBottomRightRadius: 12,
   },
   moneyLabelGreen: {
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
-    color: Colors.main.success,
+    color: Colors.light.onSurface,
   },
   moneyLabelRed: {
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
-    color: Colors.main.error,
+    color: Colors.light.onSurface,
   },
-  moneyValue: {
+  moneyInvalue: {
     fontFamily: Typography.fonts.display,
     fontSize: 22,
-    color: Colors.light.onSurface,
-    marginTop: 4,
+    color: Colors.main.success,
+    marginTop: 1
+  },
+  moneyOutvalue: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 22,
+    color: Colors.main.error,
+    marginTop: 1,
   },
   trendRow: {
     flexDirection: 'row',
@@ -426,13 +435,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.onPrimary,
   },
+  recentActivityContainer: {
+    marginHorizontal: 20,
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 24,
+    marginBottom: 4,
+  },
   recentActivityHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 24,
+    marginBottom: 8,
   },
   seeAllText: {
     fontFamily: Typography.fonts.medium,
@@ -453,6 +467,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+  },
+  avatarLetter: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.titleM,
+    color: Colors.light.onPrimary,
   },
   emptyState: {
     alignItems: 'center',
@@ -584,5 +603,23 @@ const styles = StyleSheet.create({
   nairaSymbol: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontWeight: '500',
+  },
+  // notification styles - Keep if you intend to add a proper notification section later
+  bellBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.light.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  bellBadgeText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 10,
+    color: Colors.light.surface,
   },
 });

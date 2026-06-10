@@ -54,7 +54,7 @@ export const Button: React.FC<ButtonProps> = ({
         };
       case 'error':
         return {
-          container: { backgroundColor: theme.error },
+          container: { backgroundColor: Colors.main.error },
           text: { color: theme.onPrimary },
         };
       case 'ghost':

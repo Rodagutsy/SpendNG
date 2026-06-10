@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { TextInput } from '@/components/ui/TextInput';
 
@@ -12,6 +13,7 @@ export default function ChangePasswordScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { showAlert } = useAlert();
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -20,15 +22,15 @@ export default function ChangePasswordScreen() {
 
   const handleSave = () => {
     if (!oldPassword || !newPassword || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields.');
+      showAlert({ title: 'Error', message: 'Please fill in all fields.' });
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert('Error', 'New passwords do not match.');
+      showAlert({ title: 'Error', message: 'New passwords do not match.' });
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert('Error', 'New password must be at least 6 characters long.');
+      showAlert({ title: 'Error', message: 'New password must be at least 6 characters long.' });
       return;
     }
 
@@ -36,12 +38,7 @@ export default function ChangePasswordScreen() {
     // Simulate successful password change
     setTimeout(() => {
       setLoading(false);
-      Alert.alert(
-        'Success',
-        'Password changed successfully! Redirecting you back...',
-        [],
-        { cancelable: false }
-      );
+      showAlert({ title: 'Success', message: 'Password changed successfully! Redirecting you back...' });
 
       // Auto redirect back within 3 seconds
       setTimeout(() => {
@@ -126,18 +123,18 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.fonts.medium,
-    fontSize: Typography.sizes.titleM,
+    fontSize: Typography.sizes.titleS,
   },
   form: {
     paddingHorizontal: Spacing[6],
-    gap: Spacing[3],
+    gap: Spacing[1]
   },
   saveBtn: {
     height: 48,
     borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: Spacing[2],
+    marginTop: Spacing[4],
   },
   saveBtnText: {
     fontFamily: Typography.fonts.display,

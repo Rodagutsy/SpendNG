@@ -7,11 +7,11 @@ import {
   ScrollView,
   Modal,
   Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CalendarModal } from '@/components/CalendarModal';
 import { ExportService, ExportFormat } from '@/lib/export-service';
@@ -43,6 +43,7 @@ interface ExportModalProps {
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) => {
+  const { showAlert } = useAlert();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const styles = createStyles(theme);
@@ -146,7 +147,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
       handleClose();
     } catch (err: any) {
       if (err.message === 'Export cancelled') return;
-      Alert.alert('Export Failed', err.message || 'An error occurred during export');
+      showAlert({ title: 'Export Failed', message: err.message || 'An error occurred during export' });
     } finally {
       setExporting(false);
       setExportProgress(0);
@@ -234,14 +235,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
                 <View style={[styles.summaryCard, { backgroundColor: theme.surfaceContainerLow }]}>
                   <View style={styles.summaryRow}>
                     <Text style={[styles.summaryLabel, { color: theme.onBackground }]}>Total Money In</Text>
-                    <Text style={[styles.summaryValue, { color: theme.success }]}>
+                    <Text style={[styles.summaryValue, { color: Colors.main.success }]}>
                       {summaryData ? formatCurrency(summaryData.moneyIn, 'NGN') : '—'}
                     </Text>
                   </View>
                   <View style={[styles.summaryDivider, { backgroundColor: theme.outlineVariant }]} />
                   <View style={styles.summaryRow}>
                     <Text style={[styles.summaryLabel, { color: theme.onBackground }]}>Total Money Out</Text>
-                    <Text style={[styles.summaryValue, { color: theme.error }]}>
+                    <Text style={[styles.summaryValue, { color: Colors.main.error }]}>
                       {summaryData ? formatCurrency(summaryData.moneyOut, 'NGN') : '—'}
                     </Text>
                   </View>
@@ -253,8 +254,8 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
                   </Text>
                 ) : (
                   <View style={styles.noReviewBanner}>
-                    <MaterialIcons name="check-circle" size={18} color={theme.success} />
-                    <Text style={[styles.noReviewText, { color: theme.success }]}>No review needed</Text>
+                    <MaterialIcons name="check-circle" size={18} color={Colors.main.success} />
+                    <Text style={[styles.noReviewText, { color: Colors.main.success }]}>No review needed</Text>
                   </View>
                 )}
               </>

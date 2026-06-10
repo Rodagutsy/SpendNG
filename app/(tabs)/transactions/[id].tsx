@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { TransactionModal } from '@/components/TransactionModal';
@@ -33,6 +34,7 @@ export default function TransactionDetailScreen() {
     [transaction, categories],
   );
 
+  const { showAlert } = useAlert();
   const [showEditModal, setShowEditModal] = useState(false);
 
 
@@ -49,9 +51,9 @@ export default function TransactionDetailScreen() {
 
   const isDebit = transaction.transactionType === 'debit';
   const formattedNumber = Math.abs(transaction.amount).toLocaleString('en-US');
-  const amountColor = isDebit ? theme.error : theme.success;
-  const heroBg = isDebit ? theme.error + '14' : theme.success + '1A';
-  const pillBg = isDebit ? theme.error : theme.success;
+  const amountColor = isDebit ? Colors.main.error : Colors.main.success;
+  const heroBg = isDebit ? Colors.main.error + '14' : Colors.main.success + '1A';
+  const pillBg = isDebit ? Colors.main.error : Colors.main.success;
   const formattedDate = format(new Date(transaction.transactionDate), 'EEEE, d MMMM yyyy');
   const bankName = transaction.accountName;
   const accountNumber = transaction.accountNumberLast4 ? `••${transaction.accountNumberLast4}` : null;
@@ -77,10 +79,10 @@ export default function TransactionDetailScreen() {
   };
 
   const handleMarkDuplicate = () => {
-    Alert.alert(
-      'Mark as Duplicate',
-      'What would you like to do?',
-      [
+    showAlert({
+      title: 'Mark as Duplicate',
+      message: 'What would you like to do?',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete This Transaction',
@@ -98,7 +100,7 @@ export default function TransactionDetailScreen() {
           },
         },
       ],
-    );
+    });
   };
 
   return (

@@ -36,7 +36,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: Spacing[6],
-    paddingTop: Spacing[8],
+    marginTop: Spacing[10],
+    marginBottom: Spacing[2],
   },
   backBtn: {
     width: 32,

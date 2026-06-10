@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuth } from '@/context/AuthContext';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
@@ -14,6 +15,7 @@ export default function SettingsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { signOut, user } = useAuth();
+  const { showAlert } = useAlert();
   const clearAllTransactions = useTransactionStore((s) => s.clearAllTransactions);
 
   const handleLogout = async () => {
@@ -26,10 +28,10 @@ export default function SettingsScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'Are you sure you want to delete your account? This action is permanent.',
-      [
+    showAlert({
+      title: 'Delete Account',
+      message: 'Are you sure you want to delete your account? This action is permanent.',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -44,8 +46,8 @@ export default function SettingsScreen() {
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const MenuItem = ({
@@ -104,17 +106,17 @@ export default function SettingsScreen() {
         <MenuItem icon="bell" label="Notifications" onPress={() => router.push('/settings/notifications')} />
         <MenuItem icon="arrow.down.doc.fill" label="Data & Export" onPress={() => router.push('/settings/data-export')} />
         <MenuItem icon="lock.fill" label="Security" onPress={() => router.push('/settings/security')} />
-        <MenuItem icon="envelope.fill" label="Connected Accounts" onPress={() => router.push('/settings/connected-accounts' as any)} />
+        <MenuItem icon="link" label="Connected Accounts" onPress={() => router.push('/settings/connected-accounts' as any)} />
         <MenuItem icon="help-circle" label="Help" onPress={() => router.push('/settings/help')} />
       </View>
 
       <View style={styles.footerActionContainer}>
         <TouchableOpacity
-          style={[styles.logoutBtn, { borderColor: theme.error }]}
+          style={[styles.logoutBtn, { borderColor: Colors.main.error }]}
           onPress={handleLogout}
           activeOpacity={0.8}
         >
-          <Text style={[styles.logoutBtnText, { color: theme.error }]}>Log Out</Text>
+          <Text style={[styles.logoutBtnText, { color: Colors.main.error }]}>Log Out</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.deleteLink}

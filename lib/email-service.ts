@@ -10,6 +10,11 @@ export interface GmailTokens {
   email?: string;
 }
 
+interface StoredAccount {
+  tokens: GmailTokens;
+  lastScanTimestamp: number;
+}
+
 export class EmailService {
   static readonly FINANCIAL_SENDERS = [
     'alerts@gtbank.com',
@@ -59,8 +64,7 @@ export class EmailService {
     const email = tokens.email || await this.getAccountEmail(tokens.accessToken);
     if (!email) return null;
 
-    const key = this.keyForEmail(email);
-    await Keychain.setGenericPassword('gmail', JSON.stringify(tokens), { service: key });
+    await this.storeAccount(email, { tokens, lastScanTimestamp: Date.now() });
 
     const accounts = await this.getAccountList();
     if (!accounts.includes(email)) {
@@ -71,18 +75,40 @@ export class EmailService {
     return email;
   }
 
+  private static async storeAccount(email: string, data: StoredAccount): Promise<void> {
+    const key = this.keyForEmail(email);
+    await Keychain.setGenericPassword('gmail', JSON.stringify(data), { service: key });
+  }
+
+  private static async readAccount(email: string): Promise<StoredAccount | null> {
+    try {
+      const creds = await Keychain.getGenericPassword({ service: this.keyForEmail(email) });
+      if (creds) return JSON.parse(creds.password) as StoredAccount;
+    } catch {}
+    return null;
+  }
+
+  static async getLastScanTimestamp(email: string): Promise<number | null> {
+    const account = await this.readAccount(email);
+    return account?.lastScanTimestamp ?? null;
+  }
+
+  static async saveLastScanTimestamp(email: string, timestamp: number): Promise<void> {
+    const account = await this.readAccount(email);
+    if (account) {
+      account.lastScanTimestamp = timestamp;
+      await this.storeAccount(email, account);
+    }
+  }
+
   static async getConnectedAccounts(): Promise<{ email: string; tokens: GmailTokens }[]> {
     const emails = await this.getAccountList();
     const results: { email: string; tokens: GmailTokens }[] = [];
 
     for (const email of emails) {
-      try {
-        const creds = await Keychain.getGenericPassword({ service: this.keyForEmail(email) });
-        if (creds) {
-          results.push({ email, tokens: JSON.parse(creds.password) as GmailTokens });
-        }
-      } catch {
-        // stale entry, clean up later
+      const account = await this.readAccount(email);
+      if (account) {
+        results.push({ email, tokens: account.tokens });
       }
     }
 
@@ -98,11 +124,11 @@ export class EmailService {
     }
   }
 
-  static async pollAccount(accessToken: string): Promise<{ processed: number; failed: number }> {
+  static async pollAccount(accessToken: string, email?: string, since?: number): Promise<{ processed: number; failed: number }> {
     const senderQuery = this.FINANCIAL_SENDERS.map((s) => `from:${s}`).join(' OR ');
-    const after = new Date();
-    after.setDate(after.getDate() - 30);
-    const afterStr = after.toISOString().split('T')[0];
+
+    const sinceDate = since ? new Date(since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const afterStr = sinceDate.toISOString().split('T')[0];
     const q = `(${senderQuery}) after:${afterStr}`;
 
     const searchUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(q)}&maxResults=50`;
@@ -117,7 +143,10 @@ export class EmailService {
 
     const searchData = await searchRes.json();
     const messages: Array<{ id: string; threadId: string }> = searchData.messages || [];
-    if (messages.length === 0) return { processed: 0, failed: 0 };
+    if (messages.length === 0) {
+      if (email) await this.saveLastScanTimestamp(email, Date.now());
+      return { processed: 0, failed: 0 };
+    }
 
     let success = 0;
     let failed = 0;
@@ -146,6 +175,8 @@ export class EmailService {
       else failed++;
     }
 
+    if (email) await this.saveLastScanTimestamp(email, Date.now());
+
     return { processed: success, failed };
   }
 
@@ -154,9 +185,10 @@ export class EmailService {
     let totalProcessed = 0;
     let totalFailed = 0;
 
-    for (const { tokens } of accounts) {
+    for (const { email, tokens } of accounts) {
       try {
-        const result = await this.pollAccount(tokens.accessToken);
+        const lastScan = await this.getLastScanTimestamp(email);
+        const result = await this.pollAccount(tokens.accessToken, email, lastScan ?? undefined);
         totalProcessed += result.processed;
         totalFailed += result.failed;
       } catch (e) {
@@ -189,8 +221,16 @@ export class EmailService {
     await Keychain.resetGenericPassword({ service: ACCOUNTS_LIST_KEY });
   }
 
-  static async pollNewEmails(accessToken: string): Promise<{ processed: number; failed: number }> {
-    return this.pollAccount(accessToken);
+  static async pollNewEmails(accessToken: string, email?: string): Promise<{ processed: number; failed: number }> {
+    const lastScan = email ? await this.getLastScanTimestamp(email) : undefined;
+    return this.pollAccount(accessToken, email, lastScan ?? undefined);
+  }
+
+  static async rescanMissedEmails(): Promise<void> {
+    const connected = await this.isConnected();
+    if (!connected) return;
+    console.log('SpendNG: Re-scanning missed email alerts');
+    await this.pollAllAccounts();
   }
 
   private static extractEmailData(message: any): { body: string | null; sender: string | null; timestamp: number } {

@@ -30,12 +30,12 @@ export const DashboardSummaryCard: React.FC<SummaryCardProps> = ({
       <View style={styles.row}>
         <View style={styles.column}>
           <Text style={[styles.label, { color: theme.outline }]}>Income</Text>
-          <Text style={[styles.amount, { color: theme.success }]}>
+          <Text style={[styles.amount, { color: Colors.main.success }]}>
             {formatCurrency(income)}
           </Text>
           <Text style={[
             styles.delta, 
-            { color: incomeDelta >= 0 ? theme.success : theme.error }
+            { color: incomeDelta >= 0 ? Colors.main.success : Colors.main.error }
           ]}>
             vs last month {formatPercentage(incomeDelta)}
           </Text>
@@ -45,12 +45,12 @@ export const DashboardSummaryCard: React.FC<SummaryCardProps> = ({
 
         <View style={styles.column}>
           <Text style={[styles.label, { color: theme.outline }]}>Spending</Text>
-          <Text style={[styles.amount, { color: theme.error }]}>
+          <Text style={[styles.amount, { color: Colors.main.error }]}>
             -{formatCurrency(spending)}
           </Text>
           <Text style={[
             styles.delta, 
-            { color: spendingDelta <= 0 ? theme.success : theme.error }
+            { color: spendingDelta <= 0 ? Colors.main.success : Colors.main.error }
           ]}>
             vs last month {formatPercentage(spendingDelta)}
           </Text>

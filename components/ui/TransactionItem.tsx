@@ -14,6 +14,7 @@ interface TransactionItemProps {
   amount: number;
   type: 'debit' | 'credit';
   date: string;
+  isFlagged?: boolean;
   onPress?: () => void;
 }
 
@@ -26,6 +27,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   amount,
   type,
   date,
+  isFlagged,
   onPress,
 }) => {
   const colorScheme = useColorScheme() ?? 'light';
@@ -35,7 +37,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   const iconBg = color ? `${color}26` : theme.ripple;
 
   const formattedAmount = `${type === 'debit' ? '-' : '+'}${formatCurrency(amount)}`;
-  const amountColor = type === 'debit' ? theme.error : theme.success;
+  const amountColor = type === 'debit' ? Colors.main.error : Colors.main.success;
 
   return (
     <TouchableOpacity
@@ -43,13 +45,23 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
       onPress={onPress}
       activeOpacity={0.7}
     >
+      {isFlagged && (
+        <View style={styles.flagIndicator}>
+          <Text style={styles.flagText}>!</Text>
+        </View>
+      )}
       <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
-        <IconSymbol name={icon as any} size={24} color={iconColor} />
+        <Text style={[styles.avatarLetter, { color: iconColor }]}>
+          {(merchant || '?')[0].toUpperCase()}
+        </Text>
       </View>
       <View style={styles.content}>
-        <Text style={[styles.merchant, { color: theme.onSurface }]} numberOfLines={1}>
-          {merchant}
-        </Text>
+        <View style={styles.merchantRow}>
+          {isFlagged && <Text style={[styles.reviewLabel, { color: Colors.light.warning }]}>Review </Text>}
+          <Text style={[styles.merchant, { color: theme.onSurface }]} numberOfLines={1}>
+            {merchant}
+          </Text>
+        </View>
         <Text style={[styles.detail, { color: theme.outline }]}>
           {account} • {date}
         </Text>
@@ -74,6 +86,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing[4],
     height: 72,
   },
+  flagIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.light.warning,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  flagText: {
+    color: Colors.light.surface,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   iconContainer: {
     width: 48,
     height: 48,
@@ -82,9 +108,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: Spacing[3],
   },
+  avatarLetter: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.titleM,
+  },
   content: {
     flex: 1,
     justifyContent: 'center',
+  },
+  merchantRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  reviewLabel: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.labelS,
   },
   merchant: {
     fontFamily: Typography.fonts.title,

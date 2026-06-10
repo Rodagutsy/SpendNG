@@ -92,6 +92,7 @@ export default function TransactionsScreen() {
       amount={item.amount}
       type={item.transactionType}
       date={format(new Date(item.transactionDate), 'd MMM yyyy')}
+      isFlagged={item.isFlaggedForReview}
       onPress={() => router.push(`/(tabs)/transactions/${item.id}`)}
     />
   );
@@ -107,7 +108,7 @@ export default function TransactionsScreen() {
     if (error) {
       return (
         <View style={styles.emptyContainer}>
-          <IconSymbol name="info.circle.fill" size={48} color={theme.error} />
+          <IconSymbol name="info.circle.fill" size={48} color={Colors.main.error} />
           <Text style={[styles.emptyTitle, { color: theme.onBackground }]}>Error loading transactions</Text>
           <Text style={[styles.emptySubtitle, { color: theme.outline }]}>{error}</Text>
           <TouchableOpacity onPress={() => fetchTransactions()} style={[styles.retryBtn, { backgroundColor: theme.primary }]}>
@@ -208,7 +209,14 @@ export default function TransactionsScreen() {
       </View>
 
       <ExportModal visible={showExportModal} onClose={() => setShowExportModal(false)} />
-      <FilterModal visible={showFilterModal} onClose={() => setShowFilterModal(false)} />
+      <FilterModal
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        onApply={(f) => {
+          const next = { ...filters, ...f };
+          setFilters(next);
+        }}
+      />
     </SafeAreaView>
   );
 }

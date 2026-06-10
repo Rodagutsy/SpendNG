@@ -31,6 +31,7 @@ export default function ProfileScreen() {
         </View>
 
         <TextInput
+          style={[styles.textInput, { backgroundColor: theme.surfaceContainerLow, color: theme.outline, borderColor: theme.surfaceContainerLow }]}
           label="Name"
           value={name}
           onChangeText={setName}
@@ -39,6 +40,7 @@ export default function ProfileScreen() {
         />
 
         <TextInput
+          style={[styles.textInput, { backgroundColor: theme.surfaceContainerLow, color: theme.outline, borderColor: theme.surfaceContainerLow }]}
           label="Email"
           value={email}
           onChangeText={setEmail}
@@ -69,7 +71,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: Spacing[6],
-    paddingTop: Spacing[8],
+    marginTop: Spacing[10],
+    marginBottom: Spacing[2],
   },
   backBtn: {
     width: 32,
@@ -80,14 +83,14 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.fonts.medium,
-    fontSize: Typography.sizes.titleL,
+    fontSize: Typography.sizes.titleS,
   },
   card: {
     marginHorizontal: Spacing[6],
-    borderRadius: Radius.lg,
+    borderRadius: Radius.sm,
     padding: Spacing[6],
     alignItems: 'center',
-    gap: Spacing[5],
+    gap: Spacing[1],
   },
   avatar: {
     width: 72,
@@ -96,10 +99,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  textInput: {
+    width: '100%',
+    height: 44,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Spacing[2],
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyS,
+    lineHeight: 24,
+    justifyContent: 'center',
+  },
   primaryBtn: {
     width: '100%',
     height: 44,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
   },

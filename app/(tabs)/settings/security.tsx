@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 export default function SecurityScreen() {
@@ -11,9 +12,10 @@ export default function SecurityScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { showAlert } = useAlert();
 
   const handleBiometrics = () => {
-    Alert.alert('Coming Soon', 'Enable PIN / biometric login feature is coming soon!');
+    showAlert({ title: 'Coming Soon', message: 'Enable PIN / biometric login feature is coming soon!' });
   };
 
   return (
@@ -74,7 +76,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.fonts.medium,
-    fontSize: Typography.sizes.titleL,
+    fontSize: Typography.sizes.titleS,
   },
   section: {
     paddingHorizontal: Spacing[6],

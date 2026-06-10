@@ -10,6 +10,7 @@ import {
   Poppins_700Bold,
 } from '@expo-google-fonts/poppins';
 import { AuthProvider } from '@/context/AuthContext';
+import { AlertProvider } from '@/context/AlertContext';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 
@@ -72,7 +73,9 @@ export default function RootLayout() {
   return (
     <ErrorHandler>
       <AuthProvider>
-        <Slot />
+        <AlertProvider>
+          <Slot />
+        </AlertProvider>
       </AuthProvider>
     </ErrorHandler>
   );

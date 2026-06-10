@@ -1,14 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as AuthSession from 'expo-auth-session';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAuthRequest } from 'expo-auth-session/providers/google';
 import { EmailService } from '@/lib/email-service';
+import { SMSService } from '@/lib/sms-service';
 
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+
+const googleRedirectUri = AuthSession.makeRedirectUri({
+  scheme: 'spendngapp',
+  path: 'oauth/gmail',
+});
 
 export default function ConnectedAccountsScreen() {
   const router = useRouter();
@@ -17,53 +25,119 @@ export default function ConnectedAccountsScreen() {
   const theme = Colors[colorScheme];
 
   const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
+  const [smsConnected, setSmsConnected] = useState(false);
+  const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
+  const [emailConnecting, setEmailConnecting] = useState(false);
+  const [smsConnecting, setSmsConnecting] = useState(false);
 
   const [, response, promptAsync] = useAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
     scopes: SCOPES,
+    redirectUri: googleRedirectUri,
   });
 
   useEffect(() => {
-    checkConnection();
+    checkConnections();
   }, []);
 
   useEffect(() => {
     if (response?.type === 'success' && response.authentication?.accessToken) {
       const { accessToken, refreshToken } = response.authentication;
-      EmailService.storeTokens({ accessToken, refreshToken });
-      setConnectedEmail('Gmail');
-      Alert.alert('Connected', 'Gmail account linked successfully.');
+      (async () => {
+        try {
+          await EmailService.storeTokens({ accessToken, refreshToken });
+          setConnectedEmail('Gmail');
+          showAlert({ title: 'Connected', message: 'Gmail account linked successfully.' });
+        } catch (e: any) {
+          showAlert({ title: 'Error', message: e.message || 'Failed to link Gmail.' });
+        } finally {
+          setEmailConnecting(false);
+        }
+      })();
+    } else if (response?.type === 'error') {
+      setEmailConnecting(false);
+      showAlert({ title: 'Connection Failed', message: response.params?.error_description || 'Google sign-in failed.' });
     }
   }, [response]);
 
-  const checkConnection = async () => {
+  const checkConnections = async () => {
     setLoading(true);
-    const tokens = await EmailService.getStoredTokens();
+    const [tokens, smsStatus] = await Promise.all([
+      EmailService.getStoredTokens().catch(() => null),
+      SMSService.getConnectionStatus().catch(() => ({ hasPermissions: false })),
+    ]);
     setConnectedEmail(tokens ? 'Gmail' : null);
+    setSmsConnected(smsStatus.hasPermissions);
     setLoading(false);
   };
 
   const handleConnect = () => {
+    setEmailConnecting(true);
     promptAsync();
   };
 
   const handleDisconnect = () => {
-    Alert.alert(
-      'Disconnect Gmail',
-      'This will stop email import. You can reconnect anytime.',
-      [
+    showAlert({
+      title: 'Disconnect Gmail',
+      message: 'This will stop email import. You can reconnect anytime.',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Disconnect',
           style: 'destructive',
           onPress: async () => {
-            await EmailService.clearTokens();
-            setConnectedEmail(null);
+            try {
+              await EmailService.clearTokens();
+              setConnectedEmail(null);
+            } catch (e: any) {
+              showAlert({ title: 'Error', message: e.message || 'Failed to disconnect.' });
+            }
           },
         },
       ],
-    );
+    });
+  };
+
+  const handleSmsConnect = async () => {
+    if (Platform.OS === 'ios') return;
+    setSmsConnecting(true);
+    try {
+      const result = await SMSService.requestAndScan();
+      if (result.permissionsGranted) {
+        setSmsConnected(true);
+        showAlert({ title: 'Connected', message: 'SMS import is now active.' });
+      } else {
+        showAlert({ title: 'Permission Denied', message: 'SMS access was denied. You can enable it later in Settings.' });
+      }
+    } catch (e: any) {
+      showAlert({ title: 'Error', message: e.message || 'Failed to connect SMS.' });
+    } finally {
+      setSmsConnecting(false);
+      checkConnections();
+    }
+  };
+
+  const handleSmsDisconnect = () => {
+    showAlert({
+      title: 'Disconnect SMS',
+      message: 'This will stop SMS import. You can reconnect anytime.',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disconnect',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await SMSService.clearConnection();
+              setSmsConnected(false);
+            } catch (e: any) {
+              showAlert({ title: 'Error', message: e.message || 'Failed to disconnect.' });
+            }
+          },
+        },
+      ],
+    });
   };
 
   return (
@@ -100,22 +174,66 @@ export default function ConnectedAccountsScreen() {
               </View>
               {connectedEmail ? (
                 <TouchableOpacity
-                  style={[styles.disconnectBtn, { borderColor: theme.error }]}
+                  style={[styles.disconnectBtn, { borderColor: Colors.main.error }]}
                   onPress={handleDisconnect}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.disconnectBtnText, { color: theme.error }]}>Disconnect</Text>
+                  <Text style={[styles.disconnectBtnText, { color: Colors.main.error }]}>Disconnect</Text>
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   style={[styles.connectBtn, { backgroundColor: theme.primary }]}
                   onPress={handleConnect}
+                  disabled={emailConnecting}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.connectBtnText, { color: theme.onPrimary }]}>Connect</Text>
+                  {emailConnecting ? (
+                    <ActivityIndicator size="small" color={theme.onPrimary} />
+                  ) : (
+                    <Text style={[styles.connectBtnText, { color: theme.onPrimary }]}>Connect</Text>
+                  )}
                 </TouchableOpacity>
               )}
             </View>
+
+            {/* SMS Row — Android only */}
+            {Platform.OS === 'android' && (
+              <View style={styles.accountRow}>
+                <View style={styles.accountLeft}>
+                  <View style={[styles.iconBox, { backgroundColor: '#E6EEFF' }]}>
+                    <IconSymbol name="message.fill" size={16} color="#0B5CFF" />
+                  </View>
+                  <View>
+                    <Text style={[styles.accountLabel, { color: theme.onBackground }]}>SMS</Text>
+                    <Text style={[styles.accountStatus, { color: theme.outline }]}>
+                      {smsConnected ? 'Connected' : 'Not connected'}
+                    </Text>
+                  </View>
+                </View>
+                {smsConnected ? (
+                  <TouchableOpacity
+                    style={[styles.disconnectBtn, { borderColor: Colors.main.error }]}
+                    onPress={handleSmsDisconnect}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.disconnectBtnText, { color: Colors.main.error }]}>Disconnect</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.connectBtn, { backgroundColor: theme.primary }]}
+                    onPress={handleSmsConnect}
+                    disabled={smsConnecting}
+                    activeOpacity={0.7}
+                  >
+                    {smsConnecting ? (
+                      <ActivityIndicator size="small" color={theme.onPrimary} />
+                    ) : (
+                      <Text style={[styles.connectBtnText, { color: theme.onPrimary }]}>Connect</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         )}
       </ScrollView>

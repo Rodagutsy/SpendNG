@@ -154,8 +154,8 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({ visible, onClose, 
           {/* Weekday Headers */}
           <View style={styles.weekRow}>
             {WEEKDAYS.map((d, i) => (
-              <View key={d} style={styles.dayCell}>
-                <Text style={[styles.weekdayText, i === 0 || i === 6 ? { color: theme.error } : { color: theme.outline }]}>
+              <View key={`wd-${i}`} style={styles.dayCell}>
+                <Text style={[styles.weekdayText, i === 0 || i === 6 ? { color: Colors.main.error } : { color: theme.outline }]}>
                   {d}
                 </Text>
               </View>

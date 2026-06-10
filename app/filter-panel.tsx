@@ -93,7 +93,7 @@ export default function FilterPanelScreen() {
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.onBackground }]}>Filters</Text>
           <TouchableOpacity onPress={handleClear} style={styles.headerBtn}>
-            <Text style={[styles.clearText, { color: theme.error }]}>Reset</Text>
+            <Text style={[styles.clearText, { color: Colors.main.error }]}>Reset</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -3,25 +3,49 @@ import * as Keychain from 'react-native-keychain';
 import { IngestionEngine } from './ingestion-engine';
 
 const { SMSModule } = NativeModules;
-const smsEventEmitter = Platform.OS === 'android' ? new NativeEventEmitter(SMSModule) : null;
+let smsEventEmitter: NativeEventEmitter | null = null;
+if (Platform.OS === 'android' && SMSModule) {
+  try {
+    smsEventEmitter = new NativeEventEmitter(SMSModule);
+  } catch {
+    console.warn('SpendNG: SMSModule native emitter not available');
+  }
+}
 const KEYCHAIN_SMS = 'spendng.sms';
 
 export interface SMSConnectionStatus {
   hasPermissions: boolean;
   monitoring: boolean;
   grantedAt: number | null;
+  lastScanTimestamp: number | null;
 }
 
 export class SMSService {
-  static async getConnectionStatus(): Promise<SMSConnectionStatus> {
+  private static async readStorage(): Promise<Record<string, any>> {
     try {
       const creds = await Keychain.getGenericPassword({ service: KEYCHAIN_SMS });
-      if (creds) {
-        const data = JSON.parse(creds.password);
-        return { hasPermissions: true, monitoring: data.monitoring ?? true, grantedAt: data.grantedAt ?? null };
-      }
+      if (creds) return JSON.parse(creds.password);
     } catch {}
-    return { hasPermissions: false, monitoring: false, grantedAt: null };
+    return {};
+  }
+
+  private static async updateStorage(partial: Record<string, any>): Promise<void> {
+    const existing = await this.readStorage();
+    const merged = { ...existing, ...partial };
+    await Keychain.setGenericPassword('sms', JSON.stringify(merged), { service: KEYCHAIN_SMS });
+  }
+
+  static async getConnectionStatus(): Promise<SMSConnectionStatus> {
+    const data = await this.readStorage();
+    if (data.monitoring !== undefined) {
+      return {
+        hasPermissions: true,
+        monitoring: data.monitoring ?? true,
+        grantedAt: data.grantedAt ?? null,
+        lastScanTimestamp: data.lastScanTimestamp ?? null,
+      };
+    }
+    return { hasPermissions: false, monitoring: false, grantedAt: null, lastScanTimestamp: null };
   }
 
   static async isConnected(): Promise<boolean> {
@@ -30,12 +54,17 @@ export class SMSService {
     return status.hasPermissions;
   }
 
+  static async getLastScanTimestamp(): Promise<number | null> {
+    const status = await this.getConnectionStatus();
+    return status.lastScanTimestamp;
+  }
+
+  static async saveLastScanTimestamp(timestamp: number): Promise<void> {
+    await this.updateStorage({ lastScanTimestamp: timestamp });
+  }
+
   private static async storeConnected(grantedAt: number): Promise<void> {
-    await Keychain.setGenericPassword(
-      'sms',
-      JSON.stringify({ monitoring: true, grantedAt }),
-      { service: KEYCHAIN_SMS },
-    );
+    await this.updateStorage({ monitoring: true, grantedAt, lastScanTimestamp: grantedAt });
   }
 
   static async clearConnection(): Promise<void> {
@@ -94,7 +123,7 @@ export class SMSService {
     }
   }
 
-  static async scanInbox() {
+  static async scanInbox(startDate?: number, endDate?: number) {
     if (Platform.OS !== 'android') return;
 
     const hasPermission = await this.requestPermissions();
@@ -104,7 +133,9 @@ export class SMSService {
     }
 
     try {
-      const messages = await SMSModule.getInboxMessages();
+      const resolvedEnd = endDate ?? Date.now();
+      const resolvedStart = startDate ?? 0;
+      const messages = await SMSModule.getInboxMessages(resolvedStart, resolvedEnd);
       console.log(`SpendNG: Fetched ${messages.length} messages from inbox`);
 
       const alerts = messages
@@ -117,6 +148,9 @@ export class SMSService {
         }));
 
       const result = await IngestionEngine.processBatch(alerts);
+
+      await this.saveLastScanTimestamp(resolvedEnd);
+
       return { scanned: messages.length, alertsFound: alerts.length, ...result };
     } catch (e) {
       console.error('SpendNG: Error scanning inbox', e);
@@ -124,7 +158,20 @@ export class SMSService {
     }
   }
 
-  static async requestAndScan(): Promise<{
+  static async rescanMissedAlerts(): Promise<void> {
+    if (Platform.OS !== 'android') return;
+
+    const connected = await this.isConnected();
+    if (!connected) return;
+
+    const lastScan = await this.getLastScanTimestamp();
+    if (lastScan !== null) {
+      console.log(`SpendNG: Re-scanning missed alerts since ${new Date(lastScan).toISOString()}`);
+      await this.scanInbox(lastScan, Date.now());
+    }
+  }
+
+  static async requestAndScan(startDate?: number, endDate?: number): Promise<{
     permissionsGranted: boolean;
     scanResult?: { scanned: number; alertsFound: number; success: number; failed: number };
   }> {
@@ -139,7 +186,7 @@ export class SMSService {
 
     await this.storeConnected(Date.now());
     await this.startMonitoring();
-    const scanResult = await this.scanInbox();
+    const scanResult = await this.scanInbox(startDate, endDate);
 
     return { permissionsGranted: true, scanResult };
   }

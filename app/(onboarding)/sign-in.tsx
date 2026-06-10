@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
@@ -7,23 +7,35 @@ import { useState } from 'react';
 import { GoogleLogo } from '@/components/GoogleLogo';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
+import { SMSService } from '@/lib/sms-service';
+import { EmailService } from '@/lib/email-service';
 
 export default function SignInScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { showAlert } = useAlert();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const redirectAfterAuth = async () => {
+    router.replace('/(tabs)');
+    if (Platform.OS === 'android') {
+      SMSService.rescanMissedAlerts();
+    }
+    EmailService.rescanMissedEmails();
+  };
 
   const handleSignIn = async () => {
     if (!email || !password) return;
     setLoading(true);
     try {
       await signInWithEmail(email, password);
-      router.replace('/(tabs)');
+      await redirectAfterAuth();
     } catch (error: any) {
-      Alert.alert('Sign In Error', error.message);
+      showAlert({ title: 'Sign In Error', message: error.message });
     } finally {
       setLoading(false);
     }
@@ -33,8 +45,9 @@ export default function SignInScreen() {
     setLoading(true);
     try {
       await signInWithGoogle();
+      await redirectAfterAuth();
     } catch (error: any) {
-      Alert.alert('Google Auth Error', error.message);
+      showAlert({ title: 'Google Auth Error', message: error.message });
     } finally {
       setLoading(false);
     }

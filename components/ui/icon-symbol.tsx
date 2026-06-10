@@ -19,6 +19,8 @@ const MAPPING: Record<string, ComponentProps<typeof MaterialIcons>['name']> = {
   'person.fill': 'person-outline',
   'lock.fill': 'lock-outline',
   'link': 'link',
+  'envelope.fill': 'email',
+  'message.fill': 'message',
   'plus.circle.fill': 'add-circle-outline',
   'magnifyingglass': 'search',
   'tag.fill': 'local-offer',

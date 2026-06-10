@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Alert, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
@@ -7,11 +7,13 @@ import { useState } from 'react';
 import { GoogleLogo } from '@/components/GoogleLogo';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 
 export default function AccountCreationScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { showAlert } = useAlert();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,15 +27,12 @@ export default function AccountCreationScreen() {
       const { user, session } = await signUpWithEmail(email, password);
 
       if (user && !session) {
-        Alert.alert(
-          'Verification Required',
-          'Please check your email for a verification link to activate your account.'
-        );
+        showAlert({ title: 'Verification Required', message: 'Please check your email for a verification link to activate your account.' });
         return;
       }
       router.replace('/(onboarding)/sms-permission');
     } catch (error: any) {
-      Alert.alert('Signup Error', error.message);
+      showAlert({ title: 'Signup Error', message: error.message });
     } finally {
       setLoading(false);
     }
@@ -44,7 +43,7 @@ export default function AccountCreationScreen() {
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      Alert.alert('Google Auth Error', error.message);
+      showAlert({ title: 'Google Auth Error', message: error.message });
     } finally {
       setLoading(false);
     }

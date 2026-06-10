@@ -6,10 +6,12 @@ const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 
 const isMock = !supabaseUrl || !supabaseAnonKey;
 
-const MockStorageAdapter = {
-  getItem: async (key: string) => null,
-  setItem: async (key: string, value: string) => {},
-  removeItem: async (key: string) => {},
+const sessionStore = new Map<string, string>();
+
+const AppStorageAdapter = {
+  getItem: async (key: string) => sessionStore.get(key) ?? null,
+  setItem: async (key: string, value: string) => { sessionStore.set(key, value); },
+  removeItem: async (key: string) => { sessionStore.delete(key); },
 };
 
 type MockUser = {
@@ -118,7 +120,7 @@ if (isMock) {
   const { createClient } = require('@supabase/supabase-js');
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      storage: MockStorageAdapter,
+      storage: AppStorageAdapter,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

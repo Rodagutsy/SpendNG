@@ -15,12 +15,16 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 interface TextInputProps extends RNTextInputProps {
   label?: string;
   error?: string;
+  warning?: string;
+  success?: string;
   containerStyle?: ViewStyle;
 }
 
 export const TextInput: React.FC<TextInputProps> = ({
   label,
   error,
+  warning,
+  success,
   containerStyle,
   style,
   secureTextEntry,
@@ -37,8 +41,17 @@ export const TextInput: React.FC<TextInputProps> = ({
 
   const isSecure = secureTextEntry && !isPasswordVisible;
 
+  const message = error || warning || success;
+  const messageColor = error
+    ? Colors.main.error
+    : warning
+      ? Colors.main.warning
+      : success
+        ? Colors.main.success
+        : undefined;
+
   const borderColor = error
-    ? theme.error
+    ? Colors.main.error
     : isFocused
       ? theme.primary
       : theme.outlineVariant;
@@ -82,9 +95,9 @@ export const TextInput: React.FC<TextInputProps> = ({
           </TouchableOpacity>
         )}
       </View>
-      {error && (
-        <Text style={[styles.error, { color: theme.error }]}>
-          {error}
+      {message && (
+        <Text style={[styles.message, { color: messageColor }]}>
+          {message}
         </Text>
       )}
     </View>
@@ -121,7 +134,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
-  error: {
+  message: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelM,
     marginTop: Spacing[1],

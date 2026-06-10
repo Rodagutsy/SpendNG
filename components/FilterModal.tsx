@@ -35,9 +35,15 @@ const SORT_OPTIONS = [
   { key: 'lowest', label: 'Lowest' },
 ];
 
+const STATUS_OPTIONS = [
+  { key: 'all', label: 'All' },
+  { key: 'needs_review', label: 'Needs Review' },
+];
+
 interface FilterModalProps {
   visible: boolean;
   onClose: () => void;
+  onApply?: (filters: { needsReview?: boolean }) => void;
 }
 
 const formatDisplayDate = (d: Date): string => {
@@ -47,7 +53,7 @@ const formatDisplayDate = (d: Date): string => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
-export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose }) => {
+export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, onApply }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const styles = createStyles(theme);
@@ -57,6 +63,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose }) =>
   const [sortBy, setSortBy] = useState('newest');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [reviewStatus, setReviewStatus] = useState('all');
   const [showStartCalendar, setShowStartCalendar] = useState(false);
   const [showEndCalendar, setShowEndCalendar] = useState(false);
 
@@ -65,12 +72,16 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose }) =>
       setPeriod('all');
       setTxType('all');
       setSortBy('newest');
+      setReviewStatus('all');
       setStartDate(null);
       setEndDate(null);
     }
   }, [visible]);
 
   const handleApply = () => {
+    onApply?.({
+      needsReview: reviewStatus === 'needs_review' ? true : undefined,
+    });
     onClose();
   };
 
@@ -78,6 +89,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose }) =>
     setPeriod('all');
     setTxType('all');
     setSortBy('newest');
+    setReviewStatus('all');
     setStartDate(null);
     setEndDate(null);
   };
@@ -154,6 +166,10 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose }) =>
             {/* Sort By */}
             <Text style={[styles.label, { color: theme.outline, marginTop: 20 }]}>Sort By</Text>
             {renderPillGroup(SORT_OPTIONS, sortBy, setSortBy)}
+
+            {/* Status */}
+            <Text style={[styles.label, { color: theme.outline, marginTop: 20 }]}>Status</Text>
+            {renderPillGroup(STATUS_OPTIONS, reviewStatus, setReviewStatus)}
           </ScrollView>
 
           {/* Footer */}
