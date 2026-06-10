@@ -25,14 +25,19 @@ export const Palette = {
     80: '#C5C3BF',
   },
   error: {
-    40: '#D30000',
-    60: '#FF3333',
+    main: '#D30000',
+    30: '#490000ff',
+    90: '#ffdedeff',
   },
   warning: {
     main: '#FFA000',
+    30: '#623c00ff',
+    90: '#ffdbb1ff',
   },
   success: {
     main: '#00BD00',
+    30: '#044504ff',
+    90: '#ccffccff',
   },
   gradients: {
     primary: ['#6B4EFF', '#A294FF'],
@@ -42,6 +47,19 @@ export const Palette = {
 };
 
 export const Colors = {
+
+  main: {
+    primary: Palette.primary[50],
+    secondary: Palette.primary[60],
+    success: Palette.success.main,
+    warning: Palette.warning.main,
+    error: Palette.error.main,
+    background: Palette.neutral[10],
+    surface: Palette.neutral[20],
+    onBackground: Palette.neutral[96],
+    onSurface: Palette.neutral[96],
+  },
+
   light: {
     background: Palette.neutral[96],
     surface: Palette.neutral[100],
@@ -53,19 +71,19 @@ export const Colors = {
     onPrimaryContainer: Palette.primary[10],
     outline: Palette.neutralVariant[50],
     outlineVariant: Palette.neutralVariant[80],
-    error: Palette.error[40],
-    warning: Palette.warning.main,
-    success: Palette.success.main,
+    error: Palette.error[90],
+    warning: Palette.warning[90],
+    success: Palette.success[90],
     ripple: Palette.neutral[93],
     surfaceContainerLowest: Palette.neutral[100],
     surfaceContainerLow: Palette.neutral[96],
     surfaceContainer: Palette.neutral[93],
-    
+
     roles: {
       primary: Palette.primary[50],
       success: Palette.success.main,
       warning: Palette.warning.main,
-      error: Palette.error[40],
+      error: Palette.error.main,
       surface: Palette.neutral[100],
       onSurface: Palette.neutral[10],
       outline: Palette.neutralVariant[50],
@@ -82,19 +100,19 @@ export const Colors = {
     onPrimaryContainer: Palette.primary[90],
     outline: Palette.neutralVariant[30],
     outlineVariant: Palette.neutralVariant[20],
-    error: Palette.error[60],
-    warning: Palette.warning.main,
-    success: Palette.success.main,
+    error: Palette.error[30],
+    warning: Palette.warning[30],
+    success: Palette.success[30],
     ripple: Palette.neutral[20],
     surfaceContainerLowest: Palette.neutral[10],
     surfaceContainerLow: Palette.neutral[20],
     surfaceContainer: Palette.neutralVariant[20],
-    
+
     roles: {
       primary: Palette.primary[60],
       success: Palette.success.main,
       warning: Palette.warning.main,
-      error: Palette.error[60],
+      error: Palette.error.main,
       surface: Palette.neutral[20],
       onSurface: Palette.neutral[96],
       outline: Palette.neutralVariant[30],

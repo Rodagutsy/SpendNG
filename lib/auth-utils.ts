@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -22,13 +23,16 @@ export const signUpWithEmail = async (email: string, password: string) => {
   return data;
 };
 
+const getRedirectUri = () => {
+  return AuthSession.makeRedirectUri({
+    native: Linking.createURL(''),
+    scheme: 'spendngapp',
+  });
+};
+
 export const signInWithGoogle = async () => {
-  // This is a placeholder for the Google OAuth flow using Expo Auth Session
-  // Requires configuration in Supabase dashboard (Google Provider) 
-  // and Google Cloud Console (Client IDs)
-  
-  const redirectUri = AuthSession.makeRedirectUri();
-  
+  const redirectUri = getRedirectUri();
+
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {

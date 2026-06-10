@@ -256,26 +256,26 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
               {/* Type cards */}
               <View style={styles.typeCardRow}>
                 <TouchableOpacity
-                  style={[styles.typeCard, type === 'credit' && { borderColor: theme.success, backgroundColor: theme.success + '0D' }]}
+                  style={[styles.typeCard, type === 'credit' && { borderColor: Colors.main.success, backgroundColor: Colors.main.success + '0D' }]}
                   onPress={() => setType('credit')}
                   activeOpacity={0.8}
                 >
-                  <View style={[styles.typeCardIconWrap, { backgroundColor: theme.success + '1A' }]}>
-                    <MaterialIcons name="arrow-downward" size={24} color={theme.success} />
+                  <View style={[styles.typeCardIconWrap, { backgroundColor: Colors.light.success + '1A' }]}>
+                    <MaterialIcons name="arrow-downward" size={24} color={Colors.main.success} />
                   </View>
-                  <Text style={[styles.typeCardLabel, type === 'credit' && { color: theme.success }]}>Income</Text>
+                  <Text style={[styles.typeCardLabel, type === 'credit' && { color: Colors.main.success }]}>Income</Text>
                   <Text style={styles.typeCardDesc}>Salary, freelance, gifts</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[styles.typeCard, type === 'debit' && { borderColor: theme.error, backgroundColor: theme.error + '0A' }]}
+                  style={[styles.typeCard, type === 'debit' && { borderColor: Colors.main.error, backgroundColor: Colors.main.error + '0A' }]}
                   onPress={() => setType('debit')}
                   activeOpacity={0.8}
                 >
-                  <View style={[styles.typeCardIconWrap, { backgroundColor: theme.error + '14' }]}>
-                    <MaterialIcons name="arrow-upward" size={24} color={theme.error} />
+                  <View style={[styles.typeCardIconWrap, { backgroundColor: Colors.light.error + '14' }]}>
+                    <MaterialIcons name="arrow-upward" size={24} color={Colors.main.error} />
                   </View>
-                  <Text style={[styles.typeCardLabel, type === 'debit' && { color: theme.error }]}>Expense</Text>
+                  <Text style={[styles.typeCardLabel, type === 'debit' && { color: Colors.main.error }]}>Expense</Text>
                   <Text style={styles.typeCardDesc}>Shopping, bills, transport</Text>
                 </TouchableOpacity>
               </View>

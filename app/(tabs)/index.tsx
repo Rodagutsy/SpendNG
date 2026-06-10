@@ -7,36 +7,20 @@ import {
   TouchableOpacity,
   StatusBar,
   Platform,
+  ImageBackground,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Typography, Shadows, Spacing } from '@/constants/Tokens';
-import { BellIcon, ExportIcon, LightningIcon } from '@/components/ui/CustomSvgIcon';
+import { Typography, Shadows, Spacing, Colors, Palette } from '@/constants/Tokens';
+import { useColorScheme } from '@/hooks/use-color-scheme';
+import { BellIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useMonthlyBalances, useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useAuth } from '@/context/AuthContext';
 import { TransactionModal } from '@/components/TransactionModal';
-import { ExportModal } from '@/components/ExportModal';
 
-interface QuickActionButtonProps {
-  label: string;
-  icon: React.ReactNode;
-  onPress: () => void;
-}
 
-const QuickActionButton = ({ label, icon, onPress }: QuickActionButtonProps) => {
-  return (
-    <TouchableOpacity
-      style={[styles.actionButton, Shadows.sm]}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
-      {icon}
-      <Text style={styles.actionButtonText}>{label}</Text>
-    </TouchableOpacity>
-  );
-};
 
 interface CustomTransactionProps {
   merchant: string;
@@ -55,6 +39,8 @@ const CustomTransactionItem = ({
   isDebit,
   onPress
 }: CustomTransactionProps) => {
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
   return (
     <TouchableOpacity
       style={styles.transactionContainer}
@@ -63,21 +49,21 @@ const CustomTransactionItem = ({
     >
       {/* Icon Circle */}
       {isDebit ? (
-        <View style={[styles.iconCircle, { backgroundColor: '#E31B23' }]}>
-          <MaterialIcons name="shopping-cart" size={22} color="#FFFFFF" />
+        <View style={[styles.iconCircle, { backgroundColor: theme.error }]}>
+          <MaterialIcons name="shopping-cart" size={22} color={theme.onPrimary} />
         </View>
       ) : (
-        <View style={[styles.iconCircle, { backgroundColor: '#E8F8EE' }]}>
-          <MaterialIcons name="arrow-downward" size={22} color="#007D3A" />
+        <View style={[styles.iconCircle, { backgroundColor: Palette.neutral[96] }]}>
+          <MaterialIcons name="arrow-downward" size={22} color={theme.success} />
         </View>
       )}
 
       {/* Middle Content */}
       <View style={styles.transactionMiddle}>
-        <Text style={styles.merchantText} numberOfLines={1}>
+        <Text style={[styles.merchantText, { color: theme.onSurface }]} numberOfLines={1}>
           {merchant}
         </Text>
-        <Text style={styles.detailText} numberOfLines={1}>
+        <Text style={[styles.detailText, { color: theme.outline }]} numberOfLines={1}>
           {bankAndDate}
         </Text>
       </View>
@@ -87,14 +73,14 @@ const CustomTransactionItem = ({
         <Text
           style={[
             styles.amountText,
-            { color: isDebit ? '#D30000' : '#00BD00' }
+            { color: isDebit ? theme.error : theme.success }
           ]}
         >
           {isDebit ? '-' : '+'}
           <Text style={styles.nairaSymbol}>₦</Text>
           {amount}
         </Text>
-        <Text style={styles.categoryText} numberOfLines={1}>
+        <Text style={[styles.categoryText, { color: theme.outline }]} numberOfLines={1}>
           {category}
         </Text>
       </View>
@@ -105,15 +91,16 @@ const CustomTransactionItem = ({
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme() ?? 'light';
+  const theme = Colors[colorScheme];
   const { moneyIn, moneyOut, netBalance, transactionCount } = useMonthlyBalances();
   const transactions = useTransactionStore((s) => s.transactions);
   const { user } = useAuth();
 
   const bellRef = useRef<View>(null);
   const [showTxModal, setShowTxModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
 
-  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
   const recentTransactions = transactions.slice(0, 10);
 
   const formatNaira = (amount: number) => {
@@ -150,7 +137,7 @@ export default function HomeScreen() {
       <View style={[styles.blueHeader, { paddingTop: insets.top + 16 }]}>
         <View style={styles.welcomeRow}>
           <View>
-            <Text style={styles.welcomeLabel}>Welcome</Text>
+            <Text style={styles.welcomeLabel}>Hello,</Text>
             <Text style={styles.welcomeName}>{userName}</Text>
           </View>
           <TouchableOpacity
@@ -159,7 +146,7 @@ export default function HomeScreen() {
             onPress={openNotifications}
             activeOpacity={0.8}
           >
-            <BellIcon size={24} color="#001133" />
+            <BellIcon size={24} color={theme.onSurface} />
           </TouchableOpacity>
         </View>
 
@@ -192,24 +179,24 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      {/* Quick Actions Header */}
-      <View style={styles.sectionHeaderContainer}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-      </View>
-
-      {/* Quick Actions Buttons */}
-      <View style={styles.quickActionsRow}>
-        <QuickActionButton
-          label="Insight"
-          icon={<LightningIcon size={20} color="#001133" />}
-          onPress={() => router.push('/insights' as any)}
-        />
-        <QuickActionButton
-          label="Export"
-          icon={<ExportIcon size={20} color="#001133" />}
-          onPress={() => setShowExportModal(true)}
-        />
-      </View>
+      {/* Tax Filing Alert */}
+      <ImageBackground
+        source={require('@/assets/images/dashboard_overview.png')}
+        style={[styles.taxAlert, Shadows.sm]}
+        imageStyle={styles.taxAlertImage}
+      >
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 26, 77, 0.88)', borderRadius: 12 }]} />
+        <Text style={styles.taxAlertText}>
+          Ready to review and export your record for tax filing?
+        </Text>
+        <TouchableOpacity
+          style={styles.taxFileBtn}
+          onPress={() => router.push('/transactions' as any)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.taxFileBtnText}>Review Now!</Text>
+        </TouchableOpacity>
+      </ImageBackground>
 
       {/* Recent Activity Header */}
       <View style={styles.recentActivityHeader}>
@@ -257,11 +244,10 @@ export default function HomeScreen() {
           onPress={() => setShowTxModal(true)}
           activeOpacity={0.85}
         >
-          <MaterialIcons name="add" size={24} color="#FFFFFF" />
+          <MaterialIcons name="add" size={24} color={theme.onPrimary} />
         </TouchableOpacity>
 
         <TransactionModal visible={showTxModal} onClose={() => setShowTxModal(false)} />
-        <ExportModal visible={showExportModal} onClose={() => setShowExportModal(false)} />
       </View>
     </>
   );
@@ -270,16 +256,16 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.surface,
   },
   listContent: {
     paddingBottom: Platform.OS === 'ios' ? 110 : 90,
   },
   headerContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.surface,
   },
   blueHeader: {
-    backgroundColor: '#EBF2FC', // Light blue header exactly like image
+    backgroundColor: Colors.main.primary,
     borderBottomLeftRadius: 40,
     borderBottomRightRadius: 40,
     paddingHorizontal: 24,
@@ -295,25 +281,25 @@ const styles = StyleSheet.create({
   welcomeLabel: {
     fontFamily: Typography.fonts.body,
     fontSize: 16,
-    color: '#001133',
+    color: Colors.light.primaryContainer,
     opacity: 0.8,
   },
   welcomeName: {
     fontFamily: Typography.fonts.display,
-    fontSize: 24,
-    color: '#001133',
-    marginTop: -2,
+    fontSize: 22,
+    color: Colors.light.onPrimary,
+    marginTop: -8,
   },
   notificationBtn: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
   netBalancePill: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.primaryContainer,
     borderRadius: 12,
     paddingVertical: 6,
     paddingHorizontal: 16,
@@ -323,23 +309,23 @@ const styles = StyleSheet.create({
   netBalanceText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 13,
-    color: '#001133',
+    color: Colors.light.onSurface,
   },
   balanceValue: {
     fontFamily: Typography.fonts.display,
     fontSize: 44,
-    color: '#001133',
+    color: Colors.light.onPrimary,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 4,
     letterSpacing: -0.5,
   },
   balanceSubtitle: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
-    color: '#001133',
+    color: Colors.light.primaryContainer,
     opacity: 0.65,
     textAlign: 'center',
-    marginTop: 0,
+    marginTop: -8,
   },
   moneyContainer: {
     flexDirection: 'row',
@@ -353,29 +339,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   moneyInHalf: {
-    backgroundColor: '#E8F8EE', // Light green
+    backgroundColor: Colors.light.success,
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
   },
   moneyOutHalf: {
-    backgroundColor: '#FDECEB', // Light pink
-    borderTopRightRadius: 16,
-    borderBottomRightRadius: 16,
+    backgroundColor: Colors.light.error,
+    borderTopRightRadius: 12,
+    borderBottomRightRadius: 12,
   },
   moneyLabelGreen: {
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
-    color: '#007D3A',
+    color: Colors.main.success,
   },
   moneyLabelRed: {
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
-    color: '#D30000',
+    color: Colors.main.error,
   },
   moneyValue: {
     fontFamily: Typography.fonts.display,
     fontSize: 22,
-    color: '#001133',
+    color: Colors.light.onSurface,
     marginTop: 4,
   },
   trendRow: {
@@ -387,12 +373,12 @@ const styles = StyleSheet.create({
   trendTextGreen: {
     fontFamily: Typography.fonts.medium,
     fontSize: 11,
-    color: '#007D3A',
+    color: Colors.main.success,
   },
   trendTextRed: {
     fontFamily: Typography.fonts.medium,
     fontSize: 11,
-    color: '#D30000',
+    color: Colors.main.error,
   },
   sectionHeaderContainer: {
     paddingHorizontal: 20,
@@ -402,40 +388,56 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: Typography.fonts.display,
     fontSize: 18,
-    color: '#001133',
+    color: Colors.light.onSurface,
   },
-  quickActionsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 16,
-  },
-  actionButton: {
-    flex: 1,
-    height: 48,
-    backgroundColor: '#F1F2F6', // Light gray Action Button background
+  taxAlert: {
+    marginHorizontal: 20,
+    height: 'auto',
     borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    overflow: 'hidden',
+    marginTop: 24,
   },
-  actionButtonText: {
-    fontFamily: Typography.fonts.title,
-    fontSize: 15,
-    color: '#001133',
+  taxAlertImage: {
+    borderRadius: 12,
+  },
+  taxAlertText: {
+    flex: 1,
+    fontFamily: Typography.fonts.display,
+    fontSize: 16,
+    color: Colors.light.onPrimary,
+    lineHeight: 20,
+    marginRight: 12,
+  },
+  taxFileBtn: {
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.main.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  taxFileBtnText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 14,
+    color: Colors.light.onPrimary,
   },
   recentActivityHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    marginTop: 28,
-    marginBottom: 16,
+    marginTop: 24,
+    marginBottom: 24,
   },
   seeAllText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
-    color: '#0B5CFF',
+    color: Colors.light.primary,
   },
   transactionContainer: {
     flexDirection: 'row',
@@ -460,13 +462,13 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontFamily: Typography.fonts.display,
     fontSize: 18,
-    color: '#001133',
+    color: Colors.light.onSurface,
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
-    color: '#7B786F',
+    color: Colors.light.outline,
     textAlign: 'center',
   },
   transactionMiddle: {
@@ -476,12 +478,12 @@ const styles = StyleSheet.create({
   merchantText: {
     fontFamily: Typography.fonts.title,
     fontSize: 16,
-    color: '#001133',
+    color: Colors.light.onSurface,
   },
   detailText: {
     fontFamily: Typography.fonts.body,
     fontSize: 13,
-    color: '#7B786F',
+    color: Colors.light.outline,
     marginTop: 2,
   },
   transactionRight: {
@@ -495,12 +497,12 @@ const styles = StyleSheet.create({
   categoryText: {
     fontFamily: Typography.fonts.body,
     fontSize: 12,
-    color: '#7B786F',
+    color: Colors.light.outline,
     marginTop: 2,
   },
   separator: {
     height: 1,
-    backgroundColor: '#F0F0F0',
+    backgroundColor: Colors.light.surfaceContainer,
     marginLeft: 84,
     marginRight: 20,
   },
@@ -511,7 +513,7 @@ const styles = StyleSheet.create({
     minWidth: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#D30000',
+    backgroundColor: Colors.light.error,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 4,
@@ -519,7 +521,7 @@ const styles = StyleSheet.create({
   badgeText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 11,
-    color: '#FFFFFF',
+    color: Colors.light.surface,
   },
   notifOverlay: {
     position: 'absolute',
@@ -528,7 +530,7 @@ const styles = StyleSheet.create({
   },
   notifDropdown: {
     position: 'absolute',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.light.surface,
     borderRadius: 12,
     paddingVertical: 4,
     ...Platform.select({
@@ -544,7 +546,7 @@ const styles = StyleSheet.create({
   notifHeader: {
     fontFamily: Typography.fonts.display,
     fontSize: 14,
-    color: '#001133',
+    color: Colors.light.onSurface,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -554,28 +556,28 @@ const styles = StyleSheet.create({
   },
   notifItemBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: Colors.light.surfaceContainer,
   },
   notifText: {
     fontFamily: Typography.fonts.body,
     fontSize: 13,
-    color: '#001133',
+    color: Colors.light.onSurface,
     lineHeight: 18,
   },
   notifTime: {
     fontFamily: Typography.fonts.body,
     fontSize: 11,
-    color: '#7B786F',
+    color: Colors.light.outline,
     marginTop: 4,
   },
   fab: {
     position: 'absolute',
-    bottom: Spacing[6], // Above custom tab bar height
+    bottom: Spacing[6],
     right: Spacing[6],
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#0B5CFF', // Premium blue FAB exactly like image
+    backgroundColor: Colors.light.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },

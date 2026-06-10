@@ -85,7 +85,9 @@ export default function AccountCreationScreen() {
         onPress={() => setAgreed(!agreed)}
         activeOpacity={0.7}
       >
-        <View style={[styles.radio, agreed && { backgroundColor: theme.primary, borderColor: theme.primary }]} />
+        <View style={[styles.radio, agreed && { borderColor: theme.primary }]}>
+          {agreed && <View style={[styles.radioFill, { backgroundColor: theme.primary }]} />}
+        </View>
         <Text style={[styles.termsText, { color: theme.onBackground }]}>
           By creating an account, you agree to our{' '}
           <Text style={{ color: theme.primary }} onPress={() => { }}>
@@ -119,7 +121,7 @@ export default function AccountCreationScreen() {
         style={[styles.googleButton, { borderColor: theme.outline }]}
         activeOpacity={0.8}
       >
-        <GoogleLogo size={20} />
+        <GoogleLogo size={16} />
         <Text style={[styles.googleButtonText, { color: theme.onBackground }]}>
           Continue with Google
         </Text>
@@ -167,9 +169,16 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 2,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: '#9E9E9E',
-    marginTop: 2,
+    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioFill: {
+    width: 8,
+    height: 8,
+    borderRadius: 1,
   },
   termsText: {
     flex: 1,

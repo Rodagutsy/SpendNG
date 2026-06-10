@@ -471,9 +471,8 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     paddingHorizontal: 24,
+    borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
-    ...Platform.select({
-    }),
   },
   headerRow: {
     flexDirection: 'row',
@@ -483,7 +482,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: Typography.fonts.medium, // 500 font weight
-    fontSize: Typography.sizes.titleL,// 20px similar font size
+    fontSize: Typography.sizes.titleL, // 20px similar font size
     color: '#001133',
 
   },
@@ -823,9 +822,5 @@ const styles = StyleSheet.create({
     color: '#7B786F',
     textAlign: 'center',
     lineHeight: 22,
-  },
-  nairaSymbol: {
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
-    fontWeight: '700',
   },
 });
