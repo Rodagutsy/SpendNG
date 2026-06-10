@@ -311,14 +311,16 @@ const styles = StyleSheet.create({
   },
   typePill: {
     paddingVertical: 0,
-    paddingHorizontal: 8,
+    paddingHorizontal: 2,
     borderRadius: Radius.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 'auto'
   },
   typePillText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelL,
-    alignContent: 'center',
-    verticalAlign: 'middle'
+    textAlign: 'center',
   },
   amountValue: {
     fontFamily: Typography.fonts.display,
