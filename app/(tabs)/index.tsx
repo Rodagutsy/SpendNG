@@ -8,6 +8,7 @@ import {
   StatusBar,
   Platform,
   ImageBackground,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -87,6 +88,7 @@ const CustomTransactionItem = ({
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { moneyIn, moneyOut, netBalance, transactionCount } = useMonthlyBalances();
@@ -99,6 +101,33 @@ export default function HomeScreen() {
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
   const recentTransactions = transactions.slice(0, 10);
   const flaggedCount = transactions.filter((tx) => tx.isFlaggedForReview).length;
+
+  const cardWidth = (screenWidth - 40 - Spacing[1]) / 2;
+
+  const prevMonthStart = new Date();
+  prevMonthStart.setMonth(prevMonthStart.getMonth() - 1);
+  prevMonthStart.setDate(1);
+  prevMonthStart.setHours(0, 0, 0, 0);
+  const prevMonthEnd = new Date();
+  prevMonthEnd.setDate(1);
+  prevMonthEnd.setHours(0, 0, 0, 0);
+
+  const prevMonthTxns = transactions.filter(
+    (t) => t.transactionDate >= prevMonthStart.getTime() && t.transactionDate < prevMonthEnd.getTime()
+  );
+  const prevMoneyIn = prevMonthTxns
+    .filter((t) => t.transactionType === 'credit')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const prevMoneyOut = prevMonthTxns
+    .filter((t) => t.transactionType === 'debit')
+    .reduce((sum, t) => sum + t.amount, 0);
+
+  const calcTrend = (current: number, previous: number) => {
+    if (previous === 0) return 'N/A';
+    const pct = ((current - previous) / previous) * 100;
+    const sign = pct >= 0 ? '+' : '';
+    return `${sign}${pct.toFixed(1)}%`;
+  };
 
   const formatNaira = (amount: number) => {
     const abs = Math.abs(amount);
@@ -169,15 +198,21 @@ export default function HomeScreen() {
       {/* Money In / Money Out Side-by-Side Cards */}
       <View style={styles.moneyContainer}>
         {/* Money In Card */}
-        <View style={[styles.moneyHalf, styles.moneyInHalf]}>
+        <View style={[styles.moneyHalf, styles.moneyInHalf, { width: cardWidth }]}>
           <Text style={styles.moneyLabelGreen}>Money In</Text>
           <Text style={styles.moneyInvalue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyIn)}</Text>
+          <View style={styles.trendRow}>
+            <Text style={styles.trendText}>{calcTrend(moneyIn, prevMoneyIn)} vs last month</Text>
+          </View>
         </View>
 
         {/* Money Out Card */}
-        <View style={[styles.moneyHalf, styles.moneyOutHalf]}>
+        <View style={[styles.moneyHalf, styles.moneyOutHalf, { width: cardWidth }]}>
           <Text style={styles.moneyLabelRed}>Money Out</Text>
           <Text style={styles.moneyOutvalue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyOut)}</Text>
+          <View style={styles.trendRow}>
+            <Text style={styles.trendText}>{calcTrend(moneyOut, prevMoneyOut)} vs last month</Text>
+          </View>
         </View>
       </View>
 
@@ -335,21 +370,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 24,
     height: 104,
+    gap: Spacing[1],
   },
   moneyHalf: {
-    flex: 1,
     padding: 16,
     justifyContent: 'center',
   },
   moneyInHalf: {
     backgroundColor: Colors.light.onPrimary,
-    borderTopLeftRadius: 12,
-    borderBottomLeftRadius: 12,
+    borderRadius: 12,
   },
   moneyOutHalf: {
     backgroundColor: Colors.light.onPrimary,
-    borderTopRightRadius: 12,
-    borderBottomRightRadius: 12,
+    borderRadius: 12,
   },
   moneyLabelGreen: {
     fontFamily: Typography.fonts.medium,
@@ -376,18 +409,13 @@ const styles = StyleSheet.create({
   trendRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
+    marginTop: 1,
     gap: 4,
   },
-  trendTextGreen: {
+  trendText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 11,
-    color: Colors.main.success,
-  },
-  trendTextRed: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 11,
-    color: Colors.main.error,
+    color: Colors.light.outline,
   },
   sectionHeaderContainer: {
     paddingHorizontal: 20,

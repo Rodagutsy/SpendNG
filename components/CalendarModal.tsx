@@ -247,6 +247,9 @@ const createStyles = (theme: typeof Colors.light) => StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,
     color: theme.onBackground,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   dayTextToday: {
     fontFamily: Typography.fonts.medium,

@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Platform,
   StatusBar,
-  Dimensions
+  Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Shadows, Radius } from '@/constants/Tokens';
@@ -15,6 +16,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { LinearGradient } from 'expo-linear-gradient';
 import { formatCurrency } from '@/lib/utils';
 
 const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -80,7 +82,6 @@ export default function InsightsScreen() {
   const [selectedMonth, setSelectedMonth] = useState('may2026');
   const [viewYear, setViewYear] = useState(2026);
   const [showFilter, setShowFilter] = useState(false);
-  const [filterPos, setFilterPos] = useState({ top: 0, left: 0 });
   const filterBtnRef = useRef<View>(null);
   const windowWidth = Dimensions.get('window').width;
 
@@ -234,15 +235,9 @@ export default function InsightsScreen() {
   const healthColor = pct >= 70 ? theme.roles.error : pct >= 50 ? theme.roles.warning : pct >= 0 ? theme.roles.success : theme.roles.error;
 
   const openFilter = () => {
-    filterBtnRef.current?.measureInWindow((x, y, width, height) => {
-      const match = selectedMonth.match(/^[a-z]+(\d{4})$/);
-      if (match) setViewYear(parseInt(match[1]));
-      const dropdownWidth = 280;
-      let left = x + width - dropdownWidth;
-      if (left < 12) left = 12;
-      setFilterPos({ top: y + height + 4, left });
-      setShowFilter(true);
-    });
+    const match = selectedMonth.match(/^[a-z]+(\d{4})$/);
+    if (match) setViewYear(parseInt(match[1]));
+    setShowFilter(true);
   };
 
   return (
@@ -347,7 +342,12 @@ export default function InsightsScreen() {
               </View>
 
               {/* 4. Behaviour Patterns */}
-              <View style={[styles.card, { backgroundColor: theme.primary }]}>
+              <LinearGradient
+                colors={[Colors.main.primary, Colors.dark.primary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.card}
+              >
                 <Text style={[styles.cardLabel, { color: theme.primaryContainer }]}>Behaviour Patterns</Text>
                 <View style={styles.behaviourContainer}>
                   {insights.patterns.map((pattern, i) => (
@@ -359,7 +359,7 @@ export default function InsightsScreen() {
                     </View>
                   ))}
                 </View>
-              </View>
+              </LinearGradient>
 
               {/* 5. Weekly Breakdown */}
               {insights.bestWeek && insights.worstWeek && (
@@ -407,13 +407,19 @@ export default function InsightsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      {showFilter && (
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowFilter(false)}
-        >
-          <View style={[styles.calendarDropdown, { top: filterPos.top, left: filterPos.left, backgroundColor: theme.roles.surface }]}>
+      <Modal transparent animationType="slide" visible={showFilter} onRequestClose={() => setShowFilter(false)}>
+        <View style={styles.filterOverlay}>
+          <TouchableOpacity style={styles.filterOverlayBg} activeOpacity={1} onPress={() => setShowFilter(false)} />
+          <View style={[styles.filterSheet, { backgroundColor: theme.roles.surface }]}>
+            <View style={styles.filterHandleRow}>
+              <View style={[styles.filterHandle, { backgroundColor: theme.outlineVariant }]} />
+            </View>
+            <View style={styles.filterHeader}>
+              <Text style={[styles.filterTitle, { color: theme.roles.onSurface }]}>Select Month</Text>
+              <TouchableOpacity style={styles.filterCloseBtn} onPress={() => setShowFilter(false)} activeOpacity={0.7}>
+                <MaterialIcons name="close" size={20} color={theme.roles.onSurface} />
+              </TouchableOpacity>
+            </View>
             <View style={styles.calendarYearRow}>
               <TouchableOpacity onPress={() => setViewYear(viewYear - 1)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <MaterialIcons name="chevron-left" size={22} color={theme.roles.onSurface} />
@@ -432,11 +438,7 @@ export default function InsightsScreen() {
                 return (
                   <TouchableOpacity
                     key={monthKey}
-                    style={[
-                      styles.calendarMonthBtn,
-                      isSelected && { backgroundColor: theme.roles.primary },
-                      !hasCalendarData && styles.calendarMonthBtnDisabled,
-                    ]}
+                    style={styles.calendarMonthCell}
                     onPress={() => {
                       if (hasCalendarData) {
                         setSelectedMonth(monthKey);
@@ -446,20 +448,30 @@ export default function InsightsScreen() {
                     disabled={!hasCalendarData}
                     activeOpacity={0.7}
                   >
-                    <Text style={[
-                      styles.calendarMonthLabel,
-                      isSelected && { color: theme.onPrimary, fontFamily: Typography.fonts.medium },
-                      !hasCalendarData && { color: theme.outlineVariant },
+                    <View style={[
+                      styles.calendarMonthBtn,
+                      isSelected
+                        ? { backgroundColor: theme.roles.primary, borderColor: theme.roles.primary }
+                        : { borderColor: theme.roles.primary },
+                      !hasCalendarData && styles.calendarMonthBtnDisabled,
                     ]}>
-                      {label}
-                    </Text>
+                      <Text style={[
+                        styles.calendarMonthLabel,
+                        isSelected
+                          ? { color: theme.onPrimary }
+                          : { color: theme.roles.primary },
+                        !hasCalendarData && { color: theme.outlineVariant },
+                      ]}>
+                        {label}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
-        </TouchableOpacity>
-      )}
+        </View>
+      </Modal>
     </>
   );
 }
@@ -495,35 +507,61 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: 13,
   },
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'transparent',
+  filterOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
   },
-  calendarDropdown: {
-    position: 'absolute',
-    borderRadius: 16,
-    padding: 16,
-    width: 280,
+  filterOverlayBg: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  filterSheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+    paddingHorizontal: 20,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
         shadowRadius: 12,
       },
-      android: { elevation: 8 },
+      android: { elevation: 16 },
     }),
+  },
+  filterHandleRow: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  filterHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+  },
+  filterHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  filterTitle: {
+    fontFamily: Typography.fonts.display,
+    fontSize: Typography.sizes.titleS,
+  },
+  filterCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   calendarYearRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
-    paddingHorizontal: 4,
   },
   calendarYearText: {
     fontFamily: Typography.fonts.display,
@@ -533,19 +571,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
+  calendarMonthCell: {
+    width: '25%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
   calendarMonthBtn: {
-    width: '20%',
-    aspectRatio: 1.4,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: Radius.full,
   },
   calendarMonthBtnDisabled: {
     opacity: 0.3,
+    borderWidth: 0,
   },
   calendarMonthLabel: {
     fontFamily: Typography.fonts.body,
-    fontSize: 14,
+    fontSize: 16,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
   scrollContainer: {
     flex: 1,
@@ -727,11 +776,11 @@ const styles = StyleSheet.create({
   weeklyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 8,
   },
   weeklyArrowCircle: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
@@ -747,12 +796,12 @@ const styles = StyleSheet.create({
   weeklyRowDate: {
     fontFamily: Typography.fonts.body,
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 0,
   },
   weeklyAmount: {
-    fontFamily: Typography.fonts.body,
+    fontFamily: Typography.fonts.medium,
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   weeklyDivider: {
     height: 1,
