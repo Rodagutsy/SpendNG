@@ -122,8 +122,8 @@ export default function TransactionDetailScreen() {
             <Text style={[styles.merchantName, { color: theme.onBackground }]}>
               {transaction.merchantName ?? 'Unknown'}
             </Text>
-            <View style={[styles.typePill, { backgroundColor: pillBg }]}>
-              <Text style={[styles.typePillText, { color: theme.onPrimary }]}>
+            <View style={[styles.typePill, { backgroundColor: Colors.light.error, width: '20%', borderColor: Colors.main.error, borderWidth: 1 }]}>
+              <Text style={[styles.typePillText, { color: Colors.main.error }]}>
                 {isDebit ? 'Debit' : 'Credit'}
               </Text>
             </View>
@@ -203,8 +203,8 @@ export default function TransactionDetailScreen() {
               </View>
             ) : (
               <TouchableOpacity style={styles.addReceiptDetailBtn} onPress={handlePickReceipt} activeOpacity={0.8}>
-                <MaterialIcons name="add-a-photo" size={22} color={theme.outline} />
-                <Text style={[styles.addReceiptDetailText, { color: theme.outline }]}>Add Receipt Image</Text>
+                <MaterialIcons name="add-a-photo" size={20} color={theme.outline} />
+                <Text style={[styles.addReceiptDetailText, { color: theme.outline }]}>No Receipt yet</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -310,13 +310,15 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.headlineS,
   },
   typePill: {
-    paddingVertical: 4,
-    paddingHorizontal: 14,
+    paddingVertical: 0,
+    paddingHorizontal: 8,
     borderRadius: Radius.full,
   },
   typePillText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelL,
+    alignContent: 'center',
+    verticalAlign: 'middle'
   },
   amountValue: {
     fontFamily: Typography.fonts.display,
@@ -346,7 +348,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 12,
     overflow: 'hidden',
   },
   infoRow: {

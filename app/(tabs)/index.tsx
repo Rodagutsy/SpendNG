@@ -20,70 +20,7 @@ import { useMonthlyBalances, useTransactionStore } from '@/lib/stores/transactio
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useAuth } from '@/context/AuthContext';
 import { TransactionModal } from '@/components/TransactionModal';
-
-
-
-interface CustomTransactionProps {
-  merchant: string;
-  bankAndDate: string;
-  amount: string;
-  category: string;
-  isDebit: boolean;
-  onPress?: () => void;
-}
-
-const CustomTransactionItem = ({
-  merchant,
-  bankAndDate,
-  amount,
-  category,
-  isDebit,
-  onPress
-}: CustomTransactionProps) => {
-  const colorScheme = useColorScheme() ?? 'light';
-  const theme = Colors[colorScheme];
-  return (
-    <TouchableOpacity
-      style={styles.transactionContainer}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      {/* Avatar Letter */}
-      <View style={[styles.iconCircle, { backgroundColor: isDebit ? Colors.main.error : Colors.main.success }]}>
-        <Text style={styles.avatarLetter}>
-          {(merchant || '?')[0].toUpperCase()}
-        </Text>
-      </View>
-
-      {/* Middle Content */}
-      <View style={styles.transactionMiddle}>
-        <Text style={[styles.merchantText, { color: theme.onSurface }]} numberOfLines={1}>
-          {merchant}
-        </Text>
-        <Text style={[styles.detailText, { color: theme.outline }]} numberOfLines={1}>
-          {bankAndDate}
-        </Text>
-      </View>
-
-      {/* Right Content */}
-      <View style={styles.transactionRight}>
-        <Text
-          style={[
-            styles.amountText,
-            { color: isDebit ? Colors.main.error : Colors.main.success }
-          ]}
-        >
-          {isDebit ? '-' : '+'}
-          <Text style={styles.nairaSymbol}>₦</Text>
-          {amount}
-        </Text>
-        <Text style={[styles.categoryText, { color: theme.outline }]} numberOfLines={1}>
-          {category}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
-};
+import { TransactionItem } from '@/components/ui/TransactionItem';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -117,6 +54,10 @@ export default function HomeScreen() {
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
   const recentTransactions = transactions.slice(0, 10);
   const flaggedCount = transactions.filter((tx) => tx.isFlaggedForReview).length;
+  const recentResolved = recentTransactions.map((t) => {
+    const cat = useCategoryStore.getState().getCategoryById(t.categoryId);
+    return { ...t, categoryName: cat?.name ?? 'Uncategorized', categoryIcon: cat?.iconIdentifier ?? 'help-circle', categoryColor: cat?.colorHex ?? '#ADAAA4' };
+  });
 
   const cardWidth = (screenWidth - 40 - Spacing[1]) / 2;
 
@@ -158,15 +99,6 @@ export default function HomeScreen() {
     const d = new Date(ts);
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-  };
-
-  const getCategoryName = (categoryId: string) => {
-    const cat = useCategoryStore.getState().getCategoryById(categoryId);
-    return cat?.name || categoryId;
-  };
-
-  const getAccountLabel = (tx: (typeof transactions)[0]) => {
-    return tx.accountName || 'Account';
   };
 
   const openNotifications = useCallback(() => {
@@ -277,20 +209,24 @@ export default function HomeScreen() {
                 <Text style={styles.seeAllText}>View all</Text>
               </TouchableOpacity>
             </View>
-            {recentTransactions.length === 0 ? (
+            {recentResolved.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>No transactions yet</Text>
                 <Text style={styles.emptyStateSubtext}>Tap the + button to add your first transaction</Text>
               </View>
-            ) : recentTransactions.map((item, index) => (
+            ) : recentResolved.map((item, index) => (
               <React.Fragment key={item.id}>
                 {index > 0 && <View style={styles.separator} />}
-                <CustomTransactionItem
+                <TransactionItem
                   merchant={item.merchantName || 'Unknown'}
-                  bankAndDate={`${getAccountLabel(item)} • ${formatDate(item.transactionDate)}`}
-                  amount={formatNaira(item.amount)}
-                  category={getCategoryName(item.categoryId)}
-                  isDebit={item.transactionType === 'debit'}
+                  category={item.categoryName}
+                  account={item.accountName || ''}
+                  icon={item.categoryIcon}
+                  color={item.categoryColor}
+                  amount={item.amount}
+                  type={item.transactionType}
+                  date={formatDate(item.transactionDate)}
+                  isFlagged={item.isFlaggedForReview}
                   onPress={() => router.push(`/transactions/${item.id}` as any)}
                 />
               </React.Fragment>
@@ -534,26 +470,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.primary,
   },
-  transactionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    height: 76,
-  },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  avatarLetter: {
-    fontFamily: Typography.fonts.display,
-    fontSize: Typography.sizes.titleM,
-    color: Colors.light.onPrimary,
-  },
   emptyState: {
     alignItems: 'center',
     paddingVertical: 48,
@@ -570,35 +486,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.outline,
     textAlign: 'center',
-  },
-  transactionMiddle: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  merchantText: {
-    fontFamily: Typography.fonts.title,
-    fontSize: 16,
-    color: Colors.light.onSurface,
-  },
-  detailText: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 13,
-    color: Colors.light.outline,
-    marginTop: 2,
-  },
-  transactionRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  amountText: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 16,
-  },
-  categoryText: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 12,
-    color: Colors.light.outline,
-    marginTop: 2,
   },
   separator: {
     height: 1,
