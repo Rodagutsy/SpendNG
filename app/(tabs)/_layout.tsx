@@ -2,7 +2,7 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { View, TouchableOpacity, Text, StyleSheet, Platform } from 'react-native';
 import { HouseSimpleIcon, LightningIcon, PiggyBankIcon, UserIcon } from '@/components/ui/CustomSvgIcon';
-import { Colors, Typography } from '@/constants/Tokens';
+import { Colors, Typography, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
@@ -10,7 +10,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const theme = Colors[colorScheme];
 
   return (
-    <View style={[styles.tabBarContainer, { backgroundColor: theme.surface, borderTopColor: theme.outlineVariant }]}>
+    <View style={[styles.tabBarContainer, Shadows.large, { backgroundColor: theme.surface }]}>
       {state.routes.map((route: any, index: number) => {
         // Only render known tab routes — skip all auto-discovered sub-pages
         const VISIBLE_TABS = ['index', 'transactions/index', 'insights/index', 'settings'];
@@ -40,18 +40,21 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
         // Match the exact route mapping and tab labels
         let icon = null;
         let label = '';
-        
+
+        const activeColor = theme.primary;
+        const inactiveColor = theme.outline;
+
         if (route.name === 'index') {
-          icon = <HouseSimpleIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
+          icon = <HouseSimpleIcon size={20} color={isFocused ? activeColor : inactiveColor} />;
           label = 'Home';
         } else if (route.name === 'transactions/index') {
-          icon = <PiggyBankIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
+          icon = <PiggyBankIcon size={20} color={isFocused ? activeColor : inactiveColor} />;
           label = 'Activity';
         } else if (route.name === 'insights/index') {
-          icon = <LightningIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
+          icon = <LightningIcon size={20} color={isFocused ? activeColor : inactiveColor} />;
           label = 'Insights';
         } else if (route.name === 'settings') {
-          icon = <UserIcon size={20} color={isFocused ? '#003399' : '#7B786F'} />;
+          icon = <UserIcon size={20} color={isFocused ? activeColor : inactiveColor} />;
           label = 'Profile';
         }
 
@@ -64,9 +67,9 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             activeOpacity={0.8}
           >
             {isFocused ? (
-              <View style={styles.activePill}>
+              <View style={[styles.activePill, { backgroundColor: theme.primaryContainer }]}>
                 {icon}
-                <Text style={styles.activeLabel}>{label}</Text>
+                <Text style={[styles.activeLabel, { color: theme.primary }]}>{label}</Text>
               </View>
             ) : (
               <View style={styles.inactiveIconWrapper}>
@@ -133,25 +136,11 @@ const styles = StyleSheet.create({
   tabBarContainer: {
     flexDirection: 'row',
     height: Platform.OS === 'ios' ? 96 : 76,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingBottom: Platform.OS === 'ios' ? 28 : 10,
     paddingTop: 10,
     paddingHorizontal: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
   },
   tabButton: {
     flex: 1,
@@ -161,16 +150,15 @@ const styles = StyleSheet.create({
   activePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EBF2FC',
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 20,
-    gap: 6,
+    gap: 4,
   },
   activeLabel: {
-    color: '#003399',
     fontFamily: Typography.fonts.medium,
-    fontSize: 13,
+    fontSize: 14,
+    fontWeight: 'black'
   },
   inactiveIconWrapper: {
     padding: 8,
