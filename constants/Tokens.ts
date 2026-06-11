@@ -38,7 +38,7 @@ export const Palette = {
     90: '#ffdedeff',
   },
   warning: {
-    main: '#FFA000',
+    main: '#ec9600ff',
     30: '#623c00ff',
     90: '#ffdbb1ff',
   },

@@ -164,8 +164,11 @@ export default function TaxPrepScreen() {
   const getCategoryColor = (id: string) => categories.find((c) => c.id === id)?.colorHex ?? theme.outline;
 
   const taxClassColor = (id: string | null | undefined) => {
-    const tc = id ? getTaxClassById(id) : undefined;
-    return tc?.direction === 'income' ? Colors.main.primary : Colors.main.warning;
+    if (!id) return theme.outline;
+    const tc = getTaxClassById(id);
+    if (!tc) return theme.outline;
+    if (id === 'non-taxable-receipt') return theme.outline;
+    return tc.direction === 'income' ? theme.primary : Colors.main.warning;
   };
 
   const mappedCategories = useMemo(
@@ -281,22 +284,10 @@ export default function TaxPrepScreen() {
         <View style={styles.txSection}>
           <View style={styles.txSectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Transactions</Text>
-            {unclassifiedCount > 0 && (
-              <TouchableOpacity
-                style={[styles.applyDefaultsBtn, { backgroundColor: Colors.main.warning + '1A' }]}
-                onPress={handleApplyCategoryDefaults}
-                disabled={applying}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.applyDefaultsText, { color: Colors.main.warning }]}>
-                  {applying ? 'Applying...' : 'Apply Defaults'}
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
 
           {/* Filter Tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
             {FILTER_TABS.map((tab) => (
               <Chip
                 key={tab.key}
@@ -306,6 +297,19 @@ export default function TaxPrepScreen() {
               />
             ))}
           </ScrollView>
+
+          {/* Apply Defaults — only visible when Unclassified tab is active */}
+          {activeFilter === 'unclassified' && unclassifiedCount > 0 && (
+            <View style={styles.applyDefaultsRow}>
+              <Button
+                title={applying ? 'Applying...' : `Apply Defaults (${unclassifiedCount})`}
+                size="small"
+                onPress={handleApplyCategoryDefaults}
+                disabled={applying}
+                loading={applying}
+              />
+            </View>
+          )}
 
           {/* Selection Actions */}
           {selectedIds.size > 0 && (
@@ -506,19 +510,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  applyDefaultsBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.full,
-  },
-  applyDefaultsText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 12,
+  applyDefaultsRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
   },
   filterRow: {
     flexDirection: 'row',
-    marginBottom: 8,
+    marginBottom: 4,
     marginTop: 2,
+    gap: 8,
   },
   selectionBar: {
     flexDirection: 'row',
