@@ -19,6 +19,7 @@ import { BellIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useMonthlyBalances, useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useTaxStore } from '@/lib/stores/taxStore';
 import { useAuth } from '@/context/AuthContext';
 import { TransactionModal } from '@/components/TransactionModal';
 import { TransactionItem } from '@/components/ui/TransactionItem';
@@ -37,8 +38,35 @@ export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const [showTxModal, setShowTxModal] = useState(false);
+  const [bannerDismissedAt, setBannerDismissedAt] = useState<number | null>(null);
 
   const closeNotifications = () => setShowNotifications(false);
+
+  const taxSteps = useTaxStore((s) => s.steps);
+  const stepsDone = taxSteps.filter((s) => s.done).length;
+  const hasStartedReview = stepsDone > 0;
+  const now = new Date();
+  const month = now.getMonth();
+  const isFilingSeason = month >= 0 && month <= 2;
+  const bannerVisible = !bannerDismissedAt || (Date.now() - bannerDismissedAt > 30 * 86400000);
+
+  let bannerTitle: string;
+  let bannerCta: string;
+  let bannerOverlayColor: string;
+
+  if (hasStartedReview) {
+    bannerTitle = `Tax review ${stepsDone} of 4 steps complete`;
+    bannerCta = 'Continue';
+    bannerOverlayColor = 'rgba(0, 26, 77, 0.88)';
+  } else if (isFilingSeason) {
+    bannerTitle = 'Filing season is here. Prepare your tax file now.';
+    bannerCta = 'Prepare Tax File';
+    bannerOverlayColor = 'rgba(107, 78, 255, 0.88)';
+  } else {
+    bannerTitle = 'Your records are building up. Start your tax review anytime.';
+    bannerCta = 'Review Records';
+    bannerOverlayColor = 'rgba(0, 26, 77, 0.88)';
+  }
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
   const recentTransactions = transactions.slice(0, 10);
@@ -176,26 +204,35 @@ export default function HomeScreen() {
       </View>
 
       {/* Tax Filing Alert */}
-      <ImageBackground
-        source={require('@/assets/images/dashboard_overview.png')}
-        style={[styles.taxAlert, Shadows.sm]}
-        imageStyle={styles.taxAlertImage}
-      >
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0, 26, 77, 0.88)', borderRadius: 12 }]} />
-        <Text style={styles.taxAlertText}>
-          Ready to review and export your record for tax filing?
-        </Text>
-        <TouchableOpacity
-          style={styles.taxFileBtn}
-          onPress={() => router.push('/transactions' as any)}
-          activeOpacity={0.8}
+      {bannerVisible && (
+        <ImageBackground
+          source={require('@/assets/images/dashboard_overview.png')}
+          style={[styles.taxAlert, Shadows.sm]}
+          imageStyle={styles.taxAlertImage}
         >
-          <Text style={styles.taxFileBtnText}>Review Now!</Text>
-        </TouchableOpacity>
-      </ImageBackground>
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: bannerOverlayColor, borderRadius: 12 }]} />
+          <View style={styles.taxAlertContent}>
+            <Text style={styles.taxAlertText}>{bannerTitle}</Text>
+            <TouchableOpacity
+              style={[styles.taxFileBtn, hasStartedReview && { backgroundColor: Colors.main.warning }]}
+              onPress={() => router.push('/(tabs)/tax-prep')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.taxFileBtnText}>{bannerCta}</Text>
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={styles.bannerDismiss}
+            onPress={() => setBannerDismissedAt(Date.now())}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialIcons name="close" size={16} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+        </ImageBackground>
+      )}
 
     </View>
-  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications]);
+  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications, bannerVisible, bannerOverlayColor, bannerTitle, bannerCta, hasStartedReview, bannerDismissedAt]);
 
   return (
     <>
@@ -424,18 +461,20 @@ const styles = StyleSheet.create({
   },
   taxAlert: {
     marginHorizontal: 20,
-    height: 'auto',
     borderRadius: 12,
+    overflow: 'hidden',
+    marginTop: 24,
+    position: 'relative',
+  },
+  taxAlertImage: {
+    borderRadius: 12,
+  },
+  taxAlertContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 18,
     paddingVertical: 18,
-    overflow: 'hidden',
-    marginTop: 24,
-  },
-  taxAlertImage: {
-    borderRadius: 12,
   },
   taxAlertText: {
     flex: 1,
@@ -443,7 +482,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.light.onPrimary,
     lineHeight: 20,
-    marginRight: 12,
+  },
+  bannerDismiss: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   taxFileBtn: {
     height: 36,

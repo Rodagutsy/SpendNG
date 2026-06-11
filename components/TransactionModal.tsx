@@ -14,6 +14,7 @@ import {
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { FormField } from '@/components/ui/FormField';
 import { AmountInput } from '@/components/ui/AmountInput';
 import { DropdownField } from '@/components/ui/DropdownField';
@@ -69,6 +70,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const styles = useMemo(() => createStyles(theme, step2MaxHeight), [theme, step2MaxHeight]);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
   const updateTransaction = useTransactionStore((s) => s.updateTransaction);
+  const getCategoryById = useCategoryStore((s) => s.getCategoryById);
   const isEditing = !!transaction;
 
   const [step, setStep] = useState(1);
@@ -89,6 +91,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
 
   const [nameFocused, setNameFocused] = useState(false);
   const [notesFocused, setNotesFocused] = useState(false);
+  const [whtEnabled, setWhtEnabled] = useState(false);
+  const [whtAmountText, setWhtAmountText] = useState('');
+  const [whtClientName, setWhtClientName] = useState('');
+  const [taxClass, setTaxClass] = useState<'personal' | 'business' | 'shared' | null>(null);
+  const [showTaxClassSheet, setShowTaxClassSheet] = useState(false);
 
   useEffect(() => {
     if (transaction && visible) {
@@ -107,8 +114,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
       setNotes(transaction.notes ?? '');
       setConfidenceLevel(transaction.confidenceLevel);
       setReceiptUri(transaction.receiptImageUri);
+      setTaxClass(transaction.taxClassification);
+      setWhtEnabled(transaction.whtAmount != null);
+      setWhtAmountText(transaction.whtAmount ? String(transaction.whtAmount) : '');
+      setWhtClientName(transaction.whtClientName ?? '');
     }
   }, [transaction, visible]);
+
+  useEffect(() => {
+    if (!isEditing && category) {
+      const cat = getCategoryById(category);
+      if (cat?.defaultTaxClassification) {
+        setTaxClass(cat.defaultTaxClassification);
+      }
+    }
+  }, [category, isEditing]);
 
   const categories = type === 'credit' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
@@ -125,6 +145,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     setNotes('');
     setReceiptUploading(false);
     setReceiptUri(null);
+    setWhtEnabled(false);
+    setWhtAmountText('');
+    setWhtClientName('');
+    setTaxClass(null);
   };
 
   const handleClose = () => {
@@ -180,6 +204,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
       }
     }
 
+    const whtVal = whtEnabled && whtAmountText ? parseFloat(whtAmountText) : null;
+
     if (isEditing && transaction) {
       await updateTransaction(transaction.id, {
         amount: numericAmount,
@@ -191,6 +217,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
         notes: notes || description || null,
         confidenceLevel,
         receiptImageUri: receiptUri,
+        whtAmount: whtVal,
+        whtClientName: whtEnabled ? (whtClientName || null) : null,
+        taxClassification: taxClass,
       });
     } else {
       await addTransaction({
@@ -205,7 +234,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
         availableBalance: null,
         sourceChannel: 'manual',
         notes: notes || description || null,
-        taxClassification: null,
+        taxClassification: taxClass,
         confidenceLevel,
         originalMessage: null,
         isFlaggedForReview: false,
@@ -347,6 +376,38 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                 />
               </FormField>
 
+              {/* WHT — income only */}
+              {type === 'credit' && (
+                <View style={styles.whtSection}>
+                  <TouchableOpacity style={styles.whtToggleRow} onPress={() => setWhtEnabled(!whtEnabled)} activeOpacity={0.7}>
+                    <MaterialIcons name="receipt-long" size={18} color={theme.outlineVariant} />
+                    <Text style={styles.whtToggleLabel}>Was tax withheld by client?</Text>
+                    <View style={[styles.checkbox, whtEnabled && styles.checkboxOn]}>
+                      {whtEnabled && <MaterialIcons name="check" size={14} color={Colors.light.surface} />}
+                    </View>
+                  </TouchableOpacity>
+                  {whtEnabled && (
+                    <View style={styles.whtFields}>
+                      <FormField label="WHT Amount">
+                        <AmountInput value={whtAmountText} onChangeText={setWhtAmountText} placeholder="0.00" />
+                      </FormField>
+                      <FormField label="Client Name (optional)">
+                        <View style={[styles.textInputWrap, { borderColor: theme.outlineVariant }]}>
+                          <TextInput
+                            style={[styles.textInputInner, { outlineStyle: 'none' } as any]}
+                            value={whtClientName}
+                            onChangeText={setWhtClientName}
+                            placeholder="e.g. Payoneer, Upwork"
+                            placeholderTextColor={theme.outline}
+                            underlineColorAndroid="transparent"
+                          />
+                        </View>
+                      </FormField>
+                    </View>
+                  )}
+                </View>
+              )}
+
               {/* Notes */}
               <FormField label="Notes (optional)">
                 <View style={[styles.textInputWrap, styles.notesWrap, notesFocused && styles.textInputWrapFocused]}>
@@ -383,6 +444,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                   </TouchableOpacity>
                 )}
               </View>
+
+              {/* Tax Classification — auto-filled, scroll to see */}
+              <FormField label="Tax Classification">
+                <DropdownField
+                  value={taxClass ? taxClass.charAt(0).toUpperCase() + taxClass.slice(1) : ''}
+                  placeholder="Auto from category"
+                  onPress={() => setShowTaxClassSheet(true)}
+                />
+              </FormField>
             </ScrollView>
           )}
 
@@ -457,6 +527,34 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                     {pm.label}
                   </Text>
                   {paymentMethod === pm.id && <MaterialIcons name="check" size={18} color={theme.primary} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </TouchableOpacity>
+        )}
+
+        {/* Tax Classification Picker */}
+        {showTaxClassSheet && (
+          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowTaxClassSheet(false)}>
+            <View style={[styles.pickerModal, { backgroundColor: theme.surface }]}>
+              <Text style={[styles.pickerTitle, { color: theme.onSurface }]}>Tax Classification</Text>
+              {[
+                { key: 'personal' as const, label: 'Personal', desc: 'Not deductible — excluded from filing' },
+                { key: 'business' as const, label: 'Business', desc: 'Fully deductible / reportable income' },
+                { key: 'shared' as const, label: 'Shared', desc: 'Mixed-use — pro-rated calculation' },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.pickerOption, taxClass === opt.key && { backgroundColor: theme.primaryContainer }]}
+                  onPress={() => { setTaxClass(opt.key); setShowTaxClassSheet(false); }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.pickerOptionText, { color: theme.onSurface }, taxClass === opt.key && { fontFamily: Typography.fonts.display }]}>
+                      {opt.label}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: theme.outline, fontFamily: Typography.fonts.body }}>{opt.desc}</Text>
+                  </View>
+                  {taxClass === opt.key && <MaterialIcons name="check" size={18} color={theme.primary} />}
                 </TouchableOpacity>
               ))}
             </View>
@@ -740,6 +838,40 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
     fontFamily: Typography.fonts.display,
     fontSize: 14,
     color: theme.onPrimary,
+  },
+  whtSection: {
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: theme.ripple,
+  },
+  whtToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  whtToggleLabel: {
+    flex: 1,
+    fontFamily: Typography.fonts.body,
+    fontSize: 13,
+    color: theme.onSurface,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: theme.outlineVariant,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxOn: {
+    backgroundColor: theme.primary,
+    borderColor: theme.primary,
+  },
+  whtFields: {
+    marginTop: 12,
+    gap: 10,
   },
   receiptSection: {
     marginTop: 8,

@@ -7,6 +7,7 @@ import { useAlert } from '@/context/AlertContext';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { TransactionModal } from '@/components/TransactionModal';
+import { TaxClassSheet } from '@/components/tax/TaxClassSheet';
 import { format } from 'date-fns';
 import { useMemo, useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
@@ -36,6 +37,7 @@ export default function TransactionDetailScreen() {
 
   const { showAlert } = useAlert();
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showTaxSheet, setShowTaxSheet] = useState(false);
 
 
   if (!transaction) {
@@ -116,6 +118,14 @@ export default function TransactionDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Warning banner for unclassified */}
+        {!transaction.taxClassification && (
+          <TouchableOpacity style={styles.warningBanner} onPress={() => setShowTaxSheet(true)} activeOpacity={0.8}>
+            <MaterialIcons name="warning" size={18} color={Colors.main.warning} />
+            <Text style={styles.warningBannerText}>Tax class not set — tap to assign</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Hero */}
         <View style={[styles.heroSection, { backgroundColor: heroBg }]}>
           <View style={styles.heroTopRow}>
@@ -168,18 +178,37 @@ export default function TransactionDetailScreen() {
               <Text style={[styles.infoValue, { color: theme.outline }]}>{sourceLabel}</Text>
             </View>
 
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Tax</Text>
-              <View style={[styles.pill, {
-                backgroundColor: taxLabel === 'Unclassified' ? Colors.main.warning : Colors.light.secondaryContainer
-              }]}>
-                <Text style={[styles.pillText, {
-                  color: taxLabel === 'Unclassified' ? Colors.main.warning : Colors.light.secondary
-                }]}>{taxLabel}</Text>
-              </View>
-            </View>
           </View>
         </View>
+
+        {/* WHT Breakdown — income with WHT */}
+        {!isDebit && transaction.whtAmount != null && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: theme.outline }]}>WHT Breakdown</Text>
+            <View style={[styles.card, { backgroundColor: theme.surface }]}>
+              <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: theme.outlineVariant }]}>
+                <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Gross Amount</Text>
+                <Text style={[styles.infoValue, { color: theme.onBackground }]}>₦{Math.abs(transaction.amount).toLocaleString('en-US')}</Text>
+              </View>
+              <View style={[styles.infoRow, styles.infoRowBorder, { borderBottomColor: theme.outlineVariant }]}>
+                <Text style={[styles.infoLabel, { color: theme.onBackground }]}>WHT Deducted</Text>
+                <Text style={[styles.infoValue, { color: Colors.main.error }]}>-₦{transaction.whtAmount.toLocaleString('en-US')}</Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { fontFamily: Typography.fonts.medium, color: theme.onBackground }]}>Net Received</Text>
+                <Text style={[styles.infoValue, { fontFamily: Typography.fonts.display, color: Colors.main.success, fontSize: Typography.sizes.titleM }]}>
+                  ₦{(Math.abs(transaction.amount) - transaction.whtAmount).toLocaleString('en-US')}
+                </Text>
+              </View>
+              {transaction.whtClientName && (
+                <View style={[styles.infoRow, { borderTopWidth: 0.5, borderTopColor: theme.outlineVariant }]}>
+                  <Text style={[styles.infoLabel, { color: theme.outline, fontSize: Typography.sizes.labelM }]}>Client</Text>
+                  <Text style={[styles.infoValue, { color: theme.outline, fontSize: Typography.sizes.labelM }]}>{transaction.whtClientName}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Notes */}
         <View style={styles.section}>
@@ -214,6 +243,29 @@ export default function TransactionDetailScreen() {
           </View>
         </View>
 
+        {/* Tax Classification */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.outline }]}>Tax Classification</Text>
+          <TouchableOpacity style={[styles.card, styles.taxSectionCard, { backgroundColor: theme.surface }]} onPress={() => setShowTaxSheet(true)} activeOpacity={0.7}>
+            <View style={[styles.taxSectionLeft]}>
+              <MaterialIcons name="receipt" size={20} color={taxKey ? Colors.light.secondary : Colors.main.warning} />
+              <View>
+                <Text style={[styles.taxSectionLabel, { color: theme.onBackground }]}>Tax Classification</Text>
+                <Text style={[styles.taxSectionDesc, { color: theme.outline }]}>
+                  {taxKey ? TAX_LABELS[taxKey] : 'Not set'}
+                </Text>
+              </View>
+            </View>
+            <View style={[styles.pill, {
+              backgroundColor: taxKey ? Colors.light.secondaryContainer : Colors.main.warning + '20'
+            }]}>
+              <Text style={[styles.pillText, {
+                color: taxKey ? Colors.light.secondary : Colors.main.warning
+              }]}>{taxLabel}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Actions */}
         <View style={styles.section}>
           <View style={styles.actionsRow}>
@@ -236,6 +288,13 @@ export default function TransactionDetailScreen() {
       </ScrollView>
 
       <TransactionModal visible={showEditModal} onClose={() => setShowEditModal(false)} transaction={transaction} />
+
+      <TaxClassSheet
+        visible={showTaxSheet}
+        onClose={() => setShowTaxSheet(false)}
+        onSelect={(cls) => updateTransaction(id, { taxClassification: cls })}
+        current={transaction.taxClassification}
+      />
     </View>
   );
 }
@@ -461,5 +520,44 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: 13,
     color: Colors.light.outline,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: Spacing[4],
+    marginTop: Spacing[4],
+    paddingVertical: 10,
+    paddingHorizontal: Spacing[4],
+    backgroundColor: Colors.main.warning + '18',
+    borderRadius: Radius.sm,
+  },
+  warningBannerText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.bodyM,
+    color: Colors.main.warning,
+    flex: 1,
+  },
+  taxSectionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: Spacing[2],
+    paddingHorizontal: Spacing[4],
+    minHeight: 56,
+  },
+  taxSectionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  taxSectionLabel: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.bodyM,
+  },
+  taxSectionDesc: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelM,
+    marginTop: 1,
   },
 });

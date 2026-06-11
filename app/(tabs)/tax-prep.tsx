@@ -15,6 +15,11 @@ import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useTaxStore } from '@/lib/stores/taxStore';
+import { StepIncomeReview } from '@/components/tax/StepIncomeReview';
+import { StepExpenseReview } from '@/components/tax/StepExpenseReview';
+import { StepWhtReview } from '@/components/tax/StepWhtReview';
+import { StepTaxSummary } from '@/components/tax/StepTaxSummary';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type TaxFilter = 'all' | 'unclassified' | 'personal' | 'business' | 'shared';
@@ -45,9 +50,13 @@ export default function TaxPrepScreen() {
   const categories = useCategoryStore((s) => s.categories);
   const updateDefaultTaxClassification = useCategoryStore((s) => s.updateDefaultTaxClassification);
 
+  const taxSteps = useTaxStore((s) => s.steps);
+  const stepsDone = taxSteps.filter((s) => s.done).length;
+
   const [activeFilter, setActiveFilter] = useState<TaxFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  const [activeStep, setActiveStep] = useState<0 | 1 | 2 | 3 | null>(null);
 
   const filteredTransactions = useMemo(() => {
     if (activeFilter === 'all') return transactions;
@@ -144,6 +153,21 @@ export default function TaxPrepScreen() {
     }
   }, [updateDefaultTaxClassification, showAlert]);
 
+  const handleStartReview = useCallback(() => {
+    const firstIncomplete = taxSteps.findIndex((s) => !s.done);
+    setActiveStep(Math.max(0, firstIncomplete) as 0 | 1 | 2 | 3);
+  }, [taxSteps]);
+
+  const handleStepComplete = useCallback(() => {
+    if (activeStep === null) return;
+    const next = activeStep + 1;
+    if (next <= 3) {
+      setActiveStep(next as 0 | 1 | 2 | 3);
+    } else {
+      setActiveStep(null);
+    }
+  }, [activeStep]);
+
   const getCategoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? 'Unknown';
 
   const getCategoryColor = (id: string) => categories.find((c) => c.id === id)?.colorHex ?? theme.outline;
@@ -164,10 +188,50 @@ export default function TaxPrepScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <MaterialIcons name="arrow-back" size={22} color={theme.onBackground} />
           </TouchableOpacity>
           <Text style={[styles.title, { color: theme.onBackground }]}>Tax Prep</Text>
+        </View>
+
+        {/* Tax Review Progress */}
+        <View style={[styles.progressCard, { backgroundColor: theme.surface }]}>
+          <View style={styles.progressHeader}>
+            <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Tax Review Progress</Text>
+            <Text style={[styles.progressCount, { color: theme.outline }]}>{stepsDone}/4</Text>
+          </View>
+          <View style={[styles.progressBar, { backgroundColor: theme.surfaceContainerLow }]}>
+            <View style={[styles.progressFill, { width: `${(stepsDone / 4) * 100}%`, backgroundColor: Colors.main.warning }]} />
+          </View>
+          <View style={styles.stepsRow}>
+            {['Income', 'Expenses', 'WHT', 'Summary'].map((label, i) => (
+              <View key={i} style={styles.stepIndicator}>
+                <View style={[styles.stepDot, taxSteps[i]?.done && { backgroundColor: Colors.main.success }]}>
+                  {taxSteps[i]?.done ? (
+                    <MaterialIcons name="check" size={12} color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.stepDotText}>{i + 1}</Text>
+                  )}
+                </View>
+                <Text style={[styles.stepLabel, { color: taxSteps[i]?.done ? theme.onBackground : theme.outline }]}>{label}</Text>
+                {(taxSteps[i]?.flaggedCount ?? 0) > 0 && (
+                  <View style={[styles.flagBadge, { backgroundColor: Colors.main.error }]}>
+                    <Text style={styles.flagBadgeText}>{taxSteps[i]!.flaggedCount}</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={[styles.startBtn, { backgroundColor: stepsDone === 4 ? Colors.main.success : Colors.main.warning }]}
+            onPress={handleStartReview}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name={stepsDone === 0 ? 'play-arrow' : 'arrow-forward'} size={20} color="#FFFFFF" />
+            <Text style={styles.startBtnText}>
+              {stepsDone === 0 ? 'Start Review' : stepsDone === 4 ? 'Review Complete' : 'Continue'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Category Defaults */}
@@ -369,6 +433,27 @@ export default function TaxPrepScreen() {
           )}
         </View>
       </ScrollView>
+
+      <StepIncomeReview
+        visible={activeStep === 0}
+        onClose={() => setActiveStep(null)}
+        onComplete={handleStepComplete}
+      />
+      <StepExpenseReview
+        visible={activeStep === 1}
+        onClose={() => setActiveStep(null)}
+        onComplete={handleStepComplete}
+      />
+      <StepWhtReview
+        visible={activeStep === 2}
+        onClose={() => setActiveStep(null)}
+        onComplete={handleStepComplete}
+      />
+      <StepTaxSummary
+        visible={activeStep === 3}
+        onClose={() => setActiveStep(null)}
+        onComplete={handleStepComplete}
+      />
     </View>
   );
 }
@@ -584,5 +669,87 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: 12,
     flex: 1,
+  },
+  progressCard: {
+    marginHorizontal: Spacing[5],
+    borderRadius: Radius.md,
+    padding: Spacing[4],
+    gap: 12,
+    marginBottom: 16,
+  },
+  progressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  progressCount: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 14,
+  },
+  progressBar: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  stepsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  stepIndicator: {
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+  },
+  stepDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: Colors.light.surfaceContainerLow,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.light.outlineVariant,
+  },
+  stepDotText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 10,
+    color: Colors.light.outline,
+  },
+  stepLabel: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 10,
+  },
+  flagBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -2,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  flagBadgeText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 9,
+    color: '#FFFFFF',
+  },
+  startBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    borderRadius: Radius.full,
+    gap: 6,
+  },
+  startBtnText: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 15,
+    color: '#FFFFFF',
   },
 });

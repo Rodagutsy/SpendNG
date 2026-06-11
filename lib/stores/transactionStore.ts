@@ -22,6 +22,8 @@ export interface TransactionRecord {
   isFlaggedForReview: boolean;
   notes: string | null;
   receiptImageUri: string | null;
+  whtAmount: number | null;
+  whtClientName: string | null;
   isSynced: boolean;
   createdAt: number;
   updatedAt: number;
@@ -44,7 +46,7 @@ interface TransactionState {
   filters: TransactionFilters;
 
   fetchTransactions: (filters?: TransactionFilters) => Promise<void>;
-  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence'>) => Promise<TransactionRecord>;
+  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'whtAmount' | 'whtClientName'>) => Promise<TransactionRecord>;
   updateCategory: (id: string, categoryId: string) => Promise<void>;
   updateNotes: (id: string, notes: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<TransactionRecord>) => Promise<void>;
@@ -81,6 +83,8 @@ function mapRowToRecord(row: any): TransactionRecord {
     isFlaggedForReview: row.is_flagged_for_review,
     notes: row.notes,
     receiptImageUri: null,
+    whtAmount: null,
+    whtClientName: null,
     isSynced: row.is_synced,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -173,6 +177,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       isDuplicate: false,
       isFlaggedForReview: data.isFlaggedForReview || false,
       receiptImageUri: null,
+      whtAmount: null,
+      whtClientName: null,
       isSynced: true,
       createdAt: nowTs,
       updatedAt: nowTs,
