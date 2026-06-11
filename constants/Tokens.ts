@@ -19,7 +19,7 @@ export const Palette = {
     100: '#ffffffff',
   },
   neutral: {
-    10: '#191919',
+    10: '#222222ff',
     20: '#333333',
     90: '#E6E6E6',
     93: '#EDEDED',
@@ -66,6 +66,7 @@ export const Colors = {
     surface: Palette.neutral[20],
     onBackground: Palette.neutral[96],
     onSurface: Palette.neutral[96],
+    ghost: Palette.neutralVariant[80]
   },
 
   light: {

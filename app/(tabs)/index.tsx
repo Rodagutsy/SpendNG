@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,11 @@ import {
   Platform,
   ImageBackground,
   useWindowDimensions,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Typography, Shadows, Spacing, Colors, Palette } from '@/constants/Tokens';
+import { Typography, Shadows, Spacing, Colors, Palette, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { formatCurrency } from '@/lib/utils';
 import { BellIcon } from '@/components/ui/CustomSvgIcon';
@@ -23,6 +24,8 @@ import { useTaxStore } from '@/lib/stores/taxStore';
 import { useAuth } from '@/context/AuthContext';
 import { TransactionModal } from '@/components/TransactionModal';
 import { TransactionItem } from '@/components/ui/TransactionItem';
+import { EmailService } from '@/lib/email-service';
+import { SMSService } from '@/lib/sms-service';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -40,6 +43,19 @@ export default function HomeScreen() {
   const [showTxModal, setShowTxModal] = useState(false);
   const [bannerDismissedAt, setBannerDismissedAt] = useState<number | null>(null);
   const [clearedNotificationIds, setClearedNotificationIds] = useState<Set<string>>(new Set());
+  const [showConnectPrompt, setShowConnectPrompt] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const [tokens, smsStatus] = await Promise.all([
+        EmailService.getStoredTokens().catch(() => null),
+        SMSService.getConnectionStatus().catch(() => ({ hasPermissions: false })),
+      ]);
+      if (!tokens && !smsStatus.hasPermissions) {
+        setShowConnectPrompt(true);
+      }
+    })();
+  }, []);
 
   const closeNotifications = () => setShowNotifications(false);
 
@@ -212,23 +228,28 @@ export default function HomeScreen() {
           imageStyle={styles.taxAlertImage}
         >
           <View style={[StyleSheet.absoluteFill, { backgroundColor: bannerOverlayColor, borderRadius: 12 }]} />
-          <View style={styles.taxAlertContent}>
-            <Text style={styles.taxAlertText}>{bannerTitle}</Text>
-            <TouchableOpacity
-              style={[styles.taxFileBtn, hasStartedReview && { backgroundColor: Colors.main.warning }]}
-              onPress={() => router.push('/(tabs)/tax-prep')}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.taxFileBtnText}>{bannerCta}</Text>
-            </TouchableOpacity>
+          <View style={styles.taxAlertInner}>
+            {/* Close button row */}
+            <View style={styles.taxCloseRow}>
+              <TouchableOpacity
+                onPress={() => setBannerDismissedAt(Date.now())}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <MaterialIcons name="close" size={16} color="rgba(255,255,255,0.7)" />
+              </TouchableOpacity>
+            </View>
+            {/* Content row: text left, button right */}
+            <View style={styles.taxContentRow}>
+              <Text style={styles.taxAlertText}>{bannerTitle}</Text>
+              <TouchableOpacity
+                style={[styles.taxFileBtn, hasStartedReview && { backgroundColor: Colors.main.warning }]}
+                onPress={() => router.push('/(tabs)/tax-prep')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.taxFileBtnText}>{bannerCta}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.bannerDismiss}
-            onPress={() => setBannerDismissedAt(Date.now())}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <MaterialIcons name="close" size={16} color="rgba(255,255,255,0.7)" />
-          </TouchableOpacity>
         </ImageBackground>
       )}
 
@@ -321,6 +342,37 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <TransactionModal visible={showTxModal} onClose={() => setShowTxModal(false)} />
+
+        {/* Connect source prompt */}
+        <Modal visible={showConnectPrompt} transparent animationType="fade" onRequestClose={() => setShowConnectPrompt(false)}>
+          <View style={styles.connectOverlay}>
+            <View style={[styles.connectCard, { backgroundColor: theme.surface }]}>
+              <View style={[styles.connectIconCircle, { backgroundColor: theme.primaryContainer }]}>
+                <MaterialIcons name="link" size={28} color={theme.primary} />
+              </View>
+              <Text style={[styles.connectTitle, { color: theme.onSurface }]}>Connect Your Accounts</Text>
+              <Text style={[styles.connectMessage, { color: theme.outline }]}>
+                Link your Gmail or SMS to automatically import bank transaction alerts and keep your finances up to date.
+              </Text>
+              <View style={styles.connectActions}>
+                <TouchableOpacity
+                  style={[styles.connectPrimaryBtn, { backgroundColor: theme.primary }]}
+                  onPress={() => { setShowConnectPrompt(false); router.push('/settings/connected-accounts' as any); }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.connectPrimaryBtnText, { color: theme.onPrimary }]}>Connect Now</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.connectSkipBtn}
+                  onPress={() => setShowConnectPrompt(false)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.connectSkipText, { color: theme.outline }]}>Maybe later</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     </>
   );
@@ -471,31 +523,26 @@ const styles = StyleSheet.create({
   taxAlertImage: {
     borderRadius: 12,
   },
-  taxAlertContent: {
-    flexDirection: 'column',
+  taxAlertInner: {
+    padding: 16,
+  },
+  taxCloseRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 2,
+  },
+  taxContentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingTop: 32,
-    paddingBottom: 18,
   },
   taxAlertText: {
+    flex: 1,
     fontFamily: Typography.fonts.medium,
     fontSize: 16,
     color: Colors.light.onPrimary,
     lineHeight: 20,
-    textAlign: 'center',
-    paddingHorizontal: 12,
-  },
-  bannerDismiss: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginRight: 12,
   },
   taxFileBtn: {
     height: 36,
@@ -657,5 +704,62 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: 10,
     color: Colors.light.surface,
+  },
+  connectOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    paddingHorizontal: 32,
+  },
+  connectCard: {
+    width: '100%',
+    maxWidth: 340,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+  },
+  connectIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  connectTitle: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 20,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  connectMessage: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+  connectActions: {
+    width: '100%',
+    gap: 10,
+  },
+  connectPrimaryBtn: {
+    height: 48,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectPrimaryBtnText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 15,
+  },
+  connectSkipBtn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  connectSkipText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 14,
   },
 });

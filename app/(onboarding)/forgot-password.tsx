@@ -72,8 +72,8 @@ export default function ForgotPasswordScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.content}>
         <Text style={[styles.title, { color: theme.onBackground }]}>Reset Your Password</Text>
-        <Text style={[styles.body, { color: theme.onBackground }]}>
-          Enter your email address and we will send instructions to help you regain access to your account.
+        <Text style={[styles.body, { color: theme.outline }]}>
+          Enter your email address and we will send instructions to regain access.
         </Text>
 
         <TextInput

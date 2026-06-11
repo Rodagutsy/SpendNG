@@ -56,7 +56,7 @@ export default function SignInScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Text style={[styles.title, { color: theme.onBackground }]}>Welcome Back</Text>
-      <Text style={[styles.subtitle, { color: theme.onBackground }]}>Continue tracking your finances and stay on top of your money.</Text>
+      <Text style={[styles.subtitle, { color: theme.outline }]}>Continue tracking your finances and stay on top of your money.</Text>
       <TextInput
         label="Email"
         placeholder="your@email.com"
@@ -88,15 +88,15 @@ export default function SignInScreen() {
       />
 
       <View style={styles.divider}>
-        <View style={[styles.line, { backgroundColor: theme.outline }]} />
+        <View style={[styles.line, { backgroundColor: theme.outlineVariant }]} />
         <Text style={[styles.dividerText, { color: theme.outline }]}>OR</Text>
-        <View style={[styles.line, { backgroundColor: theme.outline }]} />
+        <View style={[styles.line, { backgroundColor: theme.outlineVariant }]} />
       </View>
 
       <TouchableOpacity
         onPress={handleGoogleAuth}
         disabled={loading}
-        style={[styles.googleButton, { borderColor: theme.outline }]}
+        style={[styles.googleButton, { borderColor: theme.outlineVariant }]}
         activeOpacity={0.8}
       >
         <GoogleLogo size={16} />
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   },
   forgotPassword: {
     textAlign: 'right',
-    fontFamily: Typography.fonts.body,
+    fontFamily: Typography.fonts.medium,
     fontSize: Typography.sizes.labelL,
 
   },

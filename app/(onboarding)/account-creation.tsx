@@ -30,7 +30,7 @@ export default function AccountCreationScreen() {
         showAlert({ title: 'Verification Required', message: 'Please check your email for a verification link to activate your account.' });
         return;
       }
-      router.replace('/(onboarding)/sms-permission');
+      router.replace('/(onboarding)/connect-source');
     } catch (error: any) {
       showAlert({ title: 'Signup Error', message: error.message });
     } finally {
@@ -52,11 +52,11 @@ export default function AccountCreationScreen() {
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       <Text style={[styles.title, { color: theme.onBackground }]}>Create an Account</Text>
-      <Text style={[styles.subtitle, { color: theme.onBackground }]}>Start your journey to financial freedom today</Text>
+      <Text style={[styles.subtitle, { color: theme.outline }]}>Start your journey to financial freedom today</Text>
 
       <TextInput
         label="Full Name"
-        placeholder="Your full name"
+        placeholder="First name and last name"
         value={name}
         onChangeText={setName}
         autoCapitalize="words"
@@ -109,15 +109,15 @@ export default function AccountCreationScreen() {
       />
 
       <View style={styles.divider}>
-        <View style={[styles.line, { backgroundColor: theme.outline }]} />
+        <View style={[styles.line, { backgroundColor: theme.outlineVariant }]} />
         <Text style={[styles.dividerText, { color: theme.outline }]}>OR</Text>
-        <View style={[styles.line, { backgroundColor: theme.outline }]} />
+        <View style={[styles.line, { backgroundColor: theme.outlineVariant }]} />
       </View>
 
       <TouchableOpacity
         onPress={handleGoogleAuth}
         disabled={loading}
-        style={[styles.googleButton, { borderColor: theme.outline }]}
+        style={[styles.googleButton, { borderColor: theme.outlineVariant }]}
         activeOpacity={0.8}
       >
         <GoogleLogo size={16} />
@@ -163,6 +163,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 6,
     marginBottom: 12,
+    marginTop: 8,
   },
   radio: {
     width: 16,
