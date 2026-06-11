@@ -38,8 +38,8 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   const iconColor = color || theme.primary;
   const iconBg = color ? `${color}26` : theme.ripple;
 
-  const formattedAmount = `${type === 'debit' ? '-' : '+'}${formatCurrency(amount)}`;
-  const amountColor = theme.onSurface;
+  const formattedAmount = formatCurrency(amount);
+  const amountColor = type === 'credit' ? Colors.main.success : Colors.main.error;
 
   return (
     <TouchableOpacity
@@ -74,7 +74,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
         </Text>
       </View>
       <View style={styles.rightContent}>
-        <Text style={[styles.amount, { color: Colors.dark.outlineVariant }]}>
+        <Text style={[styles.amount, { color: amountColor }]}>
           {formattedAmount}
         </Text>
         <Text style={[styles.category, { color: theme.outline }]}>

@@ -54,23 +54,28 @@ export default function SettingsScreen() {
     icon,
     label,
     onPress,
+    color,
   }: {
     icon: string;
     label: string;
     onPress: () => void;
-  }) => (
-    <TouchableOpacity style={styles.menuItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.menuItemLeft}>
-        <View style={[styles.iconContainer, { backgroundColor: theme.primaryContainer }]}>
-          <IconSymbol name={icon as any} size={16} color={theme.primary} />
+    color?: string;
+  }) => {
+    const accent = color ?? theme.primary;
+    return (
+      <TouchableOpacity style={[styles.menuItem, color && { backgroundColor: theme.primaryContainer }]} onPress={onPress} activeOpacity={0.7}>
+        <View style={styles.menuItemLeft}>
+          <View style={[styles.iconContainer, { backgroundColor: theme.primaryContainer }]}>
+            <IconSymbol name={icon as any} size={16} color={accent} />
+          </View>
+          <Text style={[styles.menuItemLabel, { color: color ?? theme.onBackground }]}>
+            {label}
+          </Text>
         </View>
-        <Text style={[styles.menuItemLabel, { color: theme.onBackground }]}>
-          {label}
-        </Text>
-      </View>
-      <IconSymbol name="chevron.right" size={16} color={theme.outline} />
-    </TouchableOpacity>
-  );
+        <IconSymbol name="chevron.right" size={16} color={color ?? theme.outline} />
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <ScrollView
@@ -102,22 +107,6 @@ export default function SettingsScreen() {
         <IconSymbol name="chevron.right" size={16} color={theme.outline} />
       </TouchableOpacity>
 
-      {/* Tax Prep — standalone card with secondary background */}
-      <TouchableOpacity
-        style={[styles.taxPrepCard, { backgroundColor: Colors.light.secondaryContainer }]}
-        onPress={() => router.push('/(tabs)/tax-prep')}
-        activeOpacity={0.8}
-      >
-        <View style={[styles.taxPrepIconBox, { backgroundColor: Colors.light.secondary }]}>
-          <IconSymbol name="report" size={18} color="#FFFFFF" />
-        </View>
-        <View style={styles.taxPrepInfo}>
-          <Text style={[styles.taxPrepLabel, { color: Colors.light.secondary }]}>Tax Prep</Text>
-          <Text style={[styles.taxPrepDesc, { color: Colors.light.secondary }]}>Classify transactions for tax filing</Text>
-        </View>
-        <IconSymbol name="chevron.right" size={16} color={Colors.light.secondary} />
-      </TouchableOpacity>
-
       <View style={styles.section}>
         <MenuItem icon="bell" label="Notifications" onPress={() => router.push('/settings/notifications')} />
         <MenuItem icon="arrow.down.doc.fill" label="Data & Export" onPress={() => router.push('/settings/data-export')} />
@@ -125,6 +114,22 @@ export default function SettingsScreen() {
         <MenuItem icon="link" label="Connected Accounts" onPress={() => router.push('/settings/connected-accounts' as any)} />
         <MenuItem icon="help-circle" label="Help" onPress={() => router.push('/settings/help')} />
       </View>
+
+      {/* Tax Prep card */}
+      <TouchableOpacity
+        style={[styles.taxPrepCard, { backgroundColor: Colors.light.primaryContainer }]}
+        onPress={() => router.push('/(tabs)/tax-prep')}
+        activeOpacity={0.8}
+      >
+        <View style={[styles.taxPrepIconBox, { backgroundColor: Colors.light.primary }]}>
+          <IconSymbol name="report" size={18} color="#FFFFFF" />
+        </View>
+        <View style={styles.taxPrepInfo}>
+          <Text style={[styles.taxPrepLabel, { color: Colors.light.primary }]}>Tax Prep</Text>
+          <Text style={[styles.taxPrepDesc, { color: Colors.light.primary }]}>Classify transactions for tax filing</Text>
+        </View>
+        <IconSymbol name="chevron.right" size={16} color={Colors.light.primary} />
+      </TouchableOpacity>
 
       <View style={styles.footerActionContainer}>
         <TouchableOpacity

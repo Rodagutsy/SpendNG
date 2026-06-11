@@ -50,7 +50,7 @@ export default function TransactionDetailScreen() {
   const isDebit = transaction.transactionType === 'debit';
   const formattedNumber = Math.abs(transaction.amount).toLocaleString('en-US');
   const amountColor = isDebit ? Colors.main.error : Colors.main.success;
-  const heroBg = isDebit ? Colors.main.error + '14' : Colors.main.success + '1A';
+  const heroBg = isDebit ? Colors.main.error.slice(0, 7) + '14' : Colors.main.success.slice(0, 7) + '1A';
   const pillBg = isDebit ? Colors.main.error : Colors.main.success;
   const formattedDate = format(new Date(transaction.transactionDate), 'EEEE, d MMMM yyyy');
   const bankName = transaction.accountName;
@@ -94,7 +94,7 @@ export default function TransactionDetailScreen() {
             );
             const target = candidates.reduce((best, t) =>
               Math.abs(t.transactionDate - transaction.transactionDate) <
-              Math.abs(best.transactionDate - transaction.transactionDate)
+                Math.abs(best.transactionDate - transaction.transactionDate)
                 ? t
                 : best,
               candidates[0],
@@ -132,7 +132,7 @@ export default function TransactionDetailScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Duplicate banner */}
         {transaction.isDuplicate && (
-          <View style={[styles.warningBanner, { backgroundColor: Colors.main.error + '14', borderColor: Colors.main.error }]}>
+          <View style={[styles.warningBanner, { backgroundColor: Colors.main.error.slice(0, 7) + '14', borderColor: Colors.main.error }]}>
             <MaterialIcons name="info" size={18} color={Colors.main.error} />
             <Text style={[styles.warningBannerText, { color: Colors.main.error }]}>Marked as duplicate</Text>
           </View>
@@ -151,7 +151,7 @@ export default function TransactionDetailScreen() {
             <Text style={[styles.merchantName, { color: theme.onBackground }]}>
               {transaction.merchantName ?? 'Unknown'}
             </Text>
-            <View style={[styles.typePill, { backgroundColor: isDebit ? Colors.light.error : Colors.light.success, borderColor: isDebit ? Colors.main.error : Colors.main.success, borderWidth: 1 }]}>
+            <View style={[styles.typePill, { borderColor: isDebit ? Colors.main.error : Colors.main.success, borderWidth: 1 }]}>
               <Text style={[styles.typePillText, { color: isDebit ? Colors.main.error : Colors.main.success }]}>
                 {isDebit ? 'Debit' : 'Credit'}
               </Text>
@@ -544,19 +544,20 @@ const styles = StyleSheet.create({
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
     marginHorizontal: Spacing[4],
     marginTop: Spacing[4],
     paddingVertical: 10,
     paddingHorizontal: Spacing[4],
-    backgroundColor: Colors.main.warning + '18',
+    backgroundColor: Colors.main.warning.slice(0, 7) + '18',
     borderRadius: Radius.sm,
   },
   warningBannerText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,
     color: Colors.main.warning,
-    flex: 1,
+    textAlign: 'center',
   },
   taxSectionCard: {
     flexDirection: 'row',
