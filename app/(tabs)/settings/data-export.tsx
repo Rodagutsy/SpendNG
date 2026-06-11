@@ -50,7 +50,7 @@ export default function DataExportScreen() {
 
       const filePath = await ExportService.exportData(
         { format, startDate, endDate, transactions, userName: 'User', categoryNames },
-        () => {},
+        () => { },
       );
 
       await ExportService.shareFile(filePath);
@@ -182,8 +182,8 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: Spacing[6],
-    gap: 16,
-    marginBottom: 20, // 20px section spacing
+    gap: 8,
+    marginBottom: 16, // 20px section spacing
   },
   menuItem: {
     flexDirection: 'row',

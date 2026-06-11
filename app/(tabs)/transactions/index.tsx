@@ -33,6 +33,7 @@ export default function TransactionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'credit' | 'debit'>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
 
   useEffect(() => {
     fetchTransactions();
@@ -67,7 +68,7 @@ export default function TransactionsScreen() {
   ] as const;
 
   const resolvedTransactions = useMemo(() => {
-    const mapped = transactions.map((t) => {
+    let mapped = transactions.map((t) => {
       const cat = getCategoryById(t.categoryId);
       return {
         ...t,
@@ -76,9 +77,19 @@ export default function TransactionsScreen() {
         categoryColor: cat?.colorHex ?? '#ADAAA4',
       };
     });
-    if (txTypeFilter === 'all') return mapped;
-    return mapped.filter((t) => t.transactionType === txTypeFilter);
-  }, [transactions, categories, txTypeFilter]);
+    if (txTypeFilter !== 'all') {
+      mapped = mapped.filter((t) => t.transactionType === txTypeFilter);
+    }
+    mapped.sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest': return a.transactionDate - b.transactionDate;
+        case 'highest': return b.amount - a.amount;
+        case 'lowest': return a.amount - b.amount;
+        default: return b.transactionDate - a.transactionDate;
+      }
+    });
+    return mapped;
+  }, [transactions, categories, txTypeFilter, sortBy]);
 
   const renderItem = ({ item }: any) => (
     <TransactionItem
@@ -197,9 +208,12 @@ export default function TransactionsScreen() {
       <FilterModal
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
+        initialFilters={{ ...filters, sortBy }}
         onApply={(f) => {
           const next = { ...filters, ...f };
+          delete (next as any).sortBy;
           setFilters(next);
+          if (f.sortBy) setSortBy(f.sortBy);
         }}
       />
     </SafeAreaView>

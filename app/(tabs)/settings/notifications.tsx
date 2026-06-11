@@ -75,14 +75,14 @@ const styles = StyleSheet.create({
   },
   section: {
     marginHorizontal: Spacing[6],
-    borderRadius: Radius.lg,
+    borderRadius: Radius.sm,
     overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing[4],
+    paddingVertical: Spacing[1],
     paddingHorizontal: Spacing[5],
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',

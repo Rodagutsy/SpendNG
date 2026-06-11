@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: Spacing[6],
-    gap: 16,
+    gap: 12,
   },
   accountRow: {
     flexDirection: 'row',

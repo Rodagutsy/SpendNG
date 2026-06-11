@@ -40,10 +40,19 @@ const STATUS_OPTIONS = [
   { key: 'needs_review', label: 'Needs Review' },
 ];
 
+export interface FilterValues {
+  transactionType?: 'credit' | 'debit';
+  startDate?: number;
+  endDate?: number;
+  needsReview?: boolean;
+  sortBy?: 'newest' | 'oldest' | 'highest' | 'lowest';
+}
+
 interface FilterModalProps {
   visible: boolean;
   onClose: () => void;
-  onApply?: (filters: { needsReview?: boolean }) => void;
+  initialFilters?: FilterValues;
+  onApply?: (filters: FilterValues) => void;
 }
 
 const formatDisplayDate = (d: Date): string => {
@@ -53,7 +62,7 @@ const formatDisplayDate = (d: Date): string => {
   return `${dd}/${mm}/${yyyy}`;
 };
 
-export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, onApply }) => {
+export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, initialFilters, onApply }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const styles = createStyles(theme);
@@ -68,19 +77,42 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, onAp
   const [showEndCalendar, setShowEndCalendar] = useState(false);
 
   useEffect(() => {
-    if (!visible) {
+    if (visible) {
       setPeriod('all');
-      setTxType('all');
-      setSortBy('newest');
-      setReviewStatus('all');
-      setStartDate(null);
-      setEndDate(null);
+      setTxType(initialFilters?.transactionType ?? 'all');
+      setSortBy(initialFilters?.sortBy ?? 'newest');
+      setStartDate(initialFilters?.startDate ? new Date(initialFilters.startDate) : null);
+      setEndDate(initialFilters?.endDate ? new Date(initialFilters.endDate) : null);
+      setReviewStatus(initialFilters?.needsReview ? 'needs_review' : 'all');
     }
   }, [visible]);
 
+  const getDateRange = (): { startDate?: number; endDate?: number } => {
+    if (period === 'custom') {
+      if (startDate) return { startDate: startDate.getTime() };
+      return {};
+    }
+    const now = Date.now();
+    const day = 86400000;
+    switch (period) {
+      case 'today':
+        return { startDate: now - day };
+      case 'week':
+        return { startDate: now - 7 * day };
+      case 'month':
+        return { startDate: now - 30 * day };
+      default:
+        return {};
+    }
+  };
+
   const handleApply = () => {
+    const dateRange = getDateRange();
     onApply?.({
+      ...dateRange,
+      transactionType: txType === 'all' ? undefined : txType as 'credit' | 'debit',
       needsReview: reviewStatus === 'needs_review' ? true : undefined,
+      sortBy: sortBy as 'newest' | 'oldest' | 'highest' | 'lowest',
     });
     onClose();
   };

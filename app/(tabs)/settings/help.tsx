@@ -78,13 +78,13 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: Spacing[6],
-    gap: 16,
+    gap: 8,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: Spacing[3],
+    paddingVertical: Spacing[1],
   },
   rowLeft: {
     flexDirection: 'row',
