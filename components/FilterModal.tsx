@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,10 @@ import {
   ScrollView,
   Modal,
   Platform,
-  Dimensions,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { Chip } from '@/components/ui/Chip';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CalendarModal } from '@/components/CalendarModal';
 
@@ -28,13 +28,6 @@ const TRANSACTION_TYPES = [
   { key: 'debit', label: 'Money Out' },
 ];
 
-const SORT_OPTIONS = [
-  { key: 'newest', label: 'Newest' },
-  { key: 'oldest', label: 'Oldest' },
-  { key: 'highest', label: 'Highest' },
-  { key: 'lowest', label: 'Lowest' },
-];
-
 const STATUS_OPTIONS = [
   { key: 'all', label: 'All' },
   { key: 'needs_review', label: 'Needs Review' },
@@ -45,7 +38,6 @@ export interface FilterValues {
   startDate?: number;
   endDate?: number;
   needsReview?: boolean;
-  sortBy?: 'newest' | 'oldest' | 'highest' | 'lowest';
 }
 
 interface FilterModalProps {
@@ -69,7 +61,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
 
   const [period, setPeriod] = useState('all');
   const [txType, setTxType] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [reviewStatus, setReviewStatus] = useState('all');
@@ -80,7 +71,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
     if (visible) {
       setPeriod('all');
       setTxType(initialFilters?.transactionType ?? 'all');
-      setSortBy(initialFilters?.sortBy ?? 'newest');
       setStartDate(initialFilters?.startDate ? new Date(initialFilters.startDate) : null);
       setEndDate(initialFilters?.endDate ? new Date(initialFilters.endDate) : null);
       setReviewStatus(initialFilters?.needsReview ? 'needs_review' : 'all');
@@ -112,7 +102,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
       ...dateRange,
       transactionType: txType === 'all' ? undefined : txType as 'credit' | 'debit',
       needsReview: reviewStatus === 'needs_review' ? true : undefined,
-      sortBy: sortBy as 'newest' | 'oldest' | 'highest' | 'lowest',
     });
     onClose();
   };
@@ -120,7 +109,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
   const handleReset = () => {
     setPeriod('all');
     setTxType('all');
-    setSortBy('newest');
     setReviewStatus('all');
     setStartDate(null);
     setEndDate(null);
@@ -133,24 +121,25 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
   ) => (
     <View style={styles.pillRow}>
       {options.map((opt) => (
-        <TouchableOpacity
+        <Chip
           key={opt.key}
-          style={[styles.pill, selected === opt.key && styles.pillSelected]}
+          label={opt.label}
+          selected={selected === opt.key}
           onPress={() => onSelect(opt.key)}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.pillText, selected === opt.key && styles.pillTextSelected]}>
-            {opt.label}
-          </Text>
-        </TouchableOpacity>
+        />
       ))}
     </View>
   );
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={[styles.card, { backgroundColor: theme.surface }]} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity style={[styles.card, { backgroundColor: theme.surface }]} activeOpacity={1} onPress={() => { }}>
+          {/* Handle */}
+          <View style={styles.handleRow}>
+            <View style={[styles.handle, { backgroundColor: theme.outlineVariant }]} />
+          </View>
+
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.heading, { color: theme.onSurface }]}>Filter</Text>
@@ -195,10 +184,6 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
             <Text style={[styles.label, { color: theme.outline, marginTop: 20 }]}>Type</Text>
             {renderPillGroup(TRANSACTION_TYPES, txType, setTxType)}
 
-            {/* Sort By */}
-            <Text style={[styles.label, { color: theme.outline, marginTop: 20 }]}>Sort By</Text>
-            {renderPillGroup(SORT_OPTIONS, sortBy, setSortBy)}
-
             {/* Status */}
             <Text style={[styles.label, { color: theme.outline, marginTop: 20 }]}>Status</Text>
             {renderPillGroup(STATUS_OPTIONS, reviewStatus, setReviewStatus)}
@@ -235,30 +220,33 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
 const createStyles = (theme: typeof Colors.light) => StyleSheet.create({
   overlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.4)',
-    padding: Spacing[6],
   },
   card: {
     width: '100%',
-    maxWidth: 360,
-    maxHeight: '80%',
-    borderRadius: Radius.lg,
-    paddingBottom: Platform.OS === 'ios' ? 20 : Spacing[5],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 24,
-    elevation: 12,
+    maxHeight: '85%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : Spacing[5],
+  },
+  handleRow: {
+    alignItems: 'center',
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: Spacing[5],
-    paddingTop: Spacing[5],
-    paddingBottom: Spacing[4],
+    paddingTop: Spacing[3],
+    paddingBottom: Spacing[2],
     borderBottomWidth: 1,
     borderBottomColor: theme.ripple,
   },
@@ -281,6 +269,7 @@ const createStyles = (theme: typeof Colors.light) => StyleSheet.create({
     fontSize: Typography.sizes.labelL,
     fontWeight: '500',
     marginBottom: Spacing[2],
+    marginTop: Spacing[3],
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -288,27 +277,6 @@ const createStyles = (theme: typeof Colors.light) => StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  pill: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: theme.outlineVariant,
-    backgroundColor: theme.surface,
-  },
-  pillSelected: {
-    backgroundColor: theme.primary,
-    borderColor: theme.primary,
-  },
-  pillText: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 13,
-    color: theme.onBackground,
-  },
-  pillTextSelected: {
-    fontFamily: Typography.fonts.medium,
-    color: theme.onPrimary,
   },
   dateRow: {
     flexDirection: 'row',
@@ -350,7 +318,7 @@ const createStyles = (theme: typeof Colors.light) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 40,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     borderWidth: 1.5,
     borderColor: theme.primary,
   },
@@ -363,7 +331,7 @@ const createStyles = (theme: typeof Colors.light) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     height: 40,
-    borderRadius: Radius.full,
+    borderRadius: Radius.sm,
     backgroundColor: theme.primary,
   },
   applyBtnText: {

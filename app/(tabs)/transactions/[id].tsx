@@ -82,17 +82,32 @@ export default function TransactionDetailScreen() {
       title: 'Mark as Duplicate',
       message: 'What would you like to do?',
       buttons: [
-        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
-          style: 'destructive',
+          text: 'Override',
           onPress: () => {
-            updateTransaction(id, { isDuplicate: true });
+            const fiveMinutes = 5 * 60 * 1000;
+            const candidates = transactions.filter(
+              (t) =>
+                t.id !== id &&
+                t.amount === transaction.amount &&
+                Math.abs(t.transactionDate - transaction.transactionDate) <= fiveMinutes,
+            );
+            const target = candidates.reduce((best, t) =>
+              Math.abs(t.transactionDate - transaction.transactionDate) <
+              Math.abs(best.transactionDate - transaction.transactionDate)
+                ? t
+                : best,
+              candidates[0],
+            );
+            if (target) {
+              updateTransaction(target.id, { isDuplicate: true });
+            }
             router.back();
           },
         },
         {
-          text: 'Override Other',
+          text: 'Delete',
+          style: 'destructive',
           onPress: () => {
             updateTransaction(id, { isDuplicate: true });
             router.back();
@@ -115,6 +130,13 @@ export default function TransactionDetailScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Duplicate banner */}
+        {transaction.isDuplicate && (
+          <View style={[styles.warningBanner, { backgroundColor: Colors.main.error + '14', borderColor: Colors.main.error }]}>
+            <MaterialIcons name="info" size={18} color={Colors.main.error} />
+            <Text style={[styles.warningBannerText, { color: Colors.main.error }]}>Marked as duplicate</Text>
+          </View>
+        )}
         {/* Warning banner for unclassified */}
         {!transaction.taxClassificationId && (
           <TouchableOpacity style={styles.warningBanner} onPress={() => setShowTaxSheet(true)} activeOpacity={0.8}>

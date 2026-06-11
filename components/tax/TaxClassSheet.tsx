@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, ScrollView } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTaxClassificationStore, TaxClassificationRecord } from '@/lib/stores/taxClassificationStore';
@@ -39,25 +39,27 @@ export const TaxClassSheet: React.FC<TaxClassSheetProps> = ({ visible, onClose, 
         <TouchableOpacity style={[styles.sheet]} activeOpacity={1} onPress={() => {}}>
           <View style={styles.handle} />
           <Text style={styles.title}>Tax Classification</Text>
-          {options.length === 0 && (
-            <Text style={styles.emptyText}>Loading classifications...</Text>
-          )}
-          {options.map((opt) => (
-            <TouchableOpacity
-              key={opt.id}
-              style={[styles.optionRow, current === opt.id && styles.optionSelected]}
-              onPress={() => { onSelect(opt.id); onClose(); }}
-              activeOpacity={0.7}
-            >
-              <View style={styles.optionLeft}>
-                <Text style={[styles.optionLabel, current === opt.id && { fontFamily: Typography.fonts.display }]}>
-                  {opt.name}
-                </Text>
-                <Text style={styles.optionDesc}>{DIRECTION_DESCRIPTIONS[opt.id] || ''}</Text>
-              </View>
-              {current === opt.id && <MaterialIcons name="check" size={20} color={Colors.main.warning} />}
-            </TouchableOpacity>
-          ))}
+          <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
+            {options.length === 0 && (
+              <Text style={styles.emptyText}>Loading classifications...</Text>
+            )}
+            {options.map((opt) => (
+              <TouchableOpacity
+                key={opt.id}
+                style={[styles.optionRow, current === opt.id && styles.optionSelected]}
+                onPress={() => { onSelect(opt.id); onClose(); }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.optionLeft}>
+                  <Text style={[styles.optionLabel, current === opt.id && { fontFamily: Typography.fonts.display }]}>
+                    {opt.name}
+                  </Text>
+                  <Text style={styles.optionDesc}>{DIRECTION_DESCRIPTIONS[opt.id] || ''}</Text>
+                </View>
+                {current === opt.id && <MaterialIcons name="check" size={20} color={Colors.main.warning} />}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.8}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -80,6 +82,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing[5],
     paddingBottom: Platform.OS === 'ios' ? 34 : Spacing[5],
     maxHeight: '70%',
+  },
+  scrollArea: {
+    flexGrow: 0,
   },
   handle: {
     width: 40,

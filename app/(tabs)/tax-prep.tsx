@@ -13,11 +13,14 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Chip } from '@/components/ui/Chip';
+import { Button } from '@/components/ui/Button';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
+import { TaxClassSheet } from '@/components/tax/TaxClassSheet';
 import { StepIncomeReview } from '@/components/tax/StepIncomeReview';
 import { StepExpenseReview } from '@/components/tax/StepExpenseReview';
 import { StepWhtReview } from '@/components/tax/StepWhtReview';
@@ -39,6 +42,7 @@ export default function TaxPrepScreen() {
   const fetchTransactions = useTransactionStore((s) => s.fetchTransactions);
   const categories = useCategoryStore((s) => s.categories);
   const getDefaultForCategory = useCategoryDefaultStore((s) => s.getDefaultForCategory);
+  const categoryDefaults = useCategoryDefaultStore((s) => s.defaults);
   const { classifications: taxClasses, getById: getTaxClassById } = useTaxClassificationStore();
 
   const taxSteps = useTaxStore((s) => s.steps);
@@ -48,15 +52,18 @@ export default function TaxPrepScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
   const [activeStep, setActiveStep] = useState<0 | 1 | 2 | 3 | null>(null);
+  const [showDefaults, setShowDefaults] = useState(false);
+  const [showBatchSheet, setShowBatchSheet] = useState(false);
 
   const filteredTransactions = useMemo(() => {
-    if (activeFilter === 'all') return transactions;
-    if (activeFilter === 'unclassified') return transactions.filter((t) => !t.taxClassificationId);
-    return transactions.filter((t) => t.taxClassificationId === activeFilter);
+    const base = transactions.filter((t) => !t.isDuplicate);
+    if (activeFilter === 'all') return base;
+    if (activeFilter === 'unclassified') return base.filter((t) => !t.taxClassificationId);
+    return base.filter((t) => t.taxClassificationId === activeFilter);
   }, [transactions, activeFilter]);
 
   const unclassifiedCount = useMemo(
-    () => transactions.filter((t) => !t.taxClassificationId).length,
+    () => transactions.filter((t) => !t.isDuplicate && !t.taxClassificationId).length,
     [transactions]
   );
 
@@ -115,7 +122,7 @@ export default function TaxPrepScreen() {
   }, [selectedIds, updateTransaction, showAlert]);
 
   const handleApplyCategoryDefaults = useCallback(async () => {
-    const unclassified = transactions.filter((t) => !t.taxClassificationId);
+    const unclassified = transactions.filter((t) => !t.isDuplicate && !t.taxClassificationId);
     if (unclassified.length === 0) return;
     setApplying(true);
     let count = 0;
@@ -156,15 +163,26 @@ export default function TaxPrepScreen() {
 
   const getCategoryColor = (id: string) => categories.find((c) => c.id === id)?.colorHex ?? theme.outline;
 
+  const taxClassColor = (id: string | null | undefined) => {
+    const tc = id ? getTaxClassById(id) : undefined;
+    return tc?.direction === 'income' ? Colors.main.primary : Colors.main.warning;
+  };
+
+  const mappedCategories = useMemo(
+    () => Array.from(new Map(categories.map((c) => [c.id, c])).values()).filter((cat) => getDefaultForCategory(cat.id)),
+    [categories, categoryDefaults],
+  );
+
   const FILTER_TABS: { key: TaxFilter; label: string; count: number }[] = useMemo(() => {
+    const visible = transactions.filter((t) => !t.isDuplicate);
     const base = [
-      { key: 'all' as TaxFilter, label: 'All', count: transactions.length },
+      { key: 'all' as TaxFilter, label: 'All', count: visible.length },
       { key: 'unclassified' as TaxFilter, label: 'Unclassified', count: unclassifiedCount },
     ];
     const classTabs = taxClasses.map((tc) => ({
       key: tc.id as TaxFilter,
       label: tc.name,
-      count: transactions.filter((t) => t.taxClassificationId === tc.id).length,
+      count: visible.filter((t) => t.taxClassificationId === tc.id).length,
     }));
     return [...base, ...classTabs];
   }, [transactions, unclassifiedCount, taxClasses]);
@@ -212,7 +230,7 @@ export default function TaxPrepScreen() {
             ))}
           </View>
           <TouchableOpacity
-            style={[styles.startBtn, { backgroundColor: stepsDone === 4 ? Colors.main.success : Colors.main.warning }]}
+            style={[styles.startBtn, { backgroundColor: Colors.main.primary }]}
             onPress={handleStartReview}
             activeOpacity={0.8}
           >
@@ -225,53 +243,44 @@ export default function TaxPrepScreen() {
 
         {/* Category Defaults */}
         <View style={[styles.sectionCard, { backgroundColor: theme.surface }]}>
-          <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Category Defaults</Text>
-          <Text style={[styles.sectionSubtitle, { color: theme.outline }]}>
-            Set default tax treatment per category. New transactions will inherit these values.
-          </Text>
+          <TouchableOpacity style={styles.defaultsHeader} onPress={() => setShowDefaults(!showDefaults)} activeOpacity={0.7}>
+            <View style={styles.defaultsHeaderLeft}>
+              <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Category Defaults</Text>
+              <Text style={[styles.sectionSubtitle, { color: theme.outline }]}>
+                {showDefaults ? 'Tap to collapse' : `${mappedCategories.length} categories — tap to view`}
+              </Text>
+            </View>
+            <MaterialIcons name={showDefaults ? 'expand-less' : 'expand-more'} size={22} color={theme.outline} />
+          </TouchableOpacity>
 
-          {/* Legend */}
-          <View style={[styles.legendBox, { backgroundColor: theme.surfaceContainerLow }]}>
-            {taxClasses.filter((tc) => tc.direction === 'expense').map((tc) => (
-              <View key={tc.id} style={styles.legendItem}>
-                <View style={[styles.legendPill, { backgroundColor: Colors.main.warning + '1A' }]}>
-                  <Text style={[styles.legendPillText, { color: Colors.main.warning }]}>
-                    {tc.name.slice(0, 3)}
-                  </Text>
-                </View>
-                <Text style={[styles.legendText, { color: theme.outline }]}>{tc.name}</Text>
-              </View>
-            ))}
-          </View>
-
-          {categories.map((cat) => {
-            const def = getDefaultForCategory(cat.id);
-            return (
-              <View key={cat.id} style={[styles.defaultRow, { borderBottomColor: theme.outlineVariant }]}>
-                <View style={styles.defaultRowLeft}>
-                  <View style={[styles.catDot, { backgroundColor: cat.colorHex }]} />
-                  <Text style={[styles.defaultRowLabel, { color: theme.onBackground }]}>{cat.name}</Text>
-                </View>
-                <View style={styles.defaultRowRight}>
-                  {def ? (
-                    <View style={[styles.taxOptionChip, { backgroundColor: Colors.main.warning + '1A', borderColor: Colors.main.warning }]}>
-                      <Text style={[styles.taxOptionChipText, { color: Colors.main.warning }]}>
-                        {getTaxClassById(def.defaultTaxClassificationId)?.name ?? def.defaultTaxClassificationId}
-                      </Text>
+          {showDefaults && (
+            <View style={styles.defaultsBody}>
+              {mappedCategories.map((cat) => {
+                const def = getDefaultForCategory(cat.id)!;
+                return (
+                  <View key={cat.id} style={[styles.defaultRow, { borderBottomColor: theme.outlineVariant }]}>
+                    <View style={styles.defaultRowLeft}>
+                      <View style={[styles.catDot, { backgroundColor: cat.colorHex }]} />
+                      <Text style={[styles.defaultRowLabel, { color: theme.onBackground }]}>{cat.name}</Text>
                     </View>
-                  ) : (
-                    <Text style={[styles.defaultRowLabel, { color: theme.outline, fontSize: 12 }]}>No default</Text>
-                  )}
-                </View>
-              </View>
-            );
-          })}
+                    <View style={styles.defaultRowRight}>
+                      <View style={[styles.taxOptionChip, { backgroundColor: taxClassColor(def.defaultTaxClassificationId) + '1A', borderColor: taxClassColor(def.defaultTaxClassificationId) }]}>
+                        <Text style={[styles.taxOptionChipText, { color: taxClassColor(def.defaultTaxClassificationId) }]}>
+                          {getTaxClassById(def.defaultTaxClassificationId)?.name ?? def.defaultTaxClassificationId}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* Transactions Section */}
         <View style={styles.txSection}>
           <View style={styles.txSectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Transactions</Text>
+            <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Review Transactions</Text>
             {unclassifiedCount > 0 && (
               <TouchableOpacity
                 style={[styles.applyDefaultsBtn, { backgroundColor: Colors.main.warning + '1A' }]}
@@ -280,7 +289,7 @@ export default function TaxPrepScreen() {
                 activeOpacity={0.7}
               >
                 <Text style={[styles.applyDefaultsText, { color: Colors.main.warning }]}>
-                  {applying ? 'Applying...' : 'Apply Category Defaults'}
+                  {applying ? 'Applying...' : 'Apply Defaults'}
                 </Text>
               </TouchableOpacity>
             )}
@@ -289,26 +298,12 @@ export default function TaxPrepScreen() {
           {/* Filter Tabs */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow}>
             {FILTER_TABS.map((tab) => (
-              <TouchableOpacity
+              <Chip
                 key={tab.key}
-                style={[
-                  styles.filterTab,
-                  {
-                    backgroundColor: activeFilter === tab.key ? theme.primary : theme.surfaceContainerLow,
-                  },
-                ]}
+                label={`${tab.label} (${tab.count})`}
+                selected={activeFilter === tab.key}
                 onPress={() => { setActiveFilter(tab.key); setSelectedIds(new Set()); }}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.filterTabText,
-                    { color: activeFilter === tab.key ? theme.onPrimary : theme.outline },
-                  ]}
-                >
-                  {tab.label} ({tab.count})
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </ScrollView>
 
@@ -319,27 +314,20 @@ export default function TaxPrepScreen() {
                 {selectedIds.size} selected
               </Text>
               <View style={styles.selectionActions}>
-                {taxClasses.map((tc) => (
-                  <TouchableOpacity
-                    key={tc.id}
-                    style={[styles.actionChip, { backgroundColor: Colors.main.warning + '1A' }]}
-                    onPress={() => handleBatchClassify(tc.id)}
-                    disabled={applying}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.actionChipText, { color: Colors.main.warning }]}>
-                      {tc.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-                <TouchableOpacity
-                  style={[styles.actionChip, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.outlineVariant, borderWidth: 1 }]}
+                <Button
+                  title="Classify"
+                  size="xs"
+                  style={{ backgroundColor: Colors.main.warning }}
+                  onPress={() => setShowBatchSheet(true)}
+                />
+                <Button
+                  title="Clear"
+                  size="xs"
+                  variant="outline"
+                  style={{ borderColor: theme.outlineVariant }}
+                  textStyle={{ color: theme.outline }}
                   onPress={handleClearClassification}
-                  disabled={applying}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.actionChipText, { color: theme.outline }]}>Clear</Text>
-                </TouchableOpacity>
+                />
               </View>
             </View>
           )}
@@ -371,7 +359,7 @@ export default function TaxPrepScreen() {
                   <View style={[styles.catDot, { backgroundColor: catColor }]} />
                   <View style={styles.txInfo}>
                     <Text style={[styles.txMerchant, { color: theme.onBackground }]} numberOfLines={1}>
-                      {tx.merchantName ?? 'Unknown'}
+                      {tx.isDuplicate ? '[Duplicate] ' : ''}{tx.merchantName ?? 'Unknown'}
                     </Text>
                     <Text style={[styles.txMeta, { color: theme.outline }]}>
                       {getCategoryName(tx.categoryId)} • {new Date(tx.transactionDate).toLocaleDateString()}
@@ -381,21 +369,13 @@ export default function TaxPrepScreen() {
                     <Text style={[styles.txAmount, { color: tx.transactionType === 'credit' ? Colors.main.success : Colors.main.error }]}>
                       {tx.transactionType === 'credit' ? '+' : '-'}₦{tx.amount.toLocaleString()}
                     </Text>
-                    <View
-                      style={[
-                        styles.txTaxPill,
-                        { backgroundColor: tx.taxClassificationId ? Colors.main.warning + '1A' : theme.surfaceContainerLow },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.txTaxPillText,
-                          { color: tx.taxClassificationId ? Colors.main.warning : theme.outline },
-                        ]}
-                      >
-                        {tx.taxClassificationId ? getTaxClassById(tx.taxClassificationId)?.name ?? tx.taxClassificationId : 'Unset'}
-                      </Text>
-                    </View>
+                    <Chip
+                      label={tx.taxClassificationId ? getTaxClassById(tx.taxClassificationId)?.name ?? tx.taxClassificationId : 'Unset'}
+                      size="sm"
+                      selected={!!tx.taxClassificationId}
+                      color={tx.taxClassificationId ? taxClassColor(tx.taxClassificationId) : undefined}
+                      onPress={undefined}
+                    />
                   </View>
                 </TouchableOpacity>
               );
@@ -423,6 +403,11 @@ export default function TaxPrepScreen() {
         visible={activeStep === 3}
         onClose={() => setActiveStep(null)}
         onComplete={handleStepComplete}
+      />
+      <TaxClassSheet
+        visible={showBatchSheet}
+        onClose={() => setShowBatchSheet(false)}
+        onSelect={(id) => { handleBatchClassify(id); setShowBatchSheet(false); }}
       />
     </View>
   );
@@ -465,6 +450,17 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: 12,
     marginTop: -4,
+  },
+  defaultsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  defaultsHeaderLeft: {
+    flex: 1,
+  },
+  defaultsBody: {
+    marginTop: 16,
   },
   defaultRow: {
     flexDirection: 'row',
@@ -523,16 +519,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: 4,
   },
-  filterTab: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: Radius.full,
-    marginRight: 8,
-  },
-  filterTabText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 12,
-  },
   selectionBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -551,15 +537,6 @@ const styles = StyleSheet.create({
     gap: 6,
     flexWrap: 'wrap',
     justifyContent: 'flex-end',
-  },
-  actionChip: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: Radius.full,
-  },
-  actionChipText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 11,
   },
   emptyState: {
     alignItems: 'center',
@@ -606,15 +583,6 @@ const styles = StyleSheet.create({
   txAmount: {
     fontFamily: Typography.fonts.display,
     fontSize: 14,
-  },
-  txTaxPill: {
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: Radius.full,
-  },
-  txTaxPillText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 10,
   },
   legendBox: {
     padding: Spacing[3],

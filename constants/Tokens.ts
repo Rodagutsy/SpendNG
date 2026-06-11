@@ -33,7 +33,7 @@ export const Palette = {
     80: '#C5C3BF',
   },
   error: {
-    main: '#D30000',
+    main: '#dd0000ff',
     30: '#490000ff',
     90: '#ffdedeff',
   },
@@ -43,7 +43,7 @@ export const Palette = {
     90: '#ffdbb1ff',
   },
   success: {
-    main: '#00BD00',
+    main: '#00a800ff',
     30: '#044504ff',
     90: '#ccffccff',
   },

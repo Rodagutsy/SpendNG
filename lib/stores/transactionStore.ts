@@ -235,6 +235,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (data.availableBalance !== undefined) updateData.available_balance = data.availableBalance;
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.isFlaggedForReview !== undefined) updateData.is_flagged_for_review = data.isFlaggedForReview;
+    if (data.isDuplicate !== undefined) updateData.is_duplicate = data.isDuplicate;
 
     const { error } = await supabase.from('transactions')
       .update(updateData)
@@ -278,7 +279,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
 export function useMonthlyBalances() {
   const transactions = useTransactionStore((s) => s.transactions);
-  const thisMonth = transactions.filter((t) => t.transactionDate >= monthStartTs);
+  const thisMonth = transactions.filter((t) => !t.isDuplicate && t.transactionDate >= monthStartTs);
 
   const moneyIn = thisMonth
     .filter((t) => t.transactionType === 'credit')

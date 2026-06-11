@@ -13,6 +13,8 @@ import { AuthProvider } from '@/context/AuthContext';
 import { AlertProvider } from '@/context/AlertContext';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
+import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -54,6 +56,8 @@ export default function RootLayout() {
       try {
         await useCategoryStore.getState().fetchCategories();
         await useTransactionStore.getState().fetchTransactions();
+        await useCategoryDefaultStore.getState().fetchDefaults();
+        await useTaxClassificationStore.getState().fetchClassifications();
       } catch (e) {
         console.error('Data fetch error:', e);
       }

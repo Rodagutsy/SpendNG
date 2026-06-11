@@ -15,7 +15,7 @@ interface ButtonProps {
   title: string;
   onPress: () => void;
   variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'error';
-  size?: 'large' | 'medium' | 'small';
+  size?: 'large' | 'medium' | 'small' | 'xs';
   disabled?: boolean;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -86,6 +86,11 @@ export const Button: React.FC<ButtonProps> = ({
         return {
           container: { height: 40, paddingHorizontal: Spacing[3], borderRadius: 8 },
           text: { fontSize: Typography.sizes.buttonS },
+        };
+      case 'xs':
+        return {
+          container: { height: 32, paddingHorizontal: 14, borderRadius: Radius.full },
+          text: { fontSize: 11 },
         };
     }
   };

@@ -39,6 +39,7 @@ export default function HomeScreen() {
   const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const [showTxModal, setShowTxModal] = useState(false);
   const [bannerDismissedAt, setBannerDismissedAt] = useState<number | null>(null);
+  const [clearedNotificationIds, setClearedNotificationIds] = useState<Set<string>>(new Set());
 
   const closeNotifications = () => setShowNotifications(false);
 
@@ -64,12 +65,12 @@ export default function HomeScreen() {
     bannerOverlayColor = 'rgba(107, 78, 255, 0.88)';
   } else {
     bannerTitle = 'Your records are building up. Start your tax review anytime.';
-    bannerCta = 'Review Records';
+    bannerCta = 'Review Now!';
     bannerOverlayColor = 'rgba(0, 26, 77, 0.88)';
   }
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
-  const recentTransactions = transactions.slice(0, 10);
+  const recentTransactions = transactions.filter((t) => !t.isDuplicate).slice(0, 10);
   const flaggedCount = transactions.filter((tx) => tx.isFlaggedForReview).length;
   const recentResolved = recentTransactions.map((t) => {
     const cat = useCategoryStore.getState().getCategoryById(t.categoryId);
@@ -132,8 +133,8 @@ export default function HomeScreen() {
     transactions.slice(0, 10).forEach((tx) =>
       push(tx, `${tx.transactionType === 'credit' ? 'Received' : 'Sent'} ${formatCurrency(tx.amount, tx.currency)}${tx.merchantName ? ` at ${tx.merchantName}` : ''}`)
     );
-    return items.slice(0, 10);
-  }, [transactions]);
+    return items.slice(0, 10).filter((n) => !clearedNotificationIds.has(n.id));
+  }, [transactions, clearedNotificationIds]);
 
   const openNotifications = useCallback(() => {
     bellRef.current?.measureInWindow((x, y, width, height) => {
@@ -270,6 +271,7 @@ export default function HomeScreen() {
                   type={item.transactionType}
                   date={formatDate(item.transactionDate)}
                   isFlagged={item.isFlaggedForReview}
+                  isDuplicate={item.isDuplicate}
                   onPress={() => router.push(`/transactions/${item.id}` as any)}
                 />
               </React.Fragment>
@@ -302,7 +304,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <TouchableOpacity style={styles.notifClearBtn} onPress={closeNotifications} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.notifClearBtn} onPress={() => { setClearedNotificationIds(new Set(notificationItems.map((n) => n.id))); closeNotifications(); }} activeOpacity={0.7}>
                 <Text style={styles.notifClearText}>Clear all notifications</Text>
               </TouchableOpacity>
             </View>
@@ -470,23 +472,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   taxAlertContent: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 18,
-    paddingVertical: 18,
+    paddingTop: 32,
+    paddingBottom: 18,
   },
   taxAlertText: {
-    flex: 1,
-    fontFamily: Typography.fonts.display,
+    fontFamily: Typography.fonts.medium,
     fontSize: 16,
     color: Colors.light.onPrimary,
     lineHeight: 20,
+    textAlign: 'center',
+    paddingHorizontal: 12,
   },
   bannerDismiss: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 12,
+    right: 12,
     width: 24,
     height: 24,
     borderRadius: 12,

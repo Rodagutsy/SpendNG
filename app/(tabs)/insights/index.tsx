@@ -79,8 +79,8 @@ export default function InsightsScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const [selectedMonth, setSelectedMonth] = useState('may2026');
-  const [viewYear, setViewYear] = useState(2026);
+  const [selectedMonth, setSelectedMonth] = useState(getMonthKey(new Date().getFullYear(), new Date().getMonth() + 1));
+  const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [showFilter, setShowFilter] = useState(false);
   const filterBtnRef = useRef<View>(null);
   const windowWidth = Dimensions.get('window').width;
@@ -107,7 +107,7 @@ export default function InsightsScreen() {
 
   const monthTxs = useMemo(() => {
     const { start, end } = monthStartEnd(selParsed.year, selParsed.month);
-    return transactions.filter(t => t.transactionDate >= start && t.transactionDate <= end);
+    return transactions.filter(t => !t.isDuplicate && t.transactionDate >= start && t.transactionDate <= end);
   }, [transactions, selParsed]);
 
   const prevMonthParsed = useMemo(() => {
@@ -118,7 +118,7 @@ export default function InsightsScreen() {
 
   const prevMonthTxs = useMemo(() => {
     const { start, end } = monthStartEnd(prevMonthParsed.year, prevMonthParsed.month);
-    return transactions.filter(t => t.transactionDate >= start && t.transactionDate <= end);
+    return transactions.filter(t => !t.isDuplicate && t.transactionDate >= start && t.transactionDate <= end);
   }, [transactions, prevMonthParsed]);
 
   const hasEnoughData = monthTxs.filter(t => t.transactionType === 'debit').length >= 3;
@@ -451,15 +451,15 @@ export default function InsightsScreen() {
                     <View style={[
                       styles.calendarMonthBtn,
                       isSelected
-                        ? { backgroundColor: theme.roles.primary, borderColor: theme.roles.primary }
-                        : { borderColor: theme.roles.primary },
+                        ? { borderColor: theme.primary, backgroundColor: 'transparent' }
+                        : { borderColor: 'transparent' },
                       !hasCalendarData && styles.calendarMonthBtnDisabled,
                     ]}>
                       <Text style={[
                         styles.calendarMonthLabel,
                         isSelected
-                          ? { color: theme.onPrimary }
-                          : { color: theme.roles.primary },
+                          ? { color: theme.primary }
+                          : { color: theme.roles.onSurface },
                         !hasCalendarData && { color: theme.outlineVariant },
                       ]}>
                         {label}
@@ -743,19 +743,19 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   behaviourContainer: {
-    gap: 0,
+    gap: 4,
     marginBottom: 8,
     height: 'auto'
   },
   behaviourRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 0,
+    paddingVertical: 8,
     gap: 12,
   },
   behaviourIconCircle: {
-    width: 36,
-    height: 36,
+    width: 32,
+    height: 32,
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',

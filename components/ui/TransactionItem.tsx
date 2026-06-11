@@ -15,6 +15,7 @@ interface TransactionItemProps {
   type: 'debit' | 'credit';
   date: string;
   isFlagged?: boolean;
+  isDuplicate?: boolean;
   onPress?: () => void;
 }
 
@@ -28,6 +29,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   type,
   date,
   isFlagged,
+  isDuplicate,
   onPress,
 }) => {
   const colorScheme = useColorScheme() ?? 'light';
@@ -37,7 +39,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
   const iconBg = color ? `${color}26` : theme.ripple;
 
   const formattedAmount = `${type === 'debit' ? '-' : '+'}${formatCurrency(amount)}`;
-  const amountColor = type === 'debit' ? Colors.main.error : Colors.main.success;
+  const amountColor = theme.onSurface;
 
   return (
     <TouchableOpacity
@@ -48,6 +50,11 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
       {isFlagged && (
         <View style={styles.flagIndicator}>
           <Text style={styles.flagText}>!</Text>
+        </View>
+      )}
+      {isDuplicate && (
+        <View style={styles.duplicateIndicator}>
+          <Text style={styles.duplicateText}>D</Text>
         </View>
       )}
       <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
@@ -67,7 +74,7 @@ export const TransactionItem: React.FC<TransactionItemProps> = ({
         </Text>
       </View>
       <View style={styles.rightContent}>
-        <Text style={[styles.amount, { color: amountColor }]}>
+        <Text style={[styles.amount, { color: Colors.dark.outlineVariant }]}>
           {formattedAmount}
         </Text>
         <Text style={[styles.category, { color: theme.outline }]}>
@@ -97,6 +104,20 @@ const styles = StyleSheet.create({
   flagText: {
     color: Colors.light.surface,
     fontSize: 12,
+    fontWeight: '700',
+  },
+  duplicateIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.main.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 6,
+  },
+  duplicateText: {
+    color: Colors.light.surface,
+    fontSize: 11,
     fontWeight: '700',
   },
   iconContainer: {
@@ -143,6 +164,6 @@ const styles = StyleSheet.create({
   },
   category: {
     fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.labelS,
+    fontSize: Typography.sizes.labelM,
   },
 });

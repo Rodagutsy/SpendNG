@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
@@ -7,6 +7,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { TransactionItem } from '@/components/ui/TransactionItem';
+import { Chip } from '@/components/ui/Chip';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { FilterModal } from '@/components/FilterModal';
 import { format } from 'date-fns';
@@ -61,14 +62,15 @@ export default function TransactionsScreen() {
 
   const hasActiveFilters = Object.keys(filters).length > 0;
 
-  const TX_TYPE_PILLS = [
-    { key: 'all', label: 'All' },
-    { key: 'credit', label: 'Money In' },
-    { key: 'debit', label: 'Money Out' },
+  const SORT_OPTIONS = [
+    { key: 'newest', label: 'Newest' },
+    { key: 'oldest', label: 'Oldest' },
+    { key: 'highest', label: 'Highest' },
+    { key: 'lowest', label: 'Lowest' },
   ] as const;
 
   const resolvedTransactions = useMemo(() => {
-    let mapped = transactions.map((t) => {
+    let mapped = transactions.filter((t) => !t.isDuplicate).map((t) => {
       const cat = getCategoryById(t.categoryId);
       return {
         ...t,
@@ -102,6 +104,7 @@ export default function TransactionsScreen() {
       type={item.transactionType}
       date={format(new Date(item.transactionDate), 'd MMM yyyy')}
       isFlagged={item.isFlaggedForReview}
+      isDuplicate={item.isDuplicate}
       onPress={() => router.push(`/(tabs)/transactions/${item.id}`)}
     />
   );
@@ -192,6 +195,20 @@ export default function TransactionsScreen() {
         </View>
       )}
 
+      <View style={styles.sortRow}>
+        <View style={styles.sortPills}>
+          {SORT_OPTIONS.map((opt) => (
+            <Chip
+              key={opt.key}
+              label={opt.label}
+              selected={sortBy === opt.key}
+              variant="outlined"
+              onPress={() => setSortBy(opt.key)}
+            />
+          ))}
+        </View>
+      </View>
+
       <View style={[styles.listCard, { backgroundColor: theme.surface }]}>
         <FlatList
           data={resolvedTransactions}
@@ -208,13 +225,8 @@ export default function TransactionsScreen() {
       <FilterModal
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
-        initialFilters={{ ...filters, sortBy }}
-        onApply={(f) => {
-          const next = { ...filters, ...f };
-          delete (next as any).sortBy;
-          setFilters(next);
-          if (f.sortBy) setSortBy(f.sortBy);
-        }}
+        initialFilters={filters}
+        onApply={(f) => setFilters({ ...filters, ...f })}
       />
     </SafeAreaView>
   );
@@ -273,6 +285,25 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.bodyM,
     height: 48,
+  },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: Spacing[4],
+    marginBottom: 12,
+    marginTop: 12,
+  },
+  sortLabel: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelL,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sortPills: {
+    flexDirection: 'row',
+    gap: 8,
   },
   clearRowWrapper: {
     paddingHorizontal: Spacing[4],
