@@ -2,13 +2,12 @@ import React, { useEffect, useCallback, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
+import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { TransactionItem } from '@/components/ui/TransactionItem';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { ExportModal } from '@/components/ExportModal';
 import { FilterModal } from '@/components/FilterModal';
 import { format } from 'date-fns';
 
@@ -32,7 +31,6 @@ export default function TransactionsScreen() {
   const [searchText, setSearchText] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [txTypeFilter, setTxTypeFilter] = useState<'all' | 'credit' | 'debit'>('all');
 
@@ -132,7 +130,7 @@ export default function TransactionsScreen() {
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.topSection}>
         <View style={styles.headerRow}>
-          <Text style={[styles.title, { color: theme.onBackground }]}>Activity</Text>
+          <Text style={[styles.title, { color: theme.onBackground }]}>Transactions</Text>
         </View>
 
         <View style={styles.searchRow}>
@@ -168,33 +166,22 @@ export default function TransactionsScreen() {
             ) : null}
           </View>
 
-          <TouchableOpacity
-            style={[styles.exportBtn, { backgroundColor: theme.primary }]}
-            onPress={() => setShowExportModal(true)}
-            activeOpacity={0.85}
-          >
-            <IconSymbol name="square.and.arrow.up" size={16} color={theme.onPrimary} />
-            <Text style={[styles.exportBtnText, { color: theme.onPrimary }]}>Export</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={[styles.listCard, { backgroundColor: theme.surface }]}>
-        <View style={styles.pillsFilterRow}>
-          <Text style={[styles.sectionHeaderTitle, { color: theme.onBackground }]}>Transactions</Text>
-
-          <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, { backgroundColor: theme.background }]}>
+          <TouchableOpacity onPress={() => setShowFilterModal(true)} style={[styles.filterBtn, { backgroundColor: theme.surface }]}>
             <IconSymbol name="line.3.horizontal.decrease" size={18} color={theme.onBackground} />
             {hasActiveFilters && <View style={[styles.filterDot, { backgroundColor: theme.primary }]} />}
           </TouchableOpacity>
         </View>
+      </View>
 
-        {hasActiveFilters && (
+      {hasActiveFilters && (
+        <View style={styles.clearRowWrapper}>
           <TouchableOpacity onPress={clearFilters} style={styles.clearRow}>
             <Text style={[styles.clearText, { color: theme.primary }]}>Clear filters</Text>
           </TouchableOpacity>
-        )}
+        </View>
+      )}
 
+      <View style={[styles.listCard, { backgroundColor: theme.surface }]}>
         <FlatList
           data={resolvedTransactions}
           keyExtractor={(item) => item.id}
@@ -207,8 +194,6 @@ export default function TransactionsScreen() {
           showsVerticalScrollIndicator={false}
         />
       </View>
-
-      <ExportModal visible={showExportModal} onClose={() => setShowExportModal(false)} />
       <FilterModal
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
@@ -255,28 +240,6 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
   },
-  exportBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 48,
-    paddingHorizontal: 14,
-    borderRadius: Radius.sm,
-  },
-  exportBtnText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: Typography.sizes.buttonM,
-  },
-  pillsFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionHeaderTitle: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 16,
-  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -297,9 +260,12 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.bodyM,
     height: 48,
   },
+  clearRowWrapper: {
+    paddingHorizontal: Spacing[4],
+    marginBottom: Spacing[2],
+  },
   clearRow: {
     alignItems: 'flex-end',
-    marginTop: Spacing[2],
   },
   clearText: {
     fontFamily: Typography.fonts.body,
@@ -307,11 +273,11 @@ const styles = StyleSheet.create({
   },
   listCard: {
     flex: 1,
-    marginHorizontal: Spacing[4],
+    marginHorizontal: 20,
     marginTop: Spacing[3],
     marginBottom: Spacing[3],
-    borderRadius: Radius.lg,
-    padding: Spacing[3],
+    borderRadius: 12,
+    padding: 16,
     overflow: 'hidden',
   },
   listContent: {

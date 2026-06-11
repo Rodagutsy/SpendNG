@@ -236,8 +236,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     if (error) throw error;
 
-    const state = get();
-    await state.fetchTransactions(state.filters);
+    set((state) => ({
+      transactions: state.transactions.map((t) =>
+        t.id === id ? { ...t, ...data, updatedAt: nowTs } : t
+      ),
+    }));
   },
 
   deleteTransaction: async (id) => {

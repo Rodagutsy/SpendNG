@@ -123,6 +123,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="tax-prep"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="transactions/[id]"
         options={{
           href: null,

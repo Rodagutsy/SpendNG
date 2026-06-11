@@ -49,12 +49,6 @@ const PAYMENT_METHODS = [
   { id: 'wallet', label: 'Wallet' },
 ];
 
-const TAX_OPTIONS = [
-  { key: 'personal', label: 'Personal' },
-  { key: 'business', label: 'Business' },
-  { key: 'shared', label: 'Shared' },
-] as const;
-
 const CONFIDENCE_OPTIONS = [
   { key: 'high', label: 'High' },
   { key: 'medium', label: 'Medium' },
@@ -85,12 +79,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [category, setCategory] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [description, setDescription] = useState('');
-  const [taxClassification, setTaxClassification] = useState<'personal' | 'business' | 'shared' | null>(null);
   const [confidenceLevel, setConfidenceLevel] = useState<'high' | 'medium' | 'low' | null>(null);
   const [notes, setNotes] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
-  const [showTaxPicker, setShowTaxPicker] = useState(false);
   const [receiptUploading, setReceiptUploading] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -99,7 +91,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [notesFocused, setNotesFocused] = useState(false);
 
   useEffect(() => {
-    if (transaction) {
+    if (transaction && visible) {
       setStep(2);
       setType(transaction.transactionType);
       setName(transaction.merchantName ?? '');
@@ -113,11 +105,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
       const pm = PAYMENT_METHODS.find(p => p.label === transaction.accountName);
       setPaymentMethod(pm?.id ?? '');
       setNotes(transaction.notes ?? '');
-      setTaxClassification(transaction.taxClassification);
       setConfidenceLevel(transaction.confidenceLevel);
       setReceiptUri(transaction.receiptImageUri);
     }
-  }, [transaction]);
+  }, [transaction, visible]);
 
   const categories = type === 'credit' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
@@ -130,7 +121,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     setCategory('');
     setPaymentMethod('');
     setDescription('');
-    setTaxClassification(null);
     setConfidenceLevel(null);
     setNotes('');
     setReceiptUploading(false);
@@ -199,7 +189,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
         accountName: PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? null,
         transactionDate: parsedDate,
         notes: notes || description || null,
-        taxClassification,
         confidenceLevel,
         receiptImageUri: receiptUri,
       });
@@ -216,7 +205,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
         availableBalance: null,
         sourceChannel: 'manual',
         notes: notes || description || null,
-        taxClassification,
+        taxClassification: null,
         confidenceLevel,
         originalMessage: null,
         isFlaggedForReview: false,
@@ -358,15 +347,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                 />
               </FormField>
 
-              {/* Tax Classification */}
-              <FormField label="Tax Classification">
-                <DropdownField
-                  value={taxClassification ? TAX_OPTIONS.find(o => o.key === taxClassification)?.label ?? '' : ''}
-                  placeholder="Select tax classification"
-                  onPress={() => setShowTaxPicker(true)}
-                />
-              </FormField>
-
               {/* Notes */}
               <FormField label="Notes (optional)">
                 <View style={[styles.textInputWrap, styles.notesWrap, notesFocused && styles.textInputWrapFocused]}>
@@ -477,27 +457,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                     {pm.label}
                   </Text>
                   {paymentMethod === pm.id && <MaterialIcons name="check" size={18} color={theme.primary} />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        )}
-
-        {/* Tax Classification Picker */}
-        {showTaxPicker && (
-          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowTaxPicker(false)}>
-            <View style={[styles.pickerModal, { backgroundColor: theme.surface }]}>
-              <Text style={[styles.pickerTitle, { color: theme.onSurface }]}>Select Tax Classification</Text>
-              {TAX_OPTIONS.map((opt) => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.pickerOption, taxClassification === opt.key && { backgroundColor: theme.primaryContainer }]}
-                  onPress={() => { setTaxClassification(opt.key); setShowTaxPicker(false); }}
-                >
-                  <Text style={[styles.pickerOptionText, { color: theme.onSurface }, taxClassification === opt.key && { fontFamily: Typography.fonts.display }]}>
-                    {opt.label}
-                  </Text>
-                  {taxClassification === opt.key && <MaterialIcons name="check" size={18} color={theme.primary} />}
                 </TouchableOpacity>
               ))}
             </View>

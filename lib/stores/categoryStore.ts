@@ -8,6 +8,7 @@ export interface CategoryRecord {
   colorHex: string;
   transactionTypeHint: 'credit' | 'debit' | 'both';
   isSystem: boolean;
+  defaultTaxClassification: 'personal' | 'business' | 'shared' | null;
 }
 
 interface CategoryState {
@@ -17,6 +18,7 @@ interface CategoryState {
 
   fetchCategories: () => Promise<void>;
   getCategoryById: (id: string) => CategoryRecord | undefined;
+  updateDefaultTaxClassification: (categoryId: string, value: 'personal' | 'business' | 'shared' | null) => Promise<void>;
 }
 
 export const useCategoryStore = create<CategoryState>((set, get) => ({
@@ -41,6 +43,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         colorHex: r.color_hex,
         transactionTypeHint: r.transaction_type_hint as 'credit' | 'debit' | 'both',
         isSystem: r.is_system,
+        defaultTaxClassification: r.default_tax_classification ?? null,
       }));
 
       set({ categories, loading: false });
@@ -51,5 +54,13 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
 
   getCategoryById: (id) => {
     return get().categories.find((c) => c.id === id);
+  },
+
+  updateDefaultTaxClassification: async (categoryId, value) => {
+    set((state) => ({
+      categories: state.categories.map((c) =>
+        c.id === categoryId ? { ...c, defaultTaxClassification: value } : c
+      ),
+    }));
   },
 }));

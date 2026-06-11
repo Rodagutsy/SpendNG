@@ -107,7 +107,7 @@ export default function TransactionDetailScreen() {
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing[2] }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerBtn}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/transactions' as any)} style={styles.headerBtn}>
             <Text style={[styles.backArrow, { color: theme.onBackground }]}>‹</Text>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.onBackground }]}>Transaction Details</Text>
@@ -122,8 +122,8 @@ export default function TransactionDetailScreen() {
             <Text style={[styles.merchantName, { color: theme.onBackground }]}>
               {transaction.merchantName ?? 'Unknown'}
             </Text>
-            <View style={[styles.typePill, { backgroundColor: Colors.light.error, width: '20%', borderColor: Colors.main.error, borderWidth: 1 }]}>
-              <Text style={[styles.typePillText, { color: Colors.main.error }]}>
+            <View style={[styles.typePill, { backgroundColor: isDebit ? Colors.light.error : Colors.light.success, borderColor: isDebit ? Colors.main.error : Colors.main.success, borderWidth: 1 }]}>
+              <Text style={[styles.typePillText, { color: isDebit ? Colors.main.error : Colors.main.success }]}>
                 {isDebit ? 'Debit' : 'Credit'}
               </Text>
             </View>
@@ -170,8 +170,12 @@ export default function TransactionDetailScreen() {
 
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: theme.onBackground }]}>Tax</Text>
-              <View style={[styles.pill, { backgroundColor: theme.warning + '1A' }]}>
-                <Text style={[styles.pillText, { color: theme.warning }]}>{taxLabel}</Text>
+              <View style={[styles.pill, {
+                backgroundColor: taxLabel === 'Unclassified' ? Colors.main.warning : Colors.light.secondaryContainer
+              }]}>
+                <Text style={[styles.pillText, {
+                  color: taxLabel === 'Unclassified' ? Colors.main.warning : Colors.light.secondary
+                }]}>{taxLabel}</Text>
               </View>
             </View>
           </View>
@@ -202,9 +206,9 @@ export default function TransactionDetailScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity style={styles.addReceiptDetailBtn} onPress={handlePickReceipt} activeOpacity={0.8}>
+              <TouchableOpacity style={styles.addReceiptDetailBtn} onPress={handlePickReceipt} activeOpacity={0.7}>
                 <MaterialIcons name="add-a-photo" size={20} color={theme.outline} />
-                <Text style={[styles.addReceiptDetailText, { color: theme.outline }]}>No Receipt yet</Text>
+                <Text style={styles.addReceiptDetailText}>No Receipt yet, Tap Edit to attach</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -294,7 +298,7 @@ const styles = StyleSheet.create({
   heroSection: {
     marginHorizontal: Spacing[4],
     marginTop: Spacing[4],
-    borderRadius: Radius.lg,
+    borderRadius: 12,
     padding: Spacing[8],
     gap: 4,
     alignItems: 'center',
@@ -308,18 +312,19 @@ const styles = StyleSheet.create({
   merchantName: {
     fontFamily: Typography.fonts.display,
     fontSize: Typography.sizes.headlineS,
+    lineHeight: Typography.sizes.headlineS * 1.2,
   },
   typePill: {
-    paddingVertical: 0,
-    paddingHorizontal: 2,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
-    height: 'auto'
   },
   typePillText: {
-    fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.labelL,
+    fontFamily: Typography.fonts.medium,
+    fontSize: Typography.sizes.labelS,
+    lineHeight: Typography.sizes.labelS * 1.3,
     textAlign: 'center',
   },
   amountValue: {
@@ -379,8 +384,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   categoryDot: {
-    width: 10,
-    height: 10,
+    width: 8,
+    height: 8,
     borderRadius: 5,
   },
   pill: {
@@ -391,7 +396,6 @@ const styles = StyleSheet.create({
   pillText: {
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelM,
-    fontWeight: '500',
   },
   notesDisplay: {
     padding: Spacing[4],
@@ -430,7 +434,7 @@ const styles = StyleSheet.create({
   receiptDetailImage: {
     width: '100%',
     height: 200,
-    borderRadius: Radius.sm,
+    borderRadius: 12,
   },
   receiptDetailBtn: {
     flexDirection: 'row',
@@ -446,10 +450,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 20,
+    paddingVertical: 24,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: Radius.sm,
+    borderColor: Colors.light.outline,
+    opacity: 0.6,
   },
   addReceiptDetailText: {
     fontFamily: Typography.fonts.body,
-    fontSize: 14,
+    fontSize: 13,
+    color: Colors.light.outline,
   },
 });
