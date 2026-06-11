@@ -517,7 +517,8 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
-    marginBottom: 4,
+    marginBottom: 8,
+    marginTop: 2,
   },
   selectionBar: {
     flexDirection: 'row',
@@ -550,11 +551,11 @@ const styles = StyleSheet.create({
   txRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: Radius.sm,
-    gap: 10,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: -6,
   },
   checkbox: {
     width: 20,
@@ -566,23 +567,23 @@ const styles = StyleSheet.create({
   },
   txInfo: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   txMerchant: {
-    fontFamily: Typography.fonts.body,
+    fontFamily: Typography.fonts.display,
     fontSize: 14,
   },
   txMeta: {
     fontFamily: Typography.fonts.body,
-    fontSize: 11,
+    fontSize: 12,
   },
   txRight: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 2,
   },
   txAmount: {
     fontFamily: Typography.fonts.display,
-    fontSize: 14,
+    fontSize: 15,
   },
   legendBox: {
     padding: Spacing[3],

@@ -64,7 +64,7 @@ export const Chip: React.FC<ChipProps> = ({
   };
 
   const sizeStyles = size === 'sm'
-    ? { paddingVertical: 3, paddingHorizontal: 8 }
+    ? { paddingVertical: 2, paddingHorizontal: 8 }
     : { paddingVertical: 7, paddingHorizontal: 16 };
 
   const textSize = size === 'sm'
