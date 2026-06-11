@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Typography, Shadows, Spacing, Colors, Palette } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { formatCurrency } from '@/lib/utils';
 import { BellIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useMonthlyBalances, useTransactionStore } from '@/lib/stores/transactionStore';
@@ -37,19 +38,7 @@ export default function HomeScreen() {
   const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const [showTxModal, setShowTxModal] = useState(false);
 
-  const [notifications, setNotifications] = useState([
-    { id: 'n1', text: 'New transaction of ₦15,790 at Shoprite', time: '2 min ago' },
-    { id: 'n2', text: 'Monthly salary of ₦350,000 received', time: '1 hour ago' },
-    { id: 'n3', text: 'Grocery payment of ₦8,500 at Spar', time: '3 hours ago' },
-    { id: 'n4', text: 'Airtime recharge of ₦1,000', time: '5 hours ago' },
-  ]);
-
   const closeNotifications = () => setShowNotifications(false);
-
-  const clearAllNotifications = () => {
-    setNotifications([]);
-    setShowNotifications(false);
-  };
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
   const recentTransactions = transactions.slice(0, 10);
@@ -101,6 +90,23 @@ export default function HomeScreen() {
     return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
   };
 
+  const notificationItems = useMemo(() => {
+    const seen = new Set<string>();
+    const items: { id: string; text: string; time: string; transactionId: string }[] = [];
+    const push = (tx: typeof transactions[0], text: string) => {
+      if (seen.has(tx.id)) return;
+      seen.add(tx.id);
+      items.push({ id: tx.id, text, time: formatDate(tx.transactionDate), transactionId: tx.id });
+    };
+    transactions.filter((tx) => tx.isFlaggedForReview).forEach((tx) =>
+      push(tx, `${tx.merchantName || 'Unknown'} — ${formatCurrency(tx.amount, tx.currency)} requires review`)
+    );
+    transactions.slice(0, 10).forEach((tx) =>
+      push(tx, `${tx.transactionType === 'credit' ? 'Received' : 'Sent'} ${formatCurrency(tx.amount, tx.currency)}${tx.merchantName ? ` at ${tx.merchantName}` : ''}`)
+    );
+    return items.slice(0, 10);
+  }, [transactions]);
+
   const openNotifications = useCallback(() => {
     bellRef.current?.measureInWindow((x, y, width, height) => {
       setBellPos({ top: y + height + 4, right: screenWidth - (x + width / 2) });
@@ -125,9 +131,9 @@ export default function HomeScreen() {
           >
             <View>
               <BellIcon size={24} color={theme.onSurface} />
-              {notifications.length > 0 && (
+              {notificationItems.length > 0 && (
                 <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>{notifications.length > 9 ? '9+' : notifications.length}</Text>
+                  <Text style={styles.bellBadgeText}>{notificationItems.length > 9 ? '9+' : notificationItems.length}</Text>
                 </View>
               )}
             </View>
@@ -243,23 +249,23 @@ export default function HomeScreen() {
             <View style={[styles.notifDropdown, { top: bellPos.top, right: bellPos.right, width: screenWidth / 2 }]}>
               <Text style={styles.notifHeader}>Notifications</Text>
               <ScrollView style={{ maxHeight: screenHeight * 0.35 }} nestedScrollEnabled>
-                {notifications.map((n, i) => (
+                {notificationItems.map((n, i) => (
                   <TouchableOpacity
-                    key={n.id}
+                    key={n.id + n.transactionId}
                     onPress={() => {
                       closeNotifications();
-                      router.push('/transactions' as any);
+                      router.push(`/transactions/${n.transactionId}` as any);
                     }}
                     activeOpacity={0.7}
                   >
-                    <View style={[styles.notifItem, i < notifications.length - 1 && styles.notifItemBorder]}>
+                    <View style={[styles.notifItem, i < notificationItems.length - 1 && styles.notifItemBorder]}>
                       <Text style={styles.notifText}>{n.text}</Text>
                       <Text style={styles.notifTime}>{n.time}</Text>
                     </View>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <TouchableOpacity style={styles.notifClearBtn} onPress={clearAllNotifications} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.notifClearBtn} onPress={closeNotifications} activeOpacity={0.7}>
                 <Text style={styles.notifClearText}>Clear all notifications</Text>
               </TouchableOpacity>
             </View>
