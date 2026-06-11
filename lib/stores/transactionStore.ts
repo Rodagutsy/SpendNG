@@ -15,7 +15,7 @@ export interface TransactionRecord {
   availableBalance: number | null;
   sourceChannel: 'sms' | 'email' | 'manual';
   parseConfidence: string | null;
-  taxClassification: 'personal' | 'business' | 'shared' | null;
+  taxClassificationId: string | null;
   confidenceLevel: 'high' | 'medium' | 'low' | null;
   originalMessage: string | null;
   isDuplicate: boolean;
@@ -76,7 +76,7 @@ function mapRowToRecord(row: any): TransactionRecord {
     availableBalance: row.available_balance,
     sourceChannel: row.source_channel as 'sms' | 'email' | 'manual',
     parseConfidence: row.parse_confidence,
-    taxClassification: null,
+    taxClassificationId: row.tax_classification_id ?? null,
     confidenceLevel: null,
     originalMessage: row.raw_source_text,
     isDuplicate: row.is_duplicate,
@@ -172,7 +172,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       ...data,
       id: newId,
       parseConfidence: null,
-      taxClassification: null,
+      taxClassificationId: null,
       confidenceLevel: null,
       isDuplicate: false,
       isFlaggedForReview: data.isFlaggedForReview || false,

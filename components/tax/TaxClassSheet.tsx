@@ -2,41 +2,60 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useTaxClassificationStore, TaxClassificationRecord } from '@/lib/stores/taxClassificationStore';
 
 interface TaxClassSheetProps {
   visible: boolean;
   onClose: () => void;
-  onSelect: (classification: 'personal' | 'business' | 'shared') => void;
+  onSelect: (classificationId: string) => void;
   current?: string | null;
+  direction?: 'income' | 'expense';
 }
 
-const OPTIONS: { key: 'personal' | 'business' | 'shared'; label: string; desc: string }[] = [
-  { key: 'personal', label: 'Personal', desc: 'Not deductible — excluded from filing' },
-  { key: 'business', label: 'Business', desc: 'Fully deductible / reportable income' },
-  { key: 'shared', label: 'Shared', desc: 'Mixed-use — pro-rated calculation' },
-];
+const DIRECTION_DESCRIPTIONS: Record<string, string> = {
+  'employment-income': 'Salary, wages — fully reportable',
+  'business-income': 'Business revenue — fully reportable',
+  'freelance-income': 'Contract work — fully reportable',
+  'investment-income': 'Dividends, interest, capital gains',
+  'rental-income': 'Property rental — fully reportable',
+  'other-taxable-income': 'Miscellaneous — reportable income',
+  'non-taxable-receipt': 'Gifts, personal transfers — not taxed',
+  'business-expense': 'Fully deductible business cost',
+  'personal-expense': 'Not deductible — excluded from filing',
+  'business-asset': 'Capital equipment — depreciable asset',
+  'tax-paid': 'Tax already remitted — claim credit',
+};
 
-export const TaxClassSheet: React.FC<TaxClassSheetProps> = ({ visible, onClose, onSelect, current }) => {
+export const TaxClassSheet: React.FC<TaxClassSheetProps> = ({ visible, onClose, onSelect, current, direction }) => {
+  const { classifications } = useTaxClassificationStore();
+
+  const options = direction
+    ? classifications.filter((c) => c.direction === direction)
+    : classifications;
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={[styles.sheet]} activeOpacity={1} onPress={() => {}}>
           <View style={styles.handle} />
           <Text style={styles.title}>Tax Classification</Text>
-          {OPTIONS.map((opt) => (
+          {options.length === 0 && (
+            <Text style={styles.emptyText}>Loading classifications...</Text>
+          )}
+          {options.map((opt) => (
             <TouchableOpacity
-              key={opt.key}
-              style={[styles.optionRow, current === opt.key && styles.optionSelected]}
-              onPress={() => { onSelect(opt.key); onClose(); }}
+              key={opt.id}
+              style={[styles.optionRow, current === opt.id && styles.optionSelected]}
+              onPress={() => { onSelect(opt.id); onClose(); }}
               activeOpacity={0.7}
             >
               <View style={styles.optionLeft}>
-                <Text style={[styles.optionLabel, current === opt.key && { fontFamily: Typography.fonts.display }]}>
-                  {opt.label}
+                <Text style={[styles.optionLabel, current === opt.id && { fontFamily: Typography.fonts.display }]}>
+                  {opt.name}
                 </Text>
-                <Text style={styles.optionDesc}>{opt.desc}</Text>
+                <Text style={styles.optionDesc}>{DIRECTION_DESCRIPTIONS[opt.id] || ''}</Text>
               </View>
-              {current === opt.key && <MaterialIcons name="check" size={20} color={Colors.main.warning} />}
+              {current === opt.id && <MaterialIcons name="check" size={20} color={Colors.main.warning} />}
             </TouchableOpacity>
           ))}
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.8}>
@@ -60,6 +79,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     paddingHorizontal: Spacing[5],
     paddingBottom: Platform.OS === 'ios' ? 34 : Spacing[5],
+    maxHeight: '70%',
   },
   handle: {
     width: 40,
@@ -75,6 +95,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: Colors.light.onSurface,
     marginBottom: Spacing[4],
+  },
+  emptyText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 14,
+    color: Colors.light.outline,
+    textAlign: 'center',
+    paddingVertical: 20,
   },
   optionRow: {
     flexDirection: 'row',

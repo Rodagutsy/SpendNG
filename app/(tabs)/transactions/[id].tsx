@@ -6,18 +6,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAlert } from '@/context/AlertContext';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { TransactionModal } from '@/components/TransactionModal';
 import { TaxClassSheet } from '@/components/tax/TaxClassSheet';
 import { format } from 'date-fns';
 import { useMemo, useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-const TAX_LABELS: Record<string, string> = {
-  personal: 'Personal',
-  business: 'Business',
-  shared: 'Shared',
-};
 
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,6 +23,7 @@ export default function TransactionDetailScreen() {
 
   const { transactions, updateTransaction } = useTransactionStore();
   const { categories, getCategoryById } = useCategoryStore();
+  const { getById: getTaxClassById } = useTaxClassificationStore();
 
   const transaction = useMemo(() => transactions.find((t) => t.id === id), [transactions, id]);
   const category = useMemo(
@@ -61,8 +57,9 @@ export default function TransactionDetailScreen() {
   const accountNumber = transaction.accountNumberLast4 ? `••${transaction.accountNumberLast4}` : null;
   const sourceLabel = transaction.sourceChannel === 'sms' ? 'SMS' : transaction.sourceChannel === 'email' ? 'Email' : 'Manual';
 
-  const taxKey = transaction.taxClassification;
-  const taxLabel = taxKey ? TAX_LABELS[taxKey] : 'Unclassified';
+  const taxKey = transaction.taxClassificationId;
+  const taxClassObj = taxKey ? getTaxClassById(taxKey) : undefined;
+  const taxLabel = taxClassObj?.name ?? 'Unclassified';
 
   const handleEdit = () => {
     setShowEditModal(true);
@@ -119,7 +116,7 @@ export default function TransactionDetailScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Warning banner for unclassified */}
-        {!transaction.taxClassification && (
+        {!transaction.taxClassificationId && (
           <TouchableOpacity style={styles.warningBanner} onPress={() => setShowTaxSheet(true)} activeOpacity={0.8}>
             <MaterialIcons name="warning" size={18} color={Colors.main.warning} />
             <Text style={styles.warningBannerText}>Tax class not set — tap to assign</Text>
@@ -252,7 +249,7 @@ export default function TransactionDetailScreen() {
               <View>
                 <Text style={[styles.taxSectionLabel, { color: theme.onBackground }]}>Tax Classification</Text>
                 <Text style={[styles.taxSectionDesc, { color: theme.outline }]}>
-                  {taxKey ? TAX_LABELS[taxKey] : 'Not set'}
+                  {taxClassObj?.name ?? 'Not set'}
                 </Text>
               </View>
             </View>
@@ -292,8 +289,9 @@ export default function TransactionDetailScreen() {
       <TaxClassSheet
         visible={showTaxSheet}
         onClose={() => setShowTaxSheet(false)}
-        onSelect={(cls) => updateTransaction(id, { taxClassification: cls })}
-        current={transaction.taxClassification}
+        onSelect={(cls) => updateTransaction(id, { taxClassificationId: cls })}
+        current={transaction.taxClassificationId}
+        direction={isDebit ? 'expense' : 'income'}
       />
     </View>
   );

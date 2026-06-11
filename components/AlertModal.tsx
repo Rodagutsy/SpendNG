@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 export interface AlertButton {
   text: string;
@@ -34,44 +35,39 @@ export function AlertModal({ visible, config, onClose }: AlertModalProps) {
     onClose();
   };
 
-  const bgColor = (style?: 'default' | 'cancel' | 'destructive') => {
-    if (style === 'destructive') return 'transparent';
-    if (style === 'cancel') return 'transparent';
-    return theme.primary;
+  const btnStyles = (index: number, style?: 'default' | 'cancel' | 'destructive') => {
+    if (index === 0) {
+      const bg = style === 'destructive' ? theme.roles.error : theme.primary;
+      return { backgroundColor: bg, borderWidth: 0 };
+    }
+    return { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: style === 'destructive' ? theme.roles.error : theme.outlineVariant };
   };
 
-  const textColor = (style?: 'default' | 'cancel' | 'destructive') => {
-    if (style === 'destructive') return theme.roles.error;
-    if (style === 'cancel') return theme.outline;
-    return theme.onPrimary;
-  };
-
-  const borderColor = (style?: 'default' | 'cancel' | 'destructive') => {
-    if (style === 'destructive') return theme.roles.error;
-    if (style === 'cancel') return theme.outlineVariant;
-    return 'transparent';
+  const btnTextColor = (index: number, style?: 'default' | 'cancel' | 'destructive') => {
+    if (index === 0) return theme.onPrimary;
+    return style === 'destructive' ? theme.roles.error : theme.outline;
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={[styles.container, { backgroundColor: theme.roles.surface }]} activeOpacity={1} onPress={() => {}}>
+          <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <MaterialIcons name="close" size={20} color={theme.outline} />
+          </TouchableOpacity>
           <Text style={[styles.title, { color: theme.roles.onSurface }]}>{config.title}</Text>
           {config.message ? (
             <Text style={[styles.message, { color: theme.outline }]}>{config.message}</Text>
           ) : null}
           <View style={styles.buttonRow}>
-            {buttons.map((button, i) => (
+            {buttons.slice(0, 2).map((button, i) => (
               <TouchableOpacity
                 key={i}
-                style={[
-                  styles.button,
-                  { backgroundColor: bgColor(button.style), borderColor: borderColor(button.style), borderWidth: button.style === 'destructive' || button.style === 'cancel' ? 1.5 : 0 },
-                ]}
+                style={[styles.button, btnStyles(i, button.style)]}
                 onPress={() => handlePress(button)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.buttonText, { color: textColor(button.style) }]}>
+                <Text style={[styles.buttonText, { color: btnTextColor(i, button.style) }]}>
                   {button.text}
                 </Text>
               </TouchableOpacity>
@@ -95,6 +91,13 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     borderRadius: 24,
     padding: 24,
+    paddingTop: 20,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 1,
   },
   title: {
     fontFamily: Typography.fonts.display,

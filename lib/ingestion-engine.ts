@@ -3,6 +3,7 @@ import { Parser } from './parser';
 import { CategorizationEngine } from './categorization-engine';
 import { supabase } from './supabase';
 import { useTransactionStore } from './stores/transactionStore';
+import { useCategoryDefaultStore } from './stores/categoryDefaultStore';
 import { useUIStore } from './stores/uiStore';
 
 export class IngestionEngine {
@@ -55,6 +56,8 @@ export class IngestionEngine {
         parseResult.transactionDate,
       );
 
+      const confidenceLevel = parseResult.parseConfidence;
+
       const newTransaction = await useTransactionStore.getState().addTransaction({
         amount: parseResult.amount,
         currency: parseResult.currency,
@@ -67,12 +70,21 @@ export class IngestionEngine {
         availableBalance: parseResult.availableBalance,
         sourceChannel: parseResult.sourceChannel,
         originalMessage: parseResult.rawSourceText || null,
-        isFlaggedForReview: category.isFlagged || isSelfTransfer,
+        isFlaggedForReview: confidenceLevel !== 'high' || category.isFlagged || isSelfTransfer,
         notes: isSelfTransfer ? 'Internal Transfer' : null,
-        taxClassification: null,
-        confidenceLevel: null,
+        taxClassificationId: null,
+        confidenceLevel,
         receiptImageUri: null,
       });
+
+      if (newTransaction) {
+        const def = useCategoryDefaultStore.getState().getDefaultForCategory(category.categoryId);
+        if (def?.defaultTaxClassificationId) {
+          await useTransactionStore.getState().updateTransaction(newTransaction.id, {
+            taxClassificationId: def.defaultTaxClassificationId,
+          });
+        }
+      }
 
       return { success: true, transactionId: newTransaction.id };
     } catch (error) {

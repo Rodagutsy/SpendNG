@@ -204,7 +204,7 @@ export class ExportService {
       const flags: string[] = [];
       if (t.isFlaggedForReview) flags.push('[Review]');
       if (t.isDuplicate) flags.push('[Duplicate]');
-      if (t.taxClassification) flags.push(`[${esc(t.taxClassification)}]`);
+      if (t.taxClassificationId) flags.push(`[${esc(t.taxClassificationId)}]`);
       return flags.length > 0 ? flags.join(' ') : '—';
     }
 
@@ -245,7 +245,7 @@ export class ExportService {
       if (t.isFlaggedForReview) reasons.push('Flagged for review');
       if (t.isDuplicate) reasons.push('Possible duplicate');
       if (!t.categoryId || t.categoryId === 'uncategorized') reasons.push('Needs classification');
-      if (!t.taxClassification) reasons.push('Missing tax classification');
+      if (!t.taxClassificationId) reasons.push('Missing tax classification');
       const actions: string[] = [];
       if (t.isDuplicate) actions.push('Review & remove duplicate');
       else if (t.transactionType === 'debit' && t.amount > 50000) actions.push('Verify deductible eligibility');

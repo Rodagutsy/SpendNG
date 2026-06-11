@@ -15,33 +15,15 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
+import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
+import { TaxClassSheet } from '@/components/tax/TaxClassSheet';
 import { FormField } from '@/components/ui/FormField';
 import { AmountInput } from '@/components/ui/AmountInput';
 import { DropdownField } from '@/components/ui/DropdownField';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { CalendarModal } from '@/components/CalendarModal';
-
-const EXPENSE_CATEGORIES = [
-  { id: 'food-dining', label: 'Food & Dining' },
-  { id: 'transport', label: 'Transport' },
-  { id: 'airtime-data', label: 'Airtime & Data' },
-  { id: 'shopping', label: 'Shopping' },
-  { id: 'utilities', label: 'Utilities' },
-  { id: 'rent', label: 'Rent' },
-  { id: 'business-expense', label: 'Business' },
-  { id: 'health', label: 'Health' },
-  { id: 'education', label: 'Education' },
-  { id: 'other-expense', label: 'Other' },
-];
-
-const INCOME_CATEGORIES = [
-  { id: 'salary', label: 'Salary' },
-  { id: 'business-income', label: 'Business Income' },
-  { id: 'freelance', label: 'Freelance' },
-  { id: 'gifts', label: 'Gifts' },
-  { id: 'other-income', label: 'Other' },
-];
 
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash' },
@@ -70,7 +52,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const styles = useMemo(() => createStyles(theme, step2MaxHeight), [theme, step2MaxHeight]);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
   const updateTransaction = useTransactionStore((s) => s.updateTransaction);
-  const getCategoryById = useCategoryStore((s) => s.getCategoryById);
+  const { categories: allCategories, getCategoryById } = useCategoryStore();
+  const getDefaultForCategory = useCategoryDefaultStore((s) => s.getDefaultForCategory);
+  const getTaxClassById = useTaxClassificationStore((s) => s.getById);
   const isEditing = !!transaction;
 
   const [step, setStep] = useState(1);
@@ -94,7 +78,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [whtEnabled, setWhtEnabled] = useState(false);
   const [whtAmountText, setWhtAmountText] = useState('');
   const [whtClientName, setWhtClientName] = useState('');
-  const [taxClass, setTaxClass] = useState<'personal' | 'business' | 'shared' | null>(null);
+  const [taxClassId, setTaxClassId] = useState<string | null>(null);
   const [showTaxClassSheet, setShowTaxClassSheet] = useState(false);
 
   useEffect(() => {
@@ -114,7 +98,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
       setNotes(transaction.notes ?? '');
       setConfidenceLevel(transaction.confidenceLevel);
       setReceiptUri(transaction.receiptImageUri);
-      setTaxClass(transaction.taxClassification);
+      setTaxClassId(transaction.taxClassificationId);
       setWhtEnabled(transaction.whtAmount != null);
       setWhtAmountText(transaction.whtAmount ? String(transaction.whtAmount) : '');
       setWhtClientName(transaction.whtClientName ?? '');
@@ -123,14 +107,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
 
   useEffect(() => {
     if (!isEditing && category) {
-      const cat = getCategoryById(category);
-      if (cat?.defaultTaxClassification) {
-        setTaxClass(cat.defaultTaxClassification);
+      const def = getDefaultForCategory(category);
+      if (def?.defaultTaxClassificationId) {
+        setTaxClassId(def.defaultTaxClassificationId);
       }
     }
   }, [category, isEditing]);
 
-  const categories = type === 'credit' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  const categories = useMemo(() => {
+    const typeHint = type === 'credit' ? 'credit' : 'debit';
+    return allCategories
+      .filter((c) => c.transactionTypeHint === typeHint || c.transactionTypeHint === 'both')
+      .map((c) => ({ id: c.id, label: c.name }));
+  }, [allCategories, type]);
 
   const reset = () => {
     setStep(1);
@@ -148,7 +137,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     setWhtEnabled(false);
     setWhtAmountText('');
     setWhtClientName('');
-    setTaxClass(null);
+    setTaxClassId(null);
   };
 
   const handleClose = () => {
@@ -219,7 +208,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
         receiptImageUri: receiptUri,
         whtAmount: whtVal,
         whtClientName: whtEnabled ? (whtClientName || null) : null,
-        taxClassification: taxClass,
+        taxClassificationId: taxClassId,
       });
     } else {
       await addTransaction({
@@ -234,7 +223,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
         availableBalance: null,
         sourceChannel: 'manual',
         notes: notes || description || null,
-        taxClassification: taxClass,
+        taxClassificationId: taxClassId,
         confidenceLevel,
         originalMessage: null,
         isFlaggedForReview: false,
@@ -448,7 +437,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
               {/* Tax Classification — auto-filled, scroll to see */}
               <FormField label="Tax Classification">
                 <DropdownField
-                  value={taxClass ? taxClass.charAt(0).toUpperCase() + taxClass.slice(1) : ''}
+                  value={taxClassId ? getTaxClassById(taxClassId)?.name ?? '' : ''}
                   placeholder="Auto from category"
                   onPress={() => setShowTaxClassSheet(true)}
                 />
@@ -533,33 +522,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
           </TouchableOpacity>
         )}
 
-        {/* Tax Classification Picker */}
-        {showTaxClassSheet && (
-          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowTaxClassSheet(false)}>
-            <View style={[styles.pickerModal, { backgroundColor: theme.surface }]}>
-              <Text style={[styles.pickerTitle, { color: theme.onSurface }]}>Tax Classification</Text>
-              {[
-                { key: 'personal' as const, label: 'Personal', desc: 'Not deductible — excluded from filing' },
-                { key: 'business' as const, label: 'Business', desc: 'Fully deductible / reportable income' },
-                { key: 'shared' as const, label: 'Shared', desc: 'Mixed-use — pro-rated calculation' },
-              ].map((opt) => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.pickerOption, taxClass === opt.key && { backgroundColor: theme.primaryContainer }]}
-                  onPress={() => { setTaxClass(opt.key); setShowTaxClassSheet(false); }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.pickerOptionText, { color: theme.onSurface }, taxClass === opt.key && { fontFamily: Typography.fonts.display }]}>
-                      {opt.label}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: theme.outline, fontFamily: Typography.fonts.body }}>{opt.desc}</Text>
-                  </View>
-                  {taxClass === opt.key && <MaterialIcons name="check" size={18} color={theme.primary} />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        )}
+        {/* Tax Classification Sheet */}
+        <TaxClassSheet
+          visible={showTaxClassSheet}
+          onClose={() => setShowTaxClassSheet(false)}
+          onSelect={(id) => { setTaxClassId(id); setShowTaxClassSheet(false); }}
+          current={taxClassId}
+          direction={type === 'credit' ? 'income' : 'expense'}
+        />
 
         {/* Calendar */}
         <CalendarModal

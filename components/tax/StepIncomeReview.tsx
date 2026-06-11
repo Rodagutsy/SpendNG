@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform }
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
 import { TaxClassSheet } from './TaxClassSheet';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -17,6 +18,7 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
   const transactions = useTransactionStore((s) => s.transactions);
   const updateTransaction = useTransactionStore((s) => s.updateTransaction);
   const getCategoryById = useCategoryStore((s) => s.getCategoryById);
+  const { getById: getTaxClassById } = useTaxClassificationStore();
   const setStepFlagged = useTaxStore((s) => s.setStepFlagged);
   const setStepDone = useTaxStore((s) => s.setStepDone);
 
@@ -27,18 +29,18 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
   }, [transactions]);
 
   const needsAttention = useMemo(() => {
-    return incomeTxs.filter((t) => !t.taxClassification);
+    return incomeTxs.filter((t) => !t.taxClassificationId);
   }, [incomeTxs]);
 
   const classified = useMemo(() => {
-    return incomeTxs.filter((t) => t.taxClassification);
+    return incomeTxs.filter((t) => t.taxClassificationId);
   }, [incomeTxs]);
 
   const flaggedCount = needsAttention.length;
 
-  const handleReassign = async (classification: 'personal' | 'business' | 'shared') => {
+  const handleReassign = async (classificationId: string) => {
     if (!editTx) return;
-    await updateTransaction(editTx.id, { taxClassification: classification } as any);
+    await updateTransaction(editTx.id, { taxClassificationId: classificationId } as any);
     setEditTx(null);
   };
 
@@ -51,6 +53,7 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
   const renderItem = (tx: TransactionRecord) => {
     const cat = getCategoryById(tx.categoryId);
     const catName = cat?.name ?? 'Unknown';
+    const taxName = tx.taxClassificationId ? getTaxClassById(tx.taxClassificationId)?.name : null;
     return (
       <View key={tx.id} style={styles.txRow}>
         <View style={styles.txLeft}>
@@ -58,16 +61,16 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
           <View style={styles.txMetaRow}>
             <Text style={styles.txCategory}>{catName}</Text>
             <Text style={styles.txDate}>{new Date(tx.transactionDate).toLocaleDateString()}</Text>
-            {tx.taxClassification && (
+            {taxName && (
               <View style={[styles.taxBadge, { backgroundColor: Colors.main.warning + '1A' }]}>
-                <Text style={styles.taxBadgeText}>{tx.taxClassification === 'personal' ? 'Per' : tx.taxClassification === 'business' ? 'Biz' : 'Sha'}</Text>
+                <Text style={styles.taxBadgeText}>{taxName.slice(0, 3)}</Text>
               </View>
             )}
           </View>
         </View>
         <View style={styles.txRight}>
           <Text style={styles.txAmount}>₦{tx.amount.toLocaleString()}</Text>
-          <TouchableOpacity onPress={() => setEditTx({ id: tx.id, current: tx.taxClassification })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={() => setEditTx({ id: tx.id, current: tx.taxClassificationId })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <MaterialIcons name="edit" size={16} color={Colors.light.outline} />
           </TouchableOpacity>
         </View>
@@ -120,6 +123,7 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
         onClose={() => setEditTx(null)}
         onSelect={handleReassign}
         current={editTx?.current ?? null}
+        direction="income"
       />
     </Modal>
   );

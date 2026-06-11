@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, 
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -15,6 +16,7 @@ interface StepTaxSummaryProps {
 export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose, onComplete }) => {
   const transactions = useTransactionStore((s) => s.transactions);
   const getCategoryById = useCategoryStore((s) => s.getCategoryById);
+  const { classifications: taxClasses, getById: getTaxClassById } = useTaxClassificationStore();
   const whtCredits = useTaxStore((s) => s.whtCredits);
   const setStepDone = useTaxStore((s) => s.setStepDone);
 
@@ -27,33 +29,29 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
   const incomeTxs = useMemo(() => transactions.filter((t) => t.transactionType === 'credit'), [transactions]);
   const expenseTxs = useMemo(() => transactions.filter((t) => t.transactionType === 'debit'), [transactions]);
 
-  const businessIncome = useMemo(() => {
-    return incomeTxs.filter((t) => t.taxClassification === 'business');
-  }, [incomeTxs]);
+  const incomeTaxClasses = useMemo(() => taxClasses.filter((tc) => tc.direction === 'income'), [taxClasses]);
+  const expenseTaxClasses = useMemo(() => taxClasses.filter((tc) => tc.direction === 'expense'), [taxClasses]);
 
-  const personalIncome = useMemo(() => {
-    return incomeTxs.filter((t) => t.taxClassification === 'personal');
-  }, [incomeTxs]);
+  const incomeByClass = useMemo(() => {
+    return incomeTaxClasses.map((tc) => ({
+      id: tc.id,
+      name: tc.name,
+      transactions: incomeTxs.filter((t) => t.taxClassificationId === tc.id),
+    }));
+  }, [incomeTaxClasses, incomeTxs]);
 
-  const sharedIncome = useMemo(() => {
-    return incomeTxs.filter((t) => t.taxClassification === 'shared');
-  }, [incomeTxs]);
+  const expenseByClass = useMemo(() => {
+    return expenseTaxClasses.map((tc) => ({
+      id: tc.id,
+      name: tc.name,
+      transactions: expenseTxs.filter((t) => t.taxClassificationId === tc.id),
+    }));
+  }, [expenseTaxClasses, expenseTxs]);
 
-  const businessExpenses = useMemo(() => {
-    return expenseTxs.filter((t) => t.taxClassification === 'business');
-  }, [expenseTxs]);
-
-  const personalExpenses = useMemo(() => {
-    return expenseTxs.filter((t) => t.taxClassification === 'personal');
-  }, [expenseTxs]);
-
-  const totalBusinessIncome = businessIncome.reduce((s, t) => s + t.amount, 0);
-  const totalPersonalIncome = personalIncome.reduce((s, t) => s + t.amount, 0);
-  const totalSharedIncome = sharedIncome.reduce((s, t) => s + t.amount, 0);
-  const totalIncome = totalBusinessIncome + totalPersonalIncome + totalSharedIncome;
-
-  const totalDeductibleExpenses = businessExpenses.reduce((s, t) => s + t.amount, 0);
-  const totalPersonalExpenses = personalExpenses.reduce((s, t) => s + t.amount, 0);
+  const totalIncome = incomeTxs.reduce((s, t) => s + t.amount, 0);
+  const totalDeductibleExpenses = expenseByClass
+    .filter((g) => g.id === 'business-expense' || g.id === 'business-asset' || g.id === 'tax-paid')
+    .reduce((s, g) => s + g.transactions.reduce((s2, t) => s2 + t.amount, 0), 0);
 
   const totalWht = whtCredits.reduce((s, c) => s + c.whtAmount, 0);
   const estimatedTaxableIncome = totalIncome - totalDeductibleExpenses;
@@ -63,13 +61,15 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
       'Tax Summary Report',
       `Year: ${new Date().getFullYear()}`,
       '',
-      `Employment/Personal Income: ₦${totalPersonalIncome.toLocaleString()}`,
-      `Business/Freelance Income: ₦${totalBusinessIncome.toLocaleString()}`,
-      `Shared/Mixed Income: ₦${totalSharedIncome.toLocaleString()}`,
+      ...incomeByClass.flatMap((g) => [
+        `${g.name}: ₦${g.transactions.reduce((s, t) => s + t.amount, 0).toLocaleString()}`,
+      ]),
       `Total Income: ₦${totalIncome.toLocaleString()}`,
       '',
+      ...expenseByClass.flatMap((g) => [
+        `${g.name}: ₦${g.transactions.reduce((s, t) => s + t.amount, 0).toLocaleString()}`,
+      ]),
       `Deductible Expenses: ₦${totalDeductibleExpenses.toLocaleString()}`,
-      `Personal Expenses: ₦${totalPersonalExpenses.toLocaleString()}`,
       '',
       `WHT Credits: ₦${totalWht.toLocaleString()}`,
       '',
@@ -126,30 +126,22 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
           </View>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            {renderCollapsibleCard(
-              'Employment / Personal Income',
-              totalPersonalIncome,
-              personalIncome.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
-              'personalIncome'
-            )}
-            {renderCollapsibleCard(
-              'Business / Freelance Income',
-              totalBusinessIncome,
-              businessIncome.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
-              'businessIncome'
-            )}
-            {renderCollapsibleCard(
-              'Shared / Mixed Income',
-              totalSharedIncome,
-              sharedIncome.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
-              'sharedIncome'
+            {incomeByClass.map((g) =>
+              renderCollapsibleCard(
+                g.name,
+                g.transactions.reduce((s, t) => s + t.amount, 0),
+                g.transactions.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
+                `income-${g.id}`
+              )
             )}
 
-            {renderCollapsibleCard(
-              'Deductible Expenses',
-              totalDeductibleExpenses,
-              businessExpenses.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
-              'expenses'
+            {expenseByClass.map((g) =>
+              renderCollapsibleCard(
+                g.name,
+                g.transactions.reduce((s, t) => s + t.amount, 0),
+                g.transactions.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
+                `expense-${g.id}`
+              )
             )}
 
             <View style={[styles.card, { backgroundColor: Colors.light.surface }]}>
