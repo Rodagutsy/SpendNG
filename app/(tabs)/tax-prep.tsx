@@ -280,7 +280,7 @@ export default function TaxPrepScreen() {
         {/* Transactions Section */}
         <View style={styles.txSection}>
           <View style={styles.txSectionHeader}>
-            <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Review Transactions</Text>
+            <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Transactions</Text>
             {unclassifiedCount > 0 && (
               <TouchableOpacity
                 style={[styles.applyDefaultsBtn, { backgroundColor: Colors.main.warning + '1A' }]}
