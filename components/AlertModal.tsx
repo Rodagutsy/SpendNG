@@ -51,7 +51,7 @@ export function AlertModal({ visible, config, onClose }: AlertModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={[styles.container, { backgroundColor: theme.roles.surface }]} activeOpacity={1} onPress={() => {}}>
+        <TouchableOpacity style={[styles.container, { backgroundColor: theme.roles.surface }]} activeOpacity={1} onPress={() => { }}>
           <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <MaterialIcons name="close" size={20} color={theme.outline} />
           </TouchableOpacity>
@@ -91,18 +91,18 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     borderRadius: 24,
     padding: 24,
-    paddingTop: 20,
+    paddingTop: 48,
   },
   closeBtn: {
     position: 'absolute',
-    top: 12,
-    right: 12,
+    top: 16,
+    right: 20,
     zIndex: 1,
   },
   title: {
     fontFamily: Typography.fonts.display,
     fontSize: Typography.sizes.titleS,
-    marginBottom: 8,
+    marginBottom: 4,
     textAlign: 'center',
   },
   message: {
@@ -119,12 +119,14 @@ const styles = StyleSheet.create({
   button: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: Radius.md,
+    borderRadius: Radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
+    height: 40,
   },
   buttonText: {
     fontFamily: Typography.fonts.medium,
     fontSize: Typography.sizes.buttonM,
+    textAlign: 'center',
   },
 });

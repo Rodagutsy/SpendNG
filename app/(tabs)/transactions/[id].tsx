@@ -84,7 +84,7 @@ export default function TransactionDetailScreen() {
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete This Transaction',
+          text: 'Delete',
           style: 'destructive',
           onPress: () => {
             updateTransaction(id, { isDuplicate: true });
