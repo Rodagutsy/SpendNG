@@ -6,14 +6,14 @@ import { supabase } from '@/lib/supabase';
 import { useState, useEffect } from 'react';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAlert } from '@/context/AlertContext';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const { showAlert } = useAlert();
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [countdown, setCountdown] = useState(3);
@@ -34,14 +34,21 @@ export default function ForgotPasswordScreen() {
   }, [sent]);
 
   const handleSendLink = async () => {
-    if (!email) return;
+    setEmailError('');
+    setFormError('');
+    if (!email) { setEmailError('Enter your email address'); return; }
     setLoading(true);
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
       setSent(true);
     } catch (error: any) {
-      showAlert({ title: 'Error', message: error.message });
+      const msg = error?.message || '';
+      if (msg.toLowerCase().includes('invalid email') || msg.toLowerCase().includes('email')) {
+        setEmailError(msg);
+      } else {
+        setFormError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -76,13 +83,16 @@ export default function ForgotPasswordScreen() {
           Enter your email address and we will send instructions to regain access.
         </Text>
 
+        {formError ? <Text style={[styles.formError, { color: Colors.main.error }]}>{formError}</Text> : null}
+
         <TextInput
           label="Email"
           placeholder="your@email.com"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(v) => { setEmail(v); setEmailError(''); setFormError(''); }}
           autoCapitalize="none"
           keyboardType="email-address"
+          error={emailError}
           containerStyle={{ marginBottom: 20 }}
         />
 
@@ -138,6 +148,11 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.buttonM,
     fontWeight: '500',
+  },
+  formError: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelM,
+    marginBottom: 12,
   },
   confirmIcon: {
     fontSize: 64,

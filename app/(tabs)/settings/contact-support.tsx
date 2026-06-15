@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors, Typography, Spacing } from '@/constants/Tokens';
+import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
@@ -9,6 +9,10 @@ export default function ContactSupportScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+
+  const handleEmail = () => {
+    Linking.openURL('mailto:support@spendng.app');
+  };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -20,10 +24,17 @@ export default function ContactSupportScreen() {
         <View style={{ width: 32 }} />
       </View>
 
-      <View style={styles.comingSoon}>
-        <IconSymbol name="help-circle" size={48} color={theme.outline} />
-        <Text style={[styles.comingSoonText, { color: theme.onBackground }]}>Coming soon</Text>
-        <Text style={[styles.comingSoonSub, { color: theme.outline }]}>Support is not available yet. Check back later.</Text>
+      <View style={[styles.card, { backgroundColor: theme.surface }]}>
+        <TouchableOpacity style={styles.row} onPress={handleEmail} activeOpacity={0.7}>
+          <View style={[styles.iconCircle, { backgroundColor: theme.primaryContainer }]}>
+            <IconSymbol name="envelope.fill" size={20} color={theme.primary} />
+          </View>
+          <View style={styles.textCol}>
+            <Text style={[styles.rowTitle, { color: theme.onBackground }]}>Email Us</Text>
+            <Text style={[styles.rowDesc, { color: theme.outline }]}>support@spendng.app</Text>
+          </View>
+          <IconSymbol name="chevron.right" size={16} color={theme.outline} />
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -48,23 +59,36 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.fonts.medium,
-    fontSize: Typography.sizes.titleM,
-  },
-  comingSoon: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    gap: 12,
-  },
-  comingSoonText: {
-    fontFamily: Typography.fonts.medium,
     fontSize: Typography.sizes.titleS,
   },
-  comingSoonSub: {
-    fontFamily: Typography.fonts.body,
+  card: {
+    marginHorizontal: Spacing[6],
+    borderRadius: Radius.sm,
+    padding: Spacing[4],
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: Spacing[2],
+  },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  textCol: {
+    flex: 1,
+  },
+  rowTitle: {
+    fontFamily: Typography.fonts.medium,
     fontSize: Typography.sizes.bodyS,
-    textAlign: 'center',
-    paddingHorizontal: Spacing[8],
+  },
+  rowDesc: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelM,
+    marginTop: 1,
   },
 });

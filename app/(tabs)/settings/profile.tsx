@@ -1,19 +1,47 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { TextInput } from '@/components/ui/TextInput';
+import { supabase } from '@/lib/supabase';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
-  const [name, setName] = useState('John Doe');
-  const [email, setEmail] = useState('john.doe@example.com');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setName(user.user_metadata?.full_name || user.email?.split('@')[0] || '');
+        setEmail(user.email || '');
+      }
+    })();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { full_name: name },
+      });
+      if (error) throw error;
+      setEditing(false);
+      Alert.alert('Saved', 'Profile updated successfully.');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to update profile');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
@@ -43,20 +71,18 @@ export default function ProfileScreen() {
           style={[styles.textInput, { backgroundColor: theme.surfaceContainerLow, color: theme.outline, borderColor: theme.surfaceContainerLow }]}
           label="Email"
           value={email}
-          onChangeText={setEmail}
-          editable={editing}
+          editable={false}
           placeholder="Your email"
-          keyboardType="email-address"
-          autoCapitalize="none"
         />
 
         <TouchableOpacity
-          style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
-          onPress={() => setEditing(!editing)}
+          style={[styles.primaryBtn, { backgroundColor: theme.primary, opacity: saving ? 0.6 : 1 }]}
+          onPress={() => editing ? handleSave() : setEditing(true)}
           activeOpacity={0.8}
+          disabled={saving}
         >
           <Text style={[styles.primaryBtnText, { color: theme.onPrimary }]}>
-            {editing ? 'Save Changes' : 'Edit'}
+            {saving ? 'Saving...' : editing ? 'Save Changes' : 'Edit'}
           </Text>
         </TouchableOpacity>
       </View>

@@ -10,6 +10,7 @@ import {
   ImageBackground,
   useWindowDimensions,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,6 +20,7 @@ import { formatCurrency } from '@/lib/utils';
 import { BellIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useMonthlyBalances, useTransactionStore } from '@/lib/stores/transactionStore';
+import { CashflowEngine } from '@/lib/cashflow-engine';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
 import { useAuth } from '@/context/AuthContext';
@@ -34,7 +36,9 @@ export default function HomeScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { moneyIn, moneyOut, netBalance, transactionCount } = useMonthlyBalances();
-  const transactions = useTransactionStore((s) => s.transactions);
+  const transactions = useTransactionStore((s) => s.homeTransactions);
+  const fetchHomeTransactions = useTransactionStore((s) => s.fetchHomeTransactions);
+  const storeLoading = useTransactionStore((s) => s.loading);
   const { user } = useAuth();
 
   const bellRef = useRef<View>(null);
@@ -46,6 +50,7 @@ export default function HomeScreen() {
   const [showConnectPrompt, setShowConnectPrompt] = useState(false);
 
   useEffect(() => {
+    fetchHomeTransactions();
     (async () => {
       const [tokens, smsStatus] = await Promise.all([
         EmailService.getStoredTokens().catch(() => null),
@@ -86,7 +91,7 @@ export default function HomeScreen() {
   }
 
   const userName = user?.user_metadata?.full_name?.split(' ')[0] || user?.email?.split('@')[0] || 'User';
-  const recentTransactions = transactions.filter((t) => !t.isDuplicate).slice(0, 10);
+  const recentTransactions = transactions.filter((t) => !t.isDuplicate).sort((a, b) => b.transactionDate - a.transactionDate).slice(0, 4);
   const flaggedCount = transactions.filter((tx) => tx.isFlaggedForReview).length;
   const recentResolved = recentTransactions.map((t) => {
     const cat = useCategoryStore.getState().getCategoryById(t.categoryId);
@@ -99,19 +104,10 @@ export default function HomeScreen() {
   prevMonthStart.setMonth(prevMonthStart.getMonth() - 1);
   prevMonthStart.setDate(1);
   prevMonthStart.setHours(0, 0, 0, 0);
-  const prevMonthEnd = new Date();
-  prevMonthEnd.setDate(1);
-  prevMonthEnd.setHours(0, 0, 0, 0);
 
-  const prevMonthTxns = transactions.filter(
-    (t) => t.transactionDate >= prevMonthStart.getTime() && t.transactionDate < prevMonthEnd.getTime()
-  );
-  const prevMoneyIn = prevMonthTxns
-    .filter((t) => t.transactionType === 'credit')
-    .reduce((sum, t) => sum + t.amount, 0);
-  const prevMoneyOut = prevMonthTxns
-    .filter((t) => t.transactionType === 'debit')
-    .reduce((sum, t) => sum + t.amount, 0);
+  const summaries = useMemo(() => CashflowEngine.monthlySummaries(transactions, 2), [transactions]);
+  const currentSummary = summaries[1] || { income: 0, expense: 0, net: 0, transactionCount: 0, monthStart: 0 };
+  const prevSummary = summaries[0] || { income: 0, expense: 0, net: 0, transactionCount: 0, monthStart: 0 };
 
   const calcTrend = (current: number, previous: number) => {
     if (previous === 0) return 'N/A';
@@ -206,7 +202,7 @@ export default function HomeScreen() {
           <Text style={styles.moneyLabelGreen}>Money In</Text>
           <Text style={styles.moneyInvalue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyIn)}</Text>
           <View style={styles.trendRow}>
-            <Text style={styles.trendText}>{calcTrend(moneyIn, prevMoneyIn)} vs last month</Text>
+            <Text style={styles.trendText}>{calcTrend(moneyIn, prevSummary.income)} vs last month</Text>
           </View>
         </View>
 
@@ -215,7 +211,7 @@ export default function HomeScreen() {
           <Text style={styles.moneyLabelRed}>Money Out</Text>
           <Text style={styles.moneyOutvalue}><Text style={styles.nairaSymbol}>₦</Text>{formatNaira(moneyOut)}</Text>
           <View style={styles.trendRow}>
-            <Text style={styles.trendText}>{calcTrend(moneyOut, prevMoneyOut)} vs last month</Text>
+            <Text style={styles.trendText}>{calcTrend(moneyOut, prevSummary.expense)} vs last month</Text>
           </View>
         </View>
       </View>
@@ -274,7 +270,11 @@ export default function HomeScreen() {
                 <Text style={styles.seeAllText}>View all</Text>
               </TouchableOpacity>
             </View>
-            {recentResolved.length === 0 ? (
+            {storeLoading ? (
+              <View style={styles.emptyState}>
+                <ActivityIndicator size="large" color={theme.primary} />
+              </View>
+            ) : recentResolved.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>No transactions yet</Text>
                 <Text style={styles.emptyStateSubtext}>Tap the + button to add your first transaction</Text>

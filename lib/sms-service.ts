@@ -98,8 +98,7 @@ export class SMSService {
         receiveGranted === PermissionsAndroid.RESULTS.GRANTED &&
         readGranted === PermissionsAndroid.RESULTS.GRANTED
       );
-    } catch (err) {
-      console.warn(err);
+    } catch {
       return false;
     }
   }
@@ -109,17 +108,14 @@ export class SMSService {
 
     const hasPermission = await this.requestPermissions();
     if (!hasPermission) {
-      console.log('SpendNG: SMS permissions not granted');
       return;
     }
 
     if (smsEventEmitter) {
       smsEventEmitter.addListener('onSMSReceived', async (event) => {
         const { body, sender, timestamp } = event;
-        console.log(`SpendNG: Native SMS received from ${sender}`);
         await this.onMessageReceived(body, sender, timestamp);
       });
-      console.log('SpendNG: SMS Monitoring started (onSMSReceived listener active)');
     }
   }
 
@@ -128,7 +124,6 @@ export class SMSService {
 
     const hasPermission = await this.requestPermissions();
     if (!hasPermission) {
-      console.log('SpendNG: SMS permissions not granted for inbox scan');
       return;
     }
 
@@ -136,7 +131,6 @@ export class SMSService {
       const resolvedEnd = endDate ?? Date.now();
       const resolvedStart = startDate ?? 0;
       const messages = await SMSModule.getInboxMessages(resolvedStart, resolvedEnd);
-      console.log(`SpendNG: Fetched ${messages.length} messages from inbox`);
 
       const alerts = messages
         .filter((msg: any) => IngestionEngine.isTransactionAlert(msg.body))
@@ -166,7 +160,6 @@ export class SMSService {
 
     const lastScan = await this.getLastScanTimestamp();
     if (lastScan !== null) {
-      console.log(`SpendNG: Re-scanning missed alerts since ${new Date(lastScan).toISOString()}`);
       await this.scanInbox(lastScan, Date.now());
     }
   }

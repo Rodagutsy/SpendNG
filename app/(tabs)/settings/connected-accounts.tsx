@@ -14,8 +14,7 @@ import { SMSService } from '@/lib/sms-service';
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
 
 const googleRedirectUri = AuthSession.makeRedirectUri({
-  scheme: 'spendngapp',
-  path: 'oauth/gmail',
+  useProxy: true,
 });
 
 export default function ConnectedAccountsScreen() {
@@ -35,6 +34,7 @@ export default function ConnectedAccountsScreen() {
     clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
     scopes: SCOPES,
     redirectUri: googleRedirectUri,
+    extraParams: { prompt: 'consent', access_type: 'offline' },
   });
 
   useEffect(() => {

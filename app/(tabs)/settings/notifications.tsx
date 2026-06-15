@@ -1,52 +1,107 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-
-const TOGGLES = [
-  { key: 'monthly-report', label: 'Monthly report ready' },
-  { key: 'overspending', label: 'Overspending alerts' },
-  { key: 'tax-reminder', label: 'Tax reminder' },
-];
+import { supabase } from '@/lib/supabase';
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const [settings, setSettings] = useState<Record<string, boolean>>({
-    'monthly-report': true,
-    'overspending': true,
-    'tax-reminder': false,
-  });
 
-  const toggle = (key: string) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+  const [monthlyReport, setMonthlyReport] = useState(false);
+  const [overspendAlert, setOverspendAlert] = useState(false);
+  const [taxReminder, setTaxReminder] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const prefs = user?.user_metadata?.notification_preferences;
+      if (prefs) {
+        setMonthlyReport(prefs.monthly_report ?? false);
+        setOverspendAlert(prefs.overspend_alert ?? false);
+        setTaxReminder(prefs.tax_reminder ?? false);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const updatePreference = async (key: string, value: boolean) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const current = user?.user_metadata?.notification_preferences || {};
+    const { error } = await supabase.auth.updateUser({
+      data: {
+        notification_preferences: { ...current, [key]: value },
+      },
+    });
+    if (error) {
+      Alert.alert('Error', 'Failed to save preference');
+    }
   };
+
+  const toggleMonthlyReport = (val: boolean) => {
+    setMonthlyReport(val);
+    updatePreference('monthly_report', val);
+  };
+
+  const toggleOverspendAlert = (val: boolean) => {
+    setOverspendAlert(val);
+    updatePreference('overspend_alert', val);
+  };
+
+  const toggleTaxReminder = (val: boolean) => {
+    setTaxReminder(val);
+    updatePreference('tax_reminder', val);
+  };
+
+  if (loading) return null;
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <IconSymbol name="chevron.right" size={20} color={theme.onBackground} style={{ transform: [{ rotate: '180deg' }] }} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={[styles.title, { color: theme.onBackground }]}>Notifications</Text>
         <View style={{ width: 32 }} />
       </View>
 
-      <View style={[styles.section, { backgroundColor: theme.surface }]}>
-        {TOGGLES.map((item) => (
-          <View key={item.key} style={styles.row}>
-            <Text style={[styles.label, { color: theme.onBackground }]}>{item.label}</Text>
-            <Switch
-              value={settings[item.key]}
-              onValueChange={() => toggle(item.key)}
-              trackColor={{ false: theme.outlineVariant, true: theme.primary }}
-              thumbColor={theme.surface}
-            />
-          </View>
-        ))}
+      <View style={[styles.card, { backgroundColor: theme.surface }]}>
+        <View style={styles.row}>
+          <IconSymbol name="calendar" size={20} color={theme.primary} />
+          <Text style={[styles.label, { color: theme.onBackground }]}>Monthly report ready</Text>
+          <Switch
+            value={monthlyReport}
+            onValueChange={toggleMonthlyReport}
+            trackColor={{ false: theme.outlineVariant, true: theme.primaryContainer }}
+            thumbColor={monthlyReport ? theme.primary : theme.outline}
+          />
+        </View>
+        <View style={[styles.divider, { backgroundColor: theme.outlineVariant }]} />
+        <View style={styles.row}>
+          <IconSymbol name="chart-up" size={20} color={theme.primary} />
+          <Text style={[styles.label, { color: theme.onBackground }]}>Overspending alerts</Text>
+          <Switch
+            value={overspendAlert}
+            onValueChange={toggleOverspendAlert}
+            trackColor={{ false: theme.outlineVariant, true: theme.primaryContainer }}
+            thumbColor={overspendAlert ? theme.primary : theme.outline}
+          />
+        </View>
+        <View style={[styles.divider, { backgroundColor: theme.outlineVariant }]} />
+        <View style={styles.row}>
+          <IconSymbol name="bell" size={20} color={theme.primary} />
+          <Text style={[styles.label, { color: theme.onBackground }]}>Tax reminder</Text>
+          <Switch
+            value={taxReminder}
+            onValueChange={toggleTaxReminder}
+            trackColor={{ false: theme.outlineVariant, true: theme.primaryContainer }}
+            thumbColor={taxReminder ? theme.primary : theme.outline}
+          />
+        </View>
       </View>
     </ScrollView>
   );
@@ -60,7 +115,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: Spacing[6],
     marginTop: Spacing[10],
-    marginBottom: Spacing[4]
+    marginBottom: Spacing[2],
   },
   backBtn: {
     width: 32,
@@ -73,22 +128,24 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: Typography.sizes.titleS,
   },
-  section: {
+  card: {
     marginHorizontal: Spacing[6],
     borderRadius: Radius.sm,
-    overflow: 'hidden',
+    padding: Spacing[4],
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: Spacing[1],
-    paddingHorizontal: Spacing[5],
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    gap: 12,
+    paddingVertical: Spacing[2],
   },
   label: {
+    flex: 1,
     fontFamily: Typography.fonts.body,
-    fontSize: Typography.sizes.bodyM,
+    fontSize: Typography.sizes.bodyS,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 2,
   },
 });

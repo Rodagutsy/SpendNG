@@ -8,9 +8,11 @@ import {
   Modal,
   Platform,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useAlert } from '@/context/AlertContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CalendarModal } from '@/components/CalendarModal';
@@ -47,6 +49,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const styles = createStyles(theme);
+  const { translateY, panResponder } = useSwipeToClose(onClose);
 
   const [step, setStep] = useState<'configure' | 'summary'>('configure');
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -157,9 +160,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={styles.overlay}>
-        <TouchableOpacity style={styles.overlayBg} activeOpacity={1} onPress={handleClose} />
-        <View style={[styles.sheet, { backgroundColor: theme.surface }]}>
-          <View style={styles.handleBar} />
+        <TouchableOpacity style={styles.overlayBg} activeOpacity={1} onPress={() => {
+          Animated.timing(translateY, {
+            toValue: 2000,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => handleClose());
+        }} />
+        <Animated.View style={[styles.sheet, { backgroundColor: theme.surface, transform: [{ translateY }] }]}>
+          <View style={styles.handleBar} {...panResponder.panHandlers} />
 
           {/* Header */}
           <View style={styles.header}>
@@ -300,7 +309,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
               </>
             )}
           </View>
-        </View>
+        </Animated.View>
       </View>
 
       {/* Export Type Picker */}

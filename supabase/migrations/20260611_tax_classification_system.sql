@@ -25,10 +25,10 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 2. Add new categories (investment-income, rental-income, equipment)
 -- Must run before category_tax_defaults insert (FK constraint)
-INSERT INTO public.categories (id, name, icon_identifier, color_hex, transaction_type_hint, is_system, created_at, updated_at) VALUES
-  ('investment-income', 'Investment Income', 'trending-up', '#8E44AD', 'credit', true, 0, 0),
-  ('rental-income', 'Rental Income', 'home', '#1ABC9C', 'credit', true, 0, 0),
-  ('equipment', 'Equipment', 'devices', '#E91E63', 'debit', true, 0, 0)
+INSERT INTO public.categories (id, name, icon_identifier, color_hex, transaction_type_hint, is_system, created_at) VALUES
+  ('investment-income', 'Investment Income', 'trending-up', '#8E44AD', 'credit', true, now()),
+  ('rental-income', 'Rental Income', 'home', '#1ABC9C', 'credit', true, now()),
+  ('equipment', 'Equipment', 'devices', '#E91E63', 'debit', true, now())
 ON CONFLICT (id) DO NOTHING;
 
 -- 3. category_tax_defaults mapping table

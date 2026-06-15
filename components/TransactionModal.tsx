@@ -10,10 +10,14 @@ import {
   Platform,
   Image,
   useWindowDimensions,
+  Alert,
+  Animated,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
+import * as Crypto from 'expo-crypto';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
@@ -48,6 +52,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { height: windowHeight } = useWindowDimensions();
+  const { translateY, panResponder } = useSwipeToClose(onClose);
   const step2MaxHeight = windowHeight * 0.9 - 180;
   const styles = useMemo(() => createStyles(theme, step2MaxHeight), [theme, step2MaxHeight]);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
@@ -80,6 +85,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [whtClientName, setWhtClientName] = useState('');
   const [taxClassId, setTaxClassId] = useState<string | null>(null);
   const [showTaxClassSheet, setShowTaxClassSheet] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (transaction && visible) {
@@ -184,54 +190,71 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) return;
 
-    let parsedDate = Date.now();
-    if (dateText.trim()) {
-      const parts = dateText.trim().split('/');
-      if (parts.length === 3) {
-        const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        if (!isNaN(d.getTime())) parsedDate = d.getTime();
+    setSaving(true);
+    try {
+      let parsedDate = Date.now();
+      if (dateText.trim()) {
+        const parts = dateText.trim().split('/');
+        if (parts.length === 3) {
+          const d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+          if (!isNaN(d.getTime())) parsedDate = d.getTime();
+        }
       }
+
+      const whtVal = whtEnabled && whtAmountText ? parseFloat(whtAmountText) : null;
+
+      if (isEditing && transaction) {
+        await updateTransaction(transaction.id, {
+          amount: numericAmount,
+          transactionType: type as 'credit' | 'debit',
+          merchantName: name || null,
+          categoryId: category,
+          accountName: PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? null,
+          transactionDate: parsedDate,
+          notes: notes || description || null,
+          confidenceLevel,
+          receiptImageUri: receiptUri,
+          whtAmount: whtVal,
+          whtClientName: whtEnabled ? (whtClientName || null) : null,
+          taxClassificationId: taxClassId,
+        });
+      } else {
+        const dateMinute = Math.floor(parsedDate / 60000);
+        const hashInput = [(name || '').trim().toLowerCase(), numericAmount.toFixed(2), dateMinute, 'NGN'].join('|');
+        const contentHash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, hashInput);
+
+        try {
+          await addTransaction({
+            amount: numericAmount,
+            currency: 'NGN',
+            transactionType: type as 'credit' | 'debit',
+            merchantName: name || null,
+            categoryId: category,
+            accountName: PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? null,
+            accountNumberLast4: null,
+            transactionDate: parsedDate,
+            availableBalance: null,
+            sourceChannel: 'manual',
+            notes: notes || description || null,
+            taxClassificationId: taxClassId,
+            confidenceLevel,
+            originalMessage: null,
+            isFlaggedForReview: false,
+            receiptImageUri: receiptUri,
+            contentHash,
+          });
+
+          handleClose();
+        } catch (err: any) {
+          console.error('[TransactionModal] addTransaction failed:', err);
+          Alert.alert('Error', err.message || 'Failed to save transaction');
+        }
+      }
+
+      handleClose();
+    } finally {
+      setSaving(false);
     }
-
-    const whtVal = whtEnabled && whtAmountText ? parseFloat(whtAmountText) : null;
-
-    if (isEditing && transaction) {
-      await updateTransaction(transaction.id, {
-        amount: numericAmount,
-        transactionType: type as 'credit' | 'debit',
-        merchantName: name || null,
-        categoryId: category,
-        accountName: PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? null,
-        transactionDate: parsedDate,
-        notes: notes || description || null,
-        confidenceLevel,
-        receiptImageUri: receiptUri,
-        whtAmount: whtVal,
-        whtClientName: whtEnabled ? (whtClientName || null) : null,
-        taxClassificationId: taxClassId,
-      });
-    } else {
-      await addTransaction({
-        amount: numericAmount,
-        currency: 'NGN',
-        transactionType: type as 'credit' | 'debit',
-        merchantName: name || null,
-        categoryId: category,
-        accountName: PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? null,
-        accountNumberLast4: null,
-        transactionDate: parsedDate,
-        availableBalance: null,
-        sourceChannel: 'manual',
-        notes: notes || description || null,
-        taxClassificationId: taxClassId,
-        confidenceLevel,
-        originalMessage: null,
-        isFlaggedForReview: false,
-        receiptImageUri: receiptUri,
-      });
-    }
-
-    handleClose();
   };
 
   const formValid = type !== null && amount.trim().length > 0 && parseFloat(amount) > 0 && category !== '' && paymentMethod !== '';
@@ -239,11 +262,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <View style={styles.overlay}>
-        <TouchableOpacity style={styles.overlayBg} activeOpacity={1} onPress={handleClose} />
+        <TouchableOpacity style={styles.overlayBg} activeOpacity={1} onPress={() => {
+          Animated.timing(translateY, {
+            toValue: 2000,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => handleClose());
+        }} />
 
-        <View style={styles.sheet}>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
           {/* Handle */}
-          <View style={styles.handleRow}>
+          <View style={styles.handleRow} {...panResponder.panHandlers}>
             <View style={styles.handle} />
           </View>
 
@@ -468,19 +497,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                   <Text style={[styles.cancelBtnText, { color: theme.outline }]}>Back</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.footerBtn, styles.primaryBtn, !formValid && { opacity: 0.5 }]}
+                  style={[styles.footerBtn, styles.primaryBtn, (!formValid || saving) && { opacity: 0.5 }]}
                   onPress={handleSave}
                   activeOpacity={0.8}
-                  disabled={!formValid}
+                  disabled={!formValid || saving}
                 >
-                  <Text style={styles.primaryBtnText}>Save</Text>
+                  <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
                 </TouchableOpacity>
               </>
             )}
           </View>
-        </View>
-
-        {/* Category Picker */}
+          </Animated.View>
         {showCategoryPicker && (
           <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowCategoryPicker(false)}>
             <View style={[styles.pickerModal, { backgroundColor: theme.surface }]}>

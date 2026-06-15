@@ -11,5 +11,11 @@ export default function Index() {
     return <Redirect href="/(onboarding)/welcome" />;
   }
 
+  const onboardingCompleted = session.user?.user_metadata?.onboarding_completed;
+
+  if (!onboardingCompleted) {
+    return <Redirect href="/(onboarding)/connect-source" />;
+  }
+
   return <Redirect href="/(tabs)" />;
 }

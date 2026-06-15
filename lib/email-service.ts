@@ -8,6 +8,7 @@ export interface GmailTokens {
   accessToken: string;
   refreshToken?: string;
   email?: string;
+  expiryTime?: number;
 }
 
 interface StoredAccount {
@@ -101,6 +102,43 @@ export class EmailService {
     }
   }
 
+  static async refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiryTime: number } | null> {
+    try {
+      const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          client_id: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
+          refresh_token: refreshToken,
+          grant_type: 'refresh_token',
+        }).toString(),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data.access_token) return null;
+      const expiryTime = Date.now() + (data.expires_in || 3600) * 1000;
+      return { accessToken: data.access_token, expiryTime };
+    } catch {
+      return null;
+    }
+  }
+
+  private static async getValidAccessToken(email: string, tokens: GmailTokens): Promise<string | null> {
+    if (!tokens.refreshToken) return tokens.accessToken;
+
+    if (tokens.expiryTime && Date.now() < tokens.expiryTime) {
+      return tokens.accessToken;
+    }
+
+    const refreshed = await this.refreshAccessToken(tokens.refreshToken);
+    if (!refreshed) return null;
+
+    tokens.accessToken = refreshed.accessToken;
+    tokens.expiryTime = refreshed.expiryTime;
+    await this.storeAccount(email, { tokens, lastScanTimestamp: await this.getLastScanTimestamp(email) ?? Date.now() });
+    return refreshed.accessToken;
+  }
+
   static async getConnectedAccounts(): Promise<{ email: string; tokens: GmailTokens }[]> {
     const emails = await this.getAccountList();
     const results: { email: string; tokens: GmailTokens }[] = [];
@@ -187,13 +225,18 @@ export class EmailService {
 
     for (const { email, tokens } of accounts) {
       try {
+        const validToken = await this.getValidAccessToken(email, tokens);
+        if (!validToken) {
+          totalFailed += 1;
+          continue;
+        }
         const lastScan = await this.getLastScanTimestamp(email);
-        const result = await this.pollAccount(tokens.accessToken, email, lastScan ?? undefined);
+        const result = await this.pollAccount(validToken, email, lastScan ?? undefined);
         totalProcessed += result.processed;
         totalFailed += result.failed;
       } catch (e) {
         console.warn(`Failed to poll account:`, e);
-        totalFailed += 50;
+        totalFailed += 1;
       }
     }
 
@@ -229,7 +272,6 @@ export class EmailService {
   static async rescanMissedEmails(): Promise<void> {
     const connected = await this.isConnected();
     if (!connected) return;
-    console.log('SpendNG: Re-scanning missed email alerts');
     await this.pollAllAccounts();
   }
 

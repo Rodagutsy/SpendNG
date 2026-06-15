@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, Animated } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
@@ -15,6 +16,7 @@ interface StepIncomeReviewProps {
 }
 
 export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onClose, onComplete }) => {
+  const { translateY, panResponder } = useSwipeToClose(onClose);
   const transactions = useTransactionStore((s) => s.transactions);
   const updateTransaction = useTransactionStore((s) => s.updateTransaction);
   const getCategoryById = useCategoryStore((s) => s.getCategoryById);
@@ -25,7 +27,7 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
   const [editTx, setEditTx] = useState<{ id: string; current: string | null } | null>(null);
 
   const incomeTxs = useMemo(() => {
-    return transactions.filter((t) => t.transactionType === 'credit');
+    return transactions.filter((t) => !t.isDuplicate && t.transactionType === 'credit');
   }, [transactions]);
 
   const needsAttention = useMemo(() => {
@@ -81,8 +83,8 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={[styles.sheet]}>
-          <View style={styles.handle} />
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+          <View style={styles.handle} {...panResponder.panHandlers} />
           <View style={styles.header}>
             <Text style={styles.title}>Review Income</Text>
             <TouchableOpacity onPress={onClose}>
@@ -115,7 +117,7 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
               <MaterialIcons name="arrow-forward" size={18} color={Colors.light.onPrimary} />
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
 
       <TaxClassSheet

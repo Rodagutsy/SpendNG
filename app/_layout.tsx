@@ -11,10 +11,6 @@ import {
 } from '@expo-google-fonts/poppins';
 import { AuthProvider } from '@/context/AuthContext';
 import { AlertProvider } from '@/context/AlertContext';
-import { useCategoryStore } from '@/lib/stores/categoryStore';
-import { useTransactionStore } from '@/lib/stores/transactionStore';
-import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
-import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -50,20 +46,6 @@ export default function RootLayout() {
     'Poppins-Bold': Poppins_700Bold,
   });
   const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    async function init() {
-      try {
-        await useCategoryStore.getState().fetchCategories();
-        await useTransactionStore.getState().fetchTransactions();
-        await useCategoryDefaultStore.getState().fetchDefaults();
-        await useTaxClassificationStore.getState().fetchClassifications();
-      } catch (e) {
-        console.error('Data fetch error:', e);
-      }
-    }
-    init();
-  }, []);
 
   useEffect(() => {
     if (fontsLoaded || fontError) {

@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, ScrollView, Animated } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTaxClassificationStore, TaxClassificationRecord } from '@/lib/stores/taxClassificationStore';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 
 interface TaxClassSheetProps {
   visible: boolean;
@@ -27,6 +28,7 @@ const DIRECTION_DESCRIPTIONS: Record<string, string> = {
 };
 
 export const TaxClassSheet: React.FC<TaxClassSheetProps> = ({ visible, onClose, onSelect, current, direction }) => {
+  const { translateY, panResponder } = useSwipeToClose(onClose);
   const { classifications } = useTaxClassificationStore();
 
   const options = direction
@@ -35,9 +37,15 @@ export const TaxClassSheet: React.FC<TaxClassSheetProps> = ({ visible, onClose, 
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={[styles.sheet]} activeOpacity={1} onPress={() => {}}>
-          <View style={styles.handle} />
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => {
+        Animated.timing(translateY, {
+          toValue: 2000,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => onClose());
+      }}>
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+          <View style={styles.handle} {...panResponder.panHandlers} />
           <Text style={styles.title}>Tax Classification</Text>
           <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
             {options.length === 0 && (
@@ -63,7 +71,7 @@ export const TaxClassSheet: React.FC<TaxClassSheetProps> = ({ visible, onClose, 
           <TouchableOpacity style={styles.cancelBtn} onPress={onClose} activeOpacity={0.8}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </Animated.View>
       </TouchableOpacity>
     </Modal>
   );

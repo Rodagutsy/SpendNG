@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Platform, Animated } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useTaxStore, WhtCredit } from '@/lib/stores/taxStore';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -13,6 +14,7 @@ interface StepWhtReviewProps {
 }
 
 export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, onComplete }) => {
+  const { translateY, panResponder } = useSwipeToClose(onClose);
   const whtCredits = useTaxStore((s) => s.whtCredits);
   const addWhtCredit = useTaxStore((s) => s.addWhtCredit);
   const removeWhtCredit = useTaxStore((s) => s.removeWhtCredit);
@@ -74,8 +76,8 @@ export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+          <View style={styles.handle} {...panResponder.panHandlers} />
           <View style={styles.header}>
             <Text style={styles.title}>WHT & Tax Credits</Text>
             <TouchableOpacity onPress={onClose}>
@@ -189,7 +191,7 @@ export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, 
               <MaterialIcons name="arrow-forward" size={18} color={Colors.light.onPrimary} />
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

@@ -7,9 +7,11 @@ import {
   ScrollView,
   Modal,
   Platform,
+  Animated,
 } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { Chip } from '@/components/ui/Chip';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { CalendarModal } from '@/components/CalendarModal';
@@ -58,6 +60,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const styles = createStyles(theme);
+  const { translateY, panResponder } = useSwipeToClose(onClose);
 
   const [period, setPeriod] = useState('all');
   const [txType, setTxType] = useState('all');
@@ -133,10 +136,16 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity style={[styles.card, { backgroundColor: theme.surface }]} activeOpacity={1} onPress={() => { }}>
+      <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => {
+        Animated.timing(translateY, {
+          toValue: 2000,
+          duration: 200,
+          useNativeDriver: true,
+        }).start(() => onClose());
+      }}>
+        <Animated.View style={[styles.card, { backgroundColor: theme.surface, transform: [{ translateY }] }]}>
           {/* Handle */}
-          <View style={styles.handleRow}>
+          <View style={styles.handleRow} {...panResponder.panHandlers}>
             <View style={[styles.handle, { backgroundColor: theme.outlineVariant }]} />
           </View>
 
@@ -198,7 +207,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
               <Text style={styles.applyBtnText}>Apply</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </Animated.View>
       </TouchableOpacity>
 
       <CalendarModal

@@ -98,10 +98,10 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.profileInfo}>
           <Text style={[styles.profileName, { color: theme.onBackground }]}>
-            {user?.user_metadata?.full_name || 'Obayemi'}
+            {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
           </Text>
           <Text style={[styles.profileEmail, { color: theme.outline }]}>
-            {user?.email || 'obayemi@spendng.app'}
+            {user?.email || ''}
           </Text>
         </View>
         <IconSymbol name="chevron.right" size={16} color={theme.outline} />

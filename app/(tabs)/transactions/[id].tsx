@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
@@ -36,7 +36,16 @@ export default function TransactionDetailScreen() {
   const [showTaxSheet, setShowTaxSheet] = useState(false);
 
 
+  const storeLoading = useTransactionStore((s) => s.loading);
+
   if (!transaction) {
+    if (storeLoading) {
+      return (
+        <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      );
+    }
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: theme.background }]}>
         <Text style={[styles.errorText, { color: theme.onBackground }]}>Transaction not found</Text>

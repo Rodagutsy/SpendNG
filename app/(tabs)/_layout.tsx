@@ -25,8 +25,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             canPreventDefault: true,
           });
 
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name, route.params);
+          if (!event.defaultPrevented) {
+            navigation.navigate(route.name, { screen: 'index' });
           }
         };
 

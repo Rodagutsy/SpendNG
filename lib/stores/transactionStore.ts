@@ -27,6 +27,7 @@ export interface TransactionRecord {
   isSynced: boolean;
   createdAt: number;
   updatedAt: number;
+  contentHash?: string;
 }
 
 interface TransactionFilters {
@@ -41,12 +42,14 @@ interface TransactionFilters {
 
 interface TransactionState {
   transactions: TransactionRecord[];
+  homeTransactions: TransactionRecord[];
   loading: boolean;
   error: string | null;
   filters: TransactionFilters;
 
   fetchTransactions: (filters?: TransactionFilters) => Promise<void>;
-  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'whtAmount' | 'whtClientName'>) => Promise<TransactionRecord>;
+  fetchHomeTransactions: () => Promise<void>;
+  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'whtAmount' | 'whtClientName' | 'contentHash'> & { contentHash: string }) => Promise<TransactionRecord>;
   updateCategory: (id: string, categoryId: string) => Promise<void>;
   updateNotes: (id: string, notes: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<TransactionRecord>) => Promise<void>;
@@ -56,11 +59,12 @@ interface TransactionState {
   clearFilters: () => void;
 }
 
-const now = Date.now();
-const monthStart = new Date();
-monthStart.setDate(1);
-monthStart.setHours(0, 0, 0, 0);
-const monthStartTs = monthStart.getTime();
+function getMonthStartTs(): number {
+  const d = new Date();
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
 
 function mapRowToRecord(row: any): TransactionRecord {
   return {
@@ -88,11 +92,13 @@ function mapRowToRecord(row: any): TransactionRecord {
     isSynced: row.is_synced,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    contentHash: row.content_hash,
   };
 }
 
 export const useTransactionStore = create<TransactionState>((set, get) => ({
   transactions: [],
+  homeTransactions: [],
   loading: false,
   error: null,
   filters: {},
@@ -100,8 +106,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchTransactions: async (filters) => {
     set({ loading: true, error: null });
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        set({ transactions: [], loading: false });
+        return;
+      }
       const activeFilters = filters || get().filters;
-      let query = supabase.from('transactions').select('*');
+      let query = supabase.from('transactions').select('*').eq('user_id', user.id);
 
       if (activeFilters.categoryId) {
         query = query.eq('category_id', activeFilters.categoryId);
@@ -129,7 +140,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
       const { data, error } = await query;
 
-      if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        throw new Error('This transaction already exists');
+      }
+      throw error;
+    }
 
       const txs: TransactionRecord[] = (data || []).map(mapRowToRecord);
       set({ transactions: txs, loading: false });
@@ -138,12 +154,30 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     }
   },
 
+  fetchHomeTransactions: async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      let query = supabase.from('transactions').select('*').eq('user_id', user.id);
+      query = query.order('transaction_date', { ascending: false });
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const txs: TransactionRecord[] = (data || []).map(mapRowToRecord);
+      set({ homeTransactions: txs });
+    } catch (err: any) {
+      console.error('fetchHomeTransactions error:', err?.message || err);
+    }
+  },
+
   addTransaction: async (data) => {
     const newId = Crypto.randomUUID();
     const nowTs = Date.now();
     const { data: { user } } = await supabase.auth.getUser();
+    const { contentHash } = data;
 
-    const { error } = await supabase.from('transactions').insert({
+    const insertData = {
       id: newId,
       user_id: user?.id,
       amount: data.amount,
@@ -157,6 +191,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       available_balance: data.availableBalance,
       source_channel: data.sourceChannel,
       raw_source_text: data.originalMessage,
+      content_hash: contentHash,
       parse_confidence: null,
       is_duplicate: false,
       is_flagged_for_review: data.isFlaggedForReview || false,
@@ -164,30 +199,20 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       is_synced: true,
       created_at: nowTs,
       updated_at: nowTs,
-    });
+    };
+
+    const { data: inserted, error } = await supabase
+      .from('transactions')
+      .insert(insertData)
+      .select();
 
     if (error) throw error;
 
-    const added: TransactionRecord = {
-      ...data,
-      id: newId,
-      parseConfidence: null,
-      taxClassificationId: null,
-      confidenceLevel: null,
-      isDuplicate: false,
-      isFlaggedForReview: data.isFlaggedForReview || false,
-      receiptImageUri: null,
-      whtAmount: null,
-      whtClientName: null,
-      isSynced: true,
-      createdAt: nowTs,
-      updatedAt: nowTs,
-    };
-
+    const added = mapRowToRecord(inserted[0]);
     set((state) => ({
       transactions: [added, ...state.transactions],
+      homeTransactions: [added, ...state.homeTransactions],
     }));
-
     return added;
   },
 
@@ -203,6 +228,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       transactions: state.transactions.map((t) =>
         t.id === id ? { ...t, categoryId, updatedAt: nowTs } : t
       ),
+      homeTransactions: state.homeTransactions.map((t) =>
+        t.id === id ? { ...t, categoryId, updatedAt: nowTs } : t
+      ),
     }));
   },
 
@@ -216,6 +244,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     set((state) => ({
       transactions: state.transactions.map((t) =>
+        t.id === id ? { ...t, notes, updatedAt: nowTs } : t
+      ),
+      homeTransactions: state.homeTransactions.map((t) =>
         t.id === id ? { ...t, notes, updatedAt: nowTs } : t
       ),
     }));
@@ -247,6 +278,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       transactions: state.transactions.map((t) =>
         t.id === id ? { ...t, ...data, updatedAt: nowTs } : t
       ),
+      homeTransactions: state.homeTransactions.map((t) =>
+        t.id === id ? { ...t, ...data, updatedAt: nowTs } : t
+      ),
     }));
   },
 
@@ -256,14 +290,17 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
     set((state) => ({
       transactions: state.transactions.filter((t) => t.id !== id),
+      homeTransactions: state.homeTransactions.filter((t) => t.id !== id),
     }));
   },
 
   clearAllTransactions: async () => {
-    const { error } = await supabase.from('transactions').delete().neq('id', '');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('No authenticated user');
+    const { error } = await supabase.from('transactions').delete().eq('user_id', user.id);
     if (error) throw error;
 
-    set({ transactions: [] });
+    set({ transactions: [], homeTransactions: [] });
   },
 
   setFilters: (filters) => {
@@ -278,7 +315,8 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 }));
 
 export function useMonthlyBalances() {
-  const transactions = useTransactionStore((s) => s.transactions);
+  const transactions = useTransactionStore((s) => s.homeTransactions);
+  const monthStartTs = getMonthStartTs();
   const thisMonth = transactions.filter((t) => !t.isDuplicate && t.transactionDate >= monthStartTs);
 
   const moneyIn = thisMonth

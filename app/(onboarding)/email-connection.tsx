@@ -9,11 +9,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAlert } from '@/context/AlertContext';
 import { EmailService } from '@/lib/email-service';
 
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/userinfo.email',
+];
 
 const googleRedirectUri = AuthSession.makeRedirectUri({
-  scheme: 'spendngapp',
-  path: 'oauth/gmail',
+  useProxy: true,
 });
 
 export default function EmailConnectionScreen() {
@@ -27,22 +29,24 @@ export default function EmailConnectionScreen() {
     clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
     scopes: SCOPES,
     redirectUri: googleRedirectUri,
+    extraParams: { prompt: 'consent', access_type: 'offline' },
   });
 
   useEffect(() => {
     if (response?.type === 'success' && response.authentication?.accessToken) {
-      const { accessToken, refreshToken } = response.authentication;
-      runImport(accessToken, refreshToken);
+      const { accessToken, refreshToken, expiresIn, issuedAt } = response.authentication;
+      const expiryTime = expiresIn && issuedAt ? (issuedAt + expiresIn) * 1000 : undefined;
+      runImport(accessToken, refreshToken, expiryTime);
     } else if (response?.type === 'error') {
       setStatus('idle');
       showAlert({ title: 'Connection Failed', message: response.params?.error_description || 'Google sign-in failed.' });
     }
   }, [response]);
 
-  const runImport = async (accessToken: string, refreshToken?: string) => {
+  const runImport = async (accessToken: string, refreshToken?: string, expiryTime?: number) => {
     setStatus('importing');
     try {
-      await EmailService.storeTokens({ accessToken, refreshToken });
+      await EmailService.storeTokens({ accessToken, refreshToken, expiryTime });
       const result = await EmailService.pollNewEmails(accessToken);
       setStatus('done');
       showAlert({

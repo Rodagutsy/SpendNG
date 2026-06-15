@@ -1,23 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, ActivityIndicator, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as AuthSession from 'expo-auth-session';
 import { useAuthRequest } from 'expo-auth-session/providers/google';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SMSService } from '@/lib/sms-service';
 import { EmailService } from '@/lib/email-service';
+import { supabase } from '@/lib/supabase';
 import { useUIStore } from '@/lib/stores/uiStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/userinfo.email',
+];
 
-const googleRedirectUri = AuthSession.makeRedirectUri({
-  scheme: 'spendngapp',
-  path: 'oauth/gmail',
+const redirectUri = AuthSession.makeRedirectUri({
+  useProxy: true,
 });
 
 const DURATION_OPTIONS = [
@@ -43,17 +47,24 @@ export default function ConnectSourceScreen() {
   const [selectedDuration, setSelectedDuration] = useState(90);
   const [scanLabel, setScanLabel] = useState('');
 
+  const closeDurationModal = useCallback(() => setScreenState('selection'), []);
+  const { translateY: durationTranslateY, panResponder: durationPanResponder } = useSwipeToClose(closeDurationModal);
+
   const [request, response, promptAsync] = useAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     scopes: SCOPES,
-    redirectUri: googleRedirectUri,
+    redirectUri,
+    extraParams: { prompt: 'consent', access_type: 'offline' },
   });
 
   // Handle Gmail OAuth response
   useEffect(() => {
     if (response?.type === 'success' && response.authentication?.accessToken) {
-      const { accessToken, refreshToken } = response.authentication;
-      startGmailScan(accessToken, refreshToken);
+      const { accessToken, refreshToken, expiresIn, issuedAt } = response.authentication;
+      const expiryTime = expiresIn && issuedAt ? (issuedAt + expiresIn) * 1000 : undefined;
+      startGmailScan(accessToken, refreshToken, expiryTime);
     } else if (response?.type === 'error') {
       showAlert({ title: 'Connection Failed', message: response.params?.error_description || 'Google sign-in failed.' });
       setScreenState('selection');
@@ -75,11 +86,11 @@ export default function ConnectSourceScreen() {
     }
   }, []);
 
-  const startGmailScan = useCallback(async (accessToken: string, refreshToken?: string) => {
+  const startGmailScan = useCallback(async (accessToken: string, refreshToken?: string, expiryTime?: number) => {
     setScanLabel('Importing from Gmail...');
     setScreenState('scanning');
     try {
-      await EmailService.storeTokens({ accessToken, refreshToken });
+      await EmailService.storeTokens({ accessToken, refreshToken, expiryTime });
       await EmailService.pollNewEmails(accessToken);
       setScreenState('success');
     } catch (err: any) {
@@ -88,13 +99,15 @@ export default function ConnectSourceScreen() {
     }
   }, []);
 
-  // Auto-redirect on success
+  // Mark onboarding complete and redirect on success
   useEffect(() => {
     if (screenState === 'success') {
-      const timer = setTimeout(() => {
+      (async () => {
+        await supabase.auth.updateUser({
+          data: { onboarding_completed: true },
+        });
         router.replace('/(tabs)');
-      }, 4000);
-      return () => clearTimeout(timer);
+      })();
     }
   }, [screenState]);
 
@@ -161,7 +174,7 @@ export default function ConnectSourceScreen() {
             </>
           )}
 
-          <TouchableOpacity style={styles.skipBtn} onPress={() => router.replace('/(tabs)')} activeOpacity={0.7}>
+          <TouchableOpacity style={styles.skipBtn} onPress={async () => { await supabase.auth.updateUser({ data: { onboarding_completed: true } }); router.replace('/(tabs)'); }} activeOpacity={0.7}>
             <Text style={[styles.skipText, { color: theme.outline }]}>Skip for now</Text>
           </TouchableOpacity>
         </View>
@@ -174,10 +187,16 @@ export default function ConnectSourceScreen() {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.content}>
-          <Modal visible transparent animationType="slide" onRequestClose={() => setScreenState('selection')}>
-            <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => setScreenState('selection')}>
-              <TouchableOpacity style={[styles.sheet, { backgroundColor: theme.surface }]} activeOpacity={1} onPress={() => {}}>
-                <View style={[styles.handle, { backgroundColor: theme.outlineVariant }]} />
+          <Modal visible transparent animationType="slide" onRequestClose={closeDurationModal}>
+            <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={() => {
+              Animated.timing(durationTranslateY, {
+                toValue: 2000,
+                duration: 200,
+                useNativeDriver: true,
+              }).start(() => closeDurationModal());
+            }}>
+              <Animated.View style={[styles.sheet, { backgroundColor: theme.surface, transform: [{ translateY: durationTranslateY }] }]}>
+                <View style={[styles.handle, { backgroundColor: theme.outlineVariant }]} {...durationPanResponder.panHandlers} />
                 <Text style={[styles.sheetTitle, { color: theme.onSurface }]}>Select scan duration</Text>
                 <Text style={[styles.sheetSubtitle, { color: theme.outline }]}>
                   How far back should we scan your {selectedSource === 'sms' ? 'SMS' : 'email'}?
@@ -205,9 +224,9 @@ export default function ConnectSourceScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.confirmBtnText, { color: theme.onPrimary }]}>Start Scan</Text>
-                </TouchableOpacity>
               </TouchableOpacity>
-            </TouchableOpacity>
+            </Animated.View>
+          </TouchableOpacity>
           </Modal>
         </View>
       </SafeAreaView>

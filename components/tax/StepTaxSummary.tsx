@@ -1,33 +1,55 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, Platform, Alert, Animated } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useAuth } from '@/context/AuthContext';
+import { ExportService } from '@/lib/export-service';
 
 interface StepTaxSummaryProps {
   visible: boolean;
   onClose: () => void;
-  onComplete: () => void;
+  onComplete?: () => void;
 }
 
 export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose, onComplete }) => {
+  const { translateY, panResponder } = useSwipeToClose(onClose);
   const transactions = useTransactionStore((s) => s.transactions);
   const getCategoryById = useCategoryStore((s) => s.getCategoryById);
-  const { classifications: taxClasses, getById: getTaxClassById } = useTaxClassificationStore();
+  const { classifications: taxClasses } = useTaxClassificationStore();
   const whtCredits = useTaxStore((s) => s.whtCredits);
-  const setStepDone = useTaxStore((s) => s.setStepDone);
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const { user } = useAuth();
+  const userName = user?.user_metadata?.full_name || user?.email || 'User';
+
+  const taxYear = new Date().getFullYear();
+  const startDate = new Date(taxYear, 0, 1);
+  const endDate = new Date(taxYear, 11, 31);
+
+  const categoryNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    transactions.forEach(t => {
+      if (!map[t.categoryId]) {
+        const cat = getCategoryById(t.categoryId);
+        map[t.categoryId] = cat?.name || t.categoryId;
+      }
+    });
+    return map;
+  }, [transactions, getCategoryById]);
 
   const toggleSection = (key: string) => {
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const incomeTxs = useMemo(() => transactions.filter((t) => t.transactionType === 'credit'), [transactions]);
-  const expenseTxs = useMemo(() => transactions.filter((t) => t.transactionType === 'debit'), [transactions]);
+  const incomeTxs = useMemo(() => transactions.filter((t) => !t.isDuplicate && t.transactionType === 'credit'), [transactions]);
+  const expenseTxs = useMemo(() => transactions.filter((t) => !t.isDuplicate && t.transactionType === 'debit'), [transactions]);
 
   const incomeTaxClasses = useMemo(() => taxClasses.filter((tc) => tc.direction === 'income'), [taxClasses]);
   const expenseTaxClasses = useMemo(() => taxClasses.filter((tc) => tc.direction === 'expense'), [taxClasses]);
@@ -56,35 +78,23 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
   const totalWht = whtCredits.reduce((s, c) => s + c.whtAmount, 0);
   const estimatedTaxableIncome = totalIncome - totalDeductibleExpenses;
 
-  const handleShare = async () => {
-    const lines = [
-      'Tax Summary Report',
-      `Year: ${new Date().getFullYear()}`,
-      '',
-      ...incomeByClass.flatMap((g) => [
-        `${g.name}: ₦${g.transactions.reduce((s, t) => s + t.amount, 0).toLocaleString()}`,
-      ]),
-      `Total Income: ₦${totalIncome.toLocaleString()}`,
-      '',
-      ...expenseByClass.flatMap((g) => [
-        `${g.name}: ₦${g.transactions.reduce((s, t) => s + t.amount, 0).toLocaleString()}`,
-      ]),
-      `Deductible Expenses: ₦${totalDeductibleExpenses.toLocaleString()}`,
-      '',
-      `WHT Credits: ₦${totalWht.toLocaleString()}`,
-      '',
-      `Estimated Taxable Income: ₦${estimatedTaxableIncome.toLocaleString()}`,
-      '',
-      'This is a summary for your accountant, not a tax calculation.',
-    ];
+  const generateAndShare = async (title: string) => {
+    setPdfLoading(true);
     try {
-      await Share.share({ message: lines.join('\n') });
-    } catch {}
-  };
-
-  const handleComplete = () => {
-    setStepDone(3, true);
-    onComplete();
+      const uri = await ExportService.exportData({
+        format: 'PDF',
+        startDate,
+        endDate,
+        transactions,
+        userName,
+        categoryNames,
+      }, () => {});
+      await ExportService.shareFile(uri);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to generate PDF');
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const renderCollapsibleCard = (title: string, total: number, items: { name: string; amount: number }[], sectionKey: string) => (
@@ -116,8 +126,8 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
-          <View style={styles.handle} />
+        <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
+          <View style={styles.handle} {...panResponder.panHandlers} />
           <View style={styles.header}>
             <Text style={styles.title}>Tax Summary</Text>
             <TouchableOpacity onPress={onClose}>
@@ -159,18 +169,24 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
               </Text>
             </View>
 
-            <TouchableOpacity style={styles.shareBtn} onPress={handleShare} activeOpacity={0.8}>
-              <MaterialIcons name="ios-share" size={18} color={Colors.light.onPrimary} />
-              <Text style={styles.shareBtnText}>Share Summary</Text>
-            </TouchableOpacity>
-          </ScrollView>
+            <View style={styles.buttonRow}>
+              <TouchableOpacity style={styles.shareBtn} onPress={() => generateAndShare('Share Tax Report')} disabled={pdfLoading}>
+                <MaterialIcons name="ios-share" size={18} color={Colors.light.onPrimary} />
+                <Text style={styles.shareBtnText}>{pdfLoading ? 'Generating…' : 'Share PDF'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.downloadBtn} onPress={() => generateAndShare('Save Tax Report')} disabled={pdfLoading}>
+                <MaterialIcons name="download" size={18} color={Colors.main.primary} />
+                <Text style={styles.downloadBtnText}>{pdfLoading ? 'Generating…' : 'Download'}</Text>
+              </TouchableOpacity>
+            </View>
 
-          <View style={styles.footer}>
-            <TouchableOpacity style={styles.nextBtn} onPress={handleComplete} activeOpacity={0.8}>
-              <Text style={styles.nextBtnText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+            {onComplete && (
+              <TouchableOpacity style={styles.finishBtn} onPress={onComplete} activeOpacity={0.8}>
+                <Text style={styles.finishBtnText}>Finish Review</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -307,22 +323,42 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.light.onPrimary,
   },
-  footer: {
-    paddingHorizontal: Spacing[5],
-    paddingTop: Spacing[3],
+  buttonRow: {
+    flexDirection: 'row',
+    gap: Spacing[2],
+    marginTop: Spacing[2],
   },
-  nextBtn: {
+  downloadBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.main.primary,
     gap: 6,
+    paddingVertical: 12,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1,
+    borderColor: Colors.main.primary,
   },
-  nextBtnText: {
+  downloadBtnText: {
     fontFamily: Typography.fonts.display,
-    fontSize: 15,
-    color: Colors.light.onPrimary,
+    fontSize: 14,
+    color: Colors.main.primary,
+  },
+  finishBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.light.surface,
+    borderWidth: 1.5,
+    borderColor: Colors.main.primary,
+    marginTop: Spacing[3],
+    marginBottom: Spacing[4],
+  },
+  finishBtnText: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 14,
+    color: Colors.main.primary,
   },
 });

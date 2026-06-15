@@ -6,8 +6,8 @@ export interface CategorizationResult {
   matchedRule?: string;
 }
 
-const FALLBACK_CREDIT = 'cat-06';
-const FALLBACK_DEBIT = 'cat-05';
+const FALLBACK_CREDIT = 'other-income';
+const FALLBACK_DEBIT = 'other-expense';
 
 export class CategorizationEngine {
   static async categorize(

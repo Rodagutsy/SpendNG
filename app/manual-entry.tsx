@@ -8,11 +8,13 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import * as Crypto from 'expo-crypto';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -58,6 +60,7 @@ export default function ManualEntryScreen() {
   const [category, setCategory] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const categories = transactionType === 'credit' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
@@ -92,26 +95,40 @@ export default function ManualEntryScreen() {
     const numericAmount = parseFloat(amount);
     if (isNaN(numericAmount) || numericAmount <= 0) return;
 
-    await addTransaction({
-      amount: numericAmount,
-      currency: 'NGN',
-      transactionType: transactionType as 'credit' | 'debit',
-      merchantName: description || null,
-      categoryId: category,
-      accountName: paymentMethod ? PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? null : null,
-      accountNumberLast4: null,
-      transactionDate: Date.now(),
-      availableBalance: null,
-      sourceChannel: 'manual',
-      notes: description || null,
-      taxClassificationId: null,
-      confidenceLevel: 'high',
-      originalMessage: null,
-      isFlaggedForReview: false,
-      receiptImageUri: null,
-    });
+    setSaving(true);
+    try {
+      const dateNow = Date.now();
+      const dateMinute = Math.floor(dateNow / 60000);
+      const hashInput = [(description || '').trim().toLowerCase(), numericAmount.toFixed(2), dateMinute, 'NGN'].join('|');
+      const contentHash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, hashInput);
 
-    router.back();
+      await addTransaction({
+        amount: numericAmount,
+        currency: 'NGN',
+        transactionType: transactionType as 'credit' | 'debit',
+        merchantName: description || null,
+        categoryId: category,
+        accountName: paymentMethod ? PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? null : null,
+        accountNumberLast4: null,
+        transactionDate: dateNow,
+        availableBalance: null,
+        sourceChannel: 'manual',
+        notes: description || null,
+        taxClassificationId: null,
+        confidenceLevel: 'high',
+        originalMessage: null,
+        isFlaggedForReview: false,
+        receiptImageUri: null,
+        contentHash,
+      });
+
+      router.back();
+    } catch (err: any) {
+      console.error('[manual-entry] addTransaction failed:', err);
+      Alert.alert('Error', err.message || 'Failed to save transaction');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const renderStepIndicator = () => (
@@ -338,12 +355,13 @@ export default function ManualEntryScreen() {
       <View style={[styles.bottomBar, { backgroundColor: theme.surface }]}>
         {step === STEPS.length - 1 ? (
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
+            style={[styles.primaryBtn, { backgroundColor: theme.primary }, saving && { opacity: 0.5 }]}
             onPress={handleSave}
+            disabled={saving}
             activeOpacity={0.85}
           >
             <MaterialIcons name="check" size={20} color="#FFFFFF" />
-            <Text style={styles.primaryBtnText}>Save Transaction</Text>
+            <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save Transaction'}</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -484,6 +502,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+    padding: 16,
   },
   categoryChip: {
     flexDirection: 'row',

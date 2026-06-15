@@ -7,43 +7,63 @@ import { useState } from 'react';
 import { GoogleLogo } from '@/components/GoogleLogo';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAlert } from '@/context/AlertContext';
 
 export default function AccountCreationScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
-  const { showAlert } = useAlert();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [formError, setFormError] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
-    if (!name || !email || !password || !agreed) return;
+    setNameError('');
+    setEmailError('');
+    setPasswordError('');
+    setFormError('');
+    if (!name) { setNameError('Enter your full name'); return; }
+    if (!email) { setEmailError('Enter your email address'); return; }
+    if (!password) { setPasswordError('Enter a password'); return; }
+    if (password.length < 6) { setPasswordError('Password must be at least 6 characters'); return; }
+    if (!agreed) { setFormError('You must agree to the Terms of Service and Privacy Policy'); return; }
     setLoading(true);
     try {
       const { user, session } = await signUpWithEmail(email, password);
 
       if (user && !session) {
-        showAlert({ title: 'Verification Required', message: 'Please check your email for a verification link to activate your account.' });
+        router.replace(`/(onboarding)/verify-email?email=${encodeURIComponent(email)}`);
         return;
       }
       router.replace('/(onboarding)/connect-source');
     } catch (error: any) {
-      showAlert({ title: 'Signup Error', message: error.message });
+      const msg = error?.message || '';
+      if (msg.toLowerCase().includes('user already registered') || msg.toLowerCase().includes('already been registered')) {
+        setEmailError('An account with this email already exists');
+      } else if (msg.toLowerCase().includes('password')) {
+        setPasswordError(msg);
+      } else if (msg.toLowerCase().includes('invalid email')) {
+        setEmailError('Enter a valid email address');
+      } else {
+        setFormError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleAuth = async () => {
+    setFormError('');
     setLoading(true);
     try {
       await signInWithGoogle();
     } catch (error: any) {
-      showAlert({ title: 'Google Auth Error', message: error.message });
+      setFormError(error?.message || 'Google sign-in failed');
     } finally {
       setLoading(false);
     }
@@ -54,20 +74,24 @@ export default function AccountCreationScreen() {
       <Text style={[styles.title, { color: theme.onBackground }]}>Create an Account</Text>
       <Text style={[styles.subtitle, { color: theme.outline }]}>Start your journey to financial freedom today</Text>
 
+      {formError ? <Text style={[styles.formError, { color: Colors.main.error }]}>{formError}</Text> : null}
+
       <TextInput
         label="Full Name"
         placeholder="First name and last name"
         value={name}
-        onChangeText={setName}
+        onChangeText={(v) => { setName(v); setNameError(''); }}
         autoCapitalize="words"
+        error={nameError}
         containerStyle={{ marginBottom: 8 }}
       />
       <TextInput
         label="Email"
         placeholder="your@email.com"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={(v) => { setEmail(v); setEmailError(''); setFormError(''); }}
         autoCapitalize="none"
+        error={emailError}
         containerStyle={{ marginBottom: 8 }}
       />
       <TextInput
@@ -75,7 +99,8 @@ export default function AccountCreationScreen() {
         placeholder="Min 8 characters"
         secureTextEntry
         value={password}
-        onChangeText={setPassword}
+        onChangeText={(v) => { setPassword(v); setPasswordError(''); }}
+        error={passwordError}
         containerStyle={{ marginBottom: 8 }}
       />
 
@@ -157,6 +182,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'left',
     fontFamily: Typography.fonts.body,
+  },
+  formError: {
+    fontFamily: Typography.fonts.body,
+    fontSize: Typography.sizes.labelM,
+    marginBottom: 12,
   },
   termsRow: {
     flexDirection: 'row',

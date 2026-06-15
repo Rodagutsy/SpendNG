@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { useCategoryStore } from '@/lib/stores/categoryStore';
+import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
+import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { SMSService } from '@/lib/sms-service';
 import { EmailService } from '@/lib/email-service';
 
@@ -31,6 +35,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       setLoading(false);
       if (session?.user) {
+        useTransactionStore.getState().fetchHomeTransactions();
+        useTransactionStore.getState().fetchTransactions();
+        useCategoryStore.getState().fetchCategories();
+        useCategoryDefaultStore.getState().fetchDefaults();
+        useTaxClassificationStore.getState().fetchClassifications();
         if (Platform.OS === 'android') {
           SMSService.rescanMissedAlerts();
         }
@@ -41,6 +50,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (session?.user) {
+        useTransactionStore.getState().fetchHomeTransactions();
+        useTransactionStore.getState().fetchTransactions();
+      }
     });
 
     const handleAppState = (state: AppStateStatus) => {

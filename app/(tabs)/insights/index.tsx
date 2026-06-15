@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,15 @@ import {
   StatusBar,
   Dimensions,
   Modal,
+  Animated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Shadows, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
+import { CashflowEngine } from '@/lib/cashflow-engine';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { LinearGradient } from 'expo-linear-gradient';
 import { formatCurrency } from '@/lib/utils';
@@ -82,6 +85,8 @@ export default function InsightsScreen() {
   const [selectedMonth, setSelectedMonth] = useState(getMonthKey(new Date().getFullYear(), new Date().getMonth() + 1));
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [showFilter, setShowFilter] = useState(false);
+  const closeFilter = useCallback(() => setShowFilter(false), []);
+  const { translateY: filterTranslateY, panResponder: filterPanResponder } = useSwipeToClose(closeFilter);
   const filterBtnRef = useRef<View>(null);
   const windowWidth = Dimensions.get('window').width;
 
@@ -126,31 +131,30 @@ export default function InsightsScreen() {
   const insights = useMemo(() => {
     if (!hasEnoughData) return null;
 
-    const credits = monthTxs.filter(t => t.transactionType === 'credit');
+    const { start, end } = monthStartEnd(selParsed.year, selParsed.month);
+    const { start: prevStart, end: prevEnd } = monthStartEnd(prevMonthParsed.year, prevMonthParsed.month);
+
     const debits = monthTxs.filter(t => t.transactionType === 'debit');
+    const credits = monthTxs.filter(t => t.transactionType === 'credit');
     const totalCredits = credits.reduce((s, t) => s + t.amount, 0);
     const totalDebits = debits.reduce((s, t) => s + t.amount, 0);
     const pct = totalCredits > 0 ? Math.round((totalDebits / totalCredits) * 100) : 0;
 
-    const prevCredits = prevMonthTxs.filter(t => t.transactionType === 'credit');
-    const prevDebits = prevMonthTxs.filter(t => t.transactionType === 'debit');
-    const prevTotalCredits = prevCredits.reduce((s, t) => s + t.amount, 0);
-    const prevTotalDebits = prevDebits.reduce((s, t) => s + t.amount, 0);
-    const prevPct = prevTotalCredits > 0 ? Math.round((prevTotalDebits / prevTotalCredits) * 100) : 0;
-    const pctDiff = pct - prevPct;
-    const vsPrevious = prevMonthTxs.length > 0
-      ? `${pctDiff >= 0 ? '+' : ''}${pctDiff}% vs ${MONTHS_SHORT[prevMonthParsed.month - 1]}`
-      : '';
-
-    const catTotals: Record<string, number> = {};
-    debits.forEach(t => { catTotals[t.categoryId] = (catTotals[t.categoryId] || 0) + t.amount; });
-    const sortedCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-    const topCatId = sortedCats[0]?.[0] || '';
-    const topCatTotal = sortedCats[0]?.[1] || 0;
-    const topCat = categoryMap.get(topCatId);
-    const topCatPct = totalDebits > 0 ? Math.round((topCatTotal / totalDebits) * 100) : 0;
+    const catBreakdown = CashflowEngine.categoryBreakdown(transactions, 'debit', start, end);
+    const topCatEntry = catBreakdown[0] || null;
+    const topCat = topCatEntry ? categoryMap.get(topCatEntry.categoryId) : null;
+    const topCatPct = topCatEntry?.percentage || 0;
 
     const biggest = debits.reduce((max, t) => t.amount > (max?.amount || 0) ? t : max, debits[0]);
+
+    const alerts = CashflowEngine.spendingAlerts(transactions, start, end, prevStart, prevEnd);
+    const weekly = CashflowEngine.weeklyBreakdown(transactions, start, end);
+    const avgWeekly = weekly.length > 0 ? weekly.reduce((s, w) => s + w.amount, 0) / weekly.length : 0;
+    const currentWeekKey = getWeekId(new Date());
+    const currentWeekTotal = weekly.find(w => w.weekKey === currentWeekKey)?.amount || 0;
+    if (currentWeekTotal > avgWeekly * 1.2 && topCat && alerts.length < 3) {
+      alerts.push({ icon: 'local-fire-department', text: `You spent more than usual on ${topCat.name} this week` });
+    }
 
     const merchantCounts: Record<string, number> = {};
     debits.forEach(t => {
@@ -160,38 +164,6 @@ export default function InsightsScreen() {
     const sortedMerchants = Object.entries(merchantCounts).sort((a, b) => b[1] - a[1]);
     const topMerchant = sortedMerchants[0]?.[0] || '';
     const topMerchantCount = sortedMerchants[0]?.[1] || 0;
-
-    const prevCatTotals: Record<string, number> = {};
-    prevDebits.forEach(t => { prevCatTotals[t.categoryId] = (prevCatTotals[t.categoryId] || 0) + t.amount; });
-
-    const alerts: { icon: string; text: string }[] = [];
-    for (const [catId, total] of Object.entries(catTotals)) {
-      const prevTotal = prevCatTotals[catId] || 0;
-      if (prevTotal > 0) {
-        const change = Math.round(((total - prevTotal) / prevTotal) * 100);
-        if (change >= 20) {
-          const cat = categoryMap.get(catId);
-          alerts.push({ icon: 'trending-up', text: `${cat?.name || 'Category'} spending increased by ${change}% this month` });
-        }
-      }
-    }
-
-    const weeks: Record<string, number> = {};
-    debits.forEach(t => {
-      const wk = getWeekId(new Date(t.transactionDate));
-      weeks[wk] = (weeks[wk] || 0) + t.amount;
-    });
-    const weekEntries = Object.entries(weeks);
-    const avgWeekly = weekEntries.length > 0 ? totalDebits / weekEntries.length : 0;
-    const currentWeekKey = getWeekId(new Date());
-    const currentWeekTotal = weeks[currentWeekKey] || 0;
-    if (currentWeekTotal > avgWeekly * 1.2 && topCat && alerts.length < 3) {
-      alerts.push({ icon: 'local-fire-department', text: `You spent more than usual on ${topCat.name} this week` });
-    }
-
-    if (alerts.length === 0) {
-      alerts.push({ icon: 'trending-up', text: 'Your spending this month is within normal range' });
-    }
 
     const patterns: { icon: string; text: string }[] = [];
     if (topMerchant && topMerchantCount > 1) {
@@ -207,17 +179,26 @@ export default function InsightsScreen() {
       text: weekendCount > weekdayCount ? 'Most spending happens on weekends' : 'Most transactions happen on weekdays',
     });
 
-    const weekAmounts = weekEntries.map(([key, amt]) => ({ key, amount: amt }));
-    weekAmounts.sort((a, b) => a.amount - b.amount);
-    const best = weekAmounts[0];
-    const worst = weekAmounts[weekAmounts.length - 1];
+    const prevCredits = prevMonthTxs.filter(t => t.transactionType === 'credit');
+    const prevDebits = prevMonthTxs.filter(t => t.transactionType === 'debit');
+    const prevTotalCredits = prevCredits.reduce((s, t) => s + t.amount, 0);
+    const prevTotalDebits = prevDebits.reduce((s, t) => s + t.amount, 0);
+    const prevPct = prevTotalCredits > 0 ? Math.round((prevTotalDebits / prevTotalCredits) * 100) : 0;
+    const pctDiff = pct - prevPct;
+    const vsPrevious = prevMonthTxs.length > 0
+      ? `${pctDiff >= 0 ? '+' : ''}${pctDiff}% vs ${MONTHS_SHORT[prevMonthParsed.month - 1]}`
+      : '';
+
+    const sortedWeekly = [...weekly].sort((a, b) => a.amount - b.amount);
+    const best = sortedWeekly[0];
+    const worst = sortedWeekly[sortedWeekly.length - 1];
 
     return {
       pct,
       vsPrevious,
       topCatName: topCat?.name || 'Uncategorized',
-      topCatAmount: formatCurrency(topCatTotal),
-      topCatPct: `${topCatPct}% of spend`,
+      topCatAmount: topCatEntry ? formatCurrency(topCatEntry.amount) : formatCurrency(0),
+      topCatPct: `${Math.round(topCatPct)}% of spend`,
       topCatIcon: mapIcon(topCat?.iconIdentifier),
       topCatColor: topCat?.colorHex || theme.roles.primary,
       topCatBg: topCat?.colorHex ? `${topCat.colorHex}20` : theme.primaryContainer,
@@ -226,10 +207,10 @@ export default function InsightsScreen() {
       biggestDate: biggest ? formatDate(biggest.transactionDate) : '',
       alerts,
       patterns,
-      bestWeek: best ? { dateRange: best.key, amount: formatCurrency(best.amount) } : null,
-      worstWeek: worst ? { dateRange: worst.key, amount: formatCurrency(worst.amount) } : null,
+      bestWeek: best ? { dateRange: best.weekKey, amount: formatCurrency(best.amount) } : null,
+      worstWeek: worst ? { dateRange: worst.weekKey, amount: formatCurrency(worst.amount) } : null,
     };
-  }, [monthTxs, prevMonthTxs, hasEnoughData, categoryMap, prevMonthParsed, theme]);
+  }, [monthTxs, prevMonthTxs, hasEnoughData, categoryMap, prevMonthParsed, theme, selParsed, transactions]);
 
   const pct = insights?.pct ?? 0;
   const healthColor = pct >= 70 ? theme.roles.error : pct >= 50 ? theme.roles.warning : pct >= 0 ? theme.roles.success : theme.roles.error;
@@ -407,11 +388,17 @@ export default function InsightsScreen() {
         </ScrollView>
       </SafeAreaView>
 
-      <Modal transparent animationType="slide" visible={showFilter} onRequestClose={() => setShowFilter(false)}>
+      <Modal transparent animationType="slide" visible={showFilter} onRequestClose={closeFilter}>
         <View style={styles.filterOverlay}>
-          <TouchableOpacity style={styles.filterOverlayBg} activeOpacity={1} onPress={() => setShowFilter(false)} />
-          <View style={[styles.filterSheet, { backgroundColor: theme.roles.surface }]}>
-            <View style={styles.filterHandleRow}>
+          <TouchableOpacity style={styles.filterOverlayBg} activeOpacity={1} onPress={() => {
+            Animated.timing(filterTranslateY, {
+              toValue: 2000,
+              duration: 200,
+              useNativeDriver: true,
+            }).start(() => closeFilter());
+          }} />
+          <Animated.View style={[styles.filterSheet, { backgroundColor: theme.roles.surface, transform: [{ translateY: filterTranslateY }] }]}>
+            <View style={styles.filterHandleRow} {...filterPanResponder.panHandlers}>
               <View style={[styles.filterHandle, { backgroundColor: theme.outlineVariant }]} />
             </View>
             <View style={styles.filterHeader}>
@@ -469,7 +456,7 @@ export default function InsightsScreen() {
                 );
               })}
             </View>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
     </>

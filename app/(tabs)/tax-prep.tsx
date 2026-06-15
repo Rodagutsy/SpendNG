@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -13,22 +14,19 @@ import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Chip } from '@/components/ui/Chip';
-import { Button } from '@/components/ui/Button';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
 import { TaxClassSheet } from '@/components/tax/TaxClassSheet';
+import { TransactionReviewSheet } from '@/components/tax/TransactionReviewSheet';
+import { TransactionFilterSheet, TransactionFilters } from '@/components/tax/TransactionFilterSheet';
 import { StepIncomeReview } from '@/components/tax/StepIncomeReview';
 import { StepExpenseReview } from '@/components/tax/StepExpenseReview';
 import { StepWhtReview } from '@/components/tax/StepWhtReview';
 import { StepTaxSummary } from '@/components/tax/StepTaxSummary';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-type TaxFilter = 'all' | 'unclassified' | string;
-type BatchAction = string | null;
 
 export default function TaxPrepScreen() {
   const router = useRouter();
@@ -39,7 +37,6 @@ export default function TaxPrepScreen() {
 
   const transactions = useTransactionStore((s) => s.transactions);
   const updateTransaction = useTransactionStore((s) => s.updateTransaction);
-  const fetchTransactions = useTransactionStore((s) => s.fetchTransactions);
   const categories = useCategoryStore((s) => s.categories);
   const getDefaultForCategory = useCategoryDefaultStore((s) => s.getDefaultForCategory);
   const categoryDefaults = useCategoryDefaultStore((s) => s.defaults);
@@ -48,24 +45,65 @@ export default function TaxPrepScreen() {
   const taxSteps = useTaxStore((s) => s.steps);
   const stepsDone = taxSteps.filter((s) => s.done).length;
 
-  const [activeFilter, setActiveFilter] = useState<TaxFilter>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [applying, setApplying] = useState(false);
   const [activeStep, setActiveStep] = useState<0 | 1 | 2 | 3 | null>(null);
   const [showDefaults, setShowDefaults] = useState(false);
   const [showBatchSheet, setShowBatchSheet] = useState(false);
+  const [showFilterSheet, setShowFilterSheet] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filters, setFilters] = useState<TransactionFilters>({ status: 'all', taxClassId: null, dateRange: null });
+  const [reviewTx, setReviewTx] = useState<TransactionRecord | null>(null);
 
   const filteredTransactions = useMemo(() => {
-    const base = transactions.filter((t) => !t.isDuplicate);
-    if (activeFilter === 'all') return base;
-    if (activeFilter === 'unclassified') return base.filter((t) => !t.taxClassificationId);
-    return base.filter((t) => t.taxClassificationId === activeFilter);
-  }, [transactions, activeFilter]);
+    let base = transactions.filter((t) => !t.isDuplicate);
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      base = base.filter((t) =>
+        t.merchantName?.toLowerCase().includes(q) ||
+        t.originalMessage?.toLowerCase().includes(q) ||
+        t.amount.toString().includes(q)
+      );
+    }
+
+    if (filters.status === 'high') base = base.filter((t) => t.confidenceLevel === 'high');
+    else if (filters.status === 'medium') base = base.filter((t) => t.confidenceLevel === 'medium');
+    else if (filters.status === 'low') base = base.filter((t) => t.confidenceLevel === 'low' || !t.confidenceLevel);
+    else if (filters.status === 'needs_review') base = base.filter((t) => !t.taxClassificationId);
+
+    if (filters.taxClassId) {
+      base = base.filter((t) => t.taxClassificationId === filters.taxClassId);
+    }
+
+    if (filters.dateRange === 'this_week') {
+      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      base = base.filter((t) => t.transactionDate >= weekAgo);
+    } else if (filters.dateRange === 'this_month') {
+      const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      base = base.filter((t) => t.transactionDate >= monthAgo);
+    }
+
+    return base.sort((a, b) => b.transactionDate - a.transactionDate);
+  }, [transactions, searchQuery, filters]);
 
   const unclassifiedCount = useMemo(
     () => transactions.filter((t) => !t.isDuplicate && !t.taxClassificationId).length,
     [transactions]
   );
+
+  const summary = useMemo(() => {
+    const all = transactions.filter((t) => !t.isDuplicate);
+    const needsReview = all.filter((t) => !t.taxClassificationId);
+    const highConfidence = all.filter((t) => t.confidenceLevel === 'high');
+    return {
+      total: all.length,
+      needsReview: needsReview.length,
+      highConfidence: highConfidence.length,
+    };
+  }, [transactions]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -161,8 +199,6 @@ export default function TaxPrepScreen() {
 
   const getCategoryName = (id: string) => categories.find((c) => c.id === id)?.name ?? 'Unknown';
 
-  const getCategoryColor = (id: string) => categories.find((c) => c.id === id)?.colorHex ?? theme.outline;
-
   const taxClassColor = (id: string | null | undefined) => {
     if (!id) return theme.outline;
     const tc = getTaxClassById(id);
@@ -175,20 +211,6 @@ export default function TaxPrepScreen() {
     () => Array.from(new Map(categories.map((c) => [c.id, c])).values()).filter((cat) => getDefaultForCategory(cat.id)),
     [categories, categoryDefaults],
   );
-
-  const FILTER_TABS: { key: TaxFilter; label: string; count: number }[] = useMemo(() => {
-    const visible = transactions.filter((t) => !t.isDuplicate);
-    const base = [
-      { key: 'all' as TaxFilter, label: 'All', count: visible.length },
-      { key: 'unclassified' as TaxFilter, label: 'Unclassified', count: unclassifiedCount },
-    ];
-    const classTabs = taxClasses.map((tc) => ({
-      key: tc.id as TaxFilter,
-      label: tc.name,
-      count: visible.filter((t) => t.taxClassificationId === tc.id).length,
-    }));
-    return [...base, ...classTabs];
-  }, [transactions, unclassifiedCount, taxClasses]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -282,56 +304,96 @@ export default function TaxPrepScreen() {
 
         {/* Transactions Section */}
         <View style={styles.txSection}>
+          {/* Section Header */}
           <View style={styles.txSectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.onBackground }]}>Transactions</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={() => setShowSearch(!showSearch)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <MaterialIcons name={showSearch ? 'close' : 'search'} size={22} color={theme.onBackground} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setShowFilterSheet(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <MaterialIcons name="filter-list" size={22} color={theme.onBackground} />
+              </TouchableOpacity>
+            </View>
           </View>
 
-          {/* Filter Tabs */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-            {FILTER_TABS.map((tab) => (
-              <Chip
-                key={tab.key}
-                label={`${tab.label} (${tab.count})`}
-                selected={activeFilter === tab.key}
-                onPress={() => { setActiveFilter(tab.key); setSelectedIds(new Set()); }}
+          {/* Search Bar */}
+          {showSearch && (
+            <View style={[styles.searchBar, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.outlineVariant }]}>
+              <MaterialIcons name="search" size={18} color={theme.outline} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.onSurface }]}
+                placeholder="Search transactions..."
+                placeholderTextColor={theme.outline}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoFocus
               />
-            ))}
-          </ScrollView>
-
-          {/* Apply Defaults — only visible when Unclassified tab is active */}
-          {activeFilter === 'unclassified' && unclassifiedCount > 0 && (
-            <View style={styles.applyDefaultsRow}>
-              <Button
-                title={applying ? 'Applying...' : `Apply Defaults (${unclassifiedCount})`}
-                size="small"
-                onPress={handleApplyCategoryDefaults}
-                disabled={applying}
-                loading={applying}
-              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <MaterialIcons name="close" size={18} color={theme.outline} />
+                </TouchableOpacity>
+              )}
             </View>
           )}
 
-          {/* Selection Actions */}
-          {selectedIds.size > 0 && (
+          {/* Summary Strip */}
+          <View style={[styles.summaryCard, { backgroundColor: theme.surface }]}>
+            <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryValue, { color: theme.onSurface }]}>{summary.total}</Text>
+                <Text style={[styles.summaryLabel, { color: theme.outline }]}>Total</Text>
+              </View>
+              <View style={[styles.summaryDivider, { backgroundColor: theme.outlineVariant }]} />
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryValue, { color: Colors.main.warning }]}>{summary.needsReview}</Text>
+                <Text style={[styles.summaryLabel, { color: theme.outline }]}>Needs review</Text>
+              </View>
+              <View style={[styles.summaryDivider, { backgroundColor: theme.outlineVariant }]} />
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryValue, { color: Colors.main.success }]}>{summary.highConfidence}</Text>
+                <Text style={[styles.summaryLabel, { color: theme.outline }]}>High confidence</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Apply Defaults — shown when there are unclassified transactions */}
+          {unclassifiedCount > 0 && (
+            <TouchableOpacity style={[styles.applyDefaultsBtn, { backgroundColor: Colors.main.primary + '0D', borderColor: Colors.main.primary + '33' }]} onPress={handleApplyCategoryDefaults} disabled={applying} activeOpacity={0.7}>
+              <MaterialIcons name="auto-awesome" size={16} color={Colors.main.primary} />
+              <Text style={[styles.applyDefaultsText, { color: Colors.main.primary }]}>
+                {applying ? 'Applying...' : `Auto-classify ${unclassifiedCount} unclassified`}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Bulk Action Bar (selection mode) */}
+          {selectionMode && selectedIds.size > 0 && (
             <View style={[styles.selectionBar, { backgroundColor: theme.surfaceContainerLow }]}>
-              <Text style={[styles.selectionCount, { color: theme.onBackground }]}>
+              <TouchableOpacity onPress={() => { setSelectedIds(new Set()); setSelectionMode(false); }}>
+                <MaterialIcons name="close" size={20} color={theme.onSurface} />
+              </TouchableOpacity>
+              <Text style={[styles.selectionCount, { color: theme.onSurface }]}>
                 {selectedIds.size} selected
               </Text>
               <View style={styles.selectionActions}>
-                <Button
-                  title="Classify"
-                  size="xs"
-                  style={{ backgroundColor: Colors.main.warning }}
-                  onPress={() => setShowBatchSheet(true)}
-                />
-                <Button
-                  title="Clear"
-                  size="xs"
-                  variant="outline"
-                  style={{ borderColor: theme.outlineVariant }}
-                  textStyle={{ color: theme.outline }}
-                  onPress={handleClearClassification}
-                />
+                <TouchableOpacity style={[styles.bulkActionBtn, { backgroundColor: Colors.main.warning + '1A' }]} onPress={() => setShowBatchSheet(true)}>
+                  <Text style={[styles.bulkActionText, { color: Colors.main.warning }]}>Classify</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.bulkActionBtn, { backgroundColor: Colors.main.success + '1A' }]} onPress={async () => {
+                  setApplying(true);
+                  try {
+                    await Promise.all(Array.from(selectedIds).map((id) => updateTransaction(id, { isFlaggedForReview: false } as any)));
+                    setSelectedIds(new Set()); setSelectionMode(false);
+                    showAlert({ title: 'Done', message: `${selectedIds.size} transaction(s) confirmed.` });
+                  } catch (err: any) { showAlert({ title: 'Error', message: err.message }); }
+                  finally { setApplying(false); }
+                }} disabled={applying}>
+                  <Text style={[styles.bulkActionText, { color: Colors.main.success }]}>Confirm</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.bulkActionBtn, { backgroundColor: theme.outlineVariant }]} onPress={() => { setSelectedIds(new Set()); setSelectionMode(false); }}>
+                  <Text style={[styles.bulkActionText, { color: theme.outline }]}>Cancel</Text>
+                </TouchableOpacity>
               </View>
             </View>
           )}
@@ -345,41 +407,58 @@ export default function TaxPrepScreen() {
           ) : (
             filteredTransactions.map((tx) => {
               const isSelected = selectedIds.has(tx.id);
-              const catColor = getCategoryColor(tx.categoryId);
+              const confidence = tx.confidenceLevel || 'low';
+              const confidenceColor = confidence === 'high' ? Colors.main.success : confidence === 'medium' ? Colors.main.warning : Colors.main.error;
+              const catName = getCategoryName(tx.categoryId);
+
               return (
                 <TouchableOpacity
                   key={tx.id}
                   style={[
-                    styles.txRow,
-                    { backgroundColor: isSelected ? theme.primaryContainer + '33' : theme.surface },
-                    isSelected && { borderColor: theme.primary, borderWidth: 1 },
+                    styles.txRowNew,
+                    { backgroundColor: theme.surface },
+                    selectionMode && isSelected && { backgroundColor: Colors.main.primary + '0D', borderColor: Colors.main.primary, borderWidth: 1 },
                   ]}
-                  onPress={() => toggleSelect(tx.id)}
+                  onPress={() => {
+                    if (selectionMode) {
+                      toggleSelect(tx.id);
+                    } else {
+                      setReviewTx(tx);
+                    }
+                  }}
+                  onLongPress={() => {
+                    if (!selectionMode) {
+                      setSelectionMode(true);
+                      setSelectedIds(new Set([tx.id]));
+                    }
+                  }}
                   activeOpacity={0.7}
                 >
-                  <View style={[styles.checkbox, { borderColor: isSelected ? theme.primary : theme.outlineVariant, backgroundColor: isSelected ? theme.primary : 'transparent' }]}>
-                    {isSelected && <MaterialIcons name="check" size={14} color={theme.onPrimary} />}
-                  </View>
-                  <View style={[styles.catDot, { backgroundColor: catColor }]} />
-                  <View style={styles.txInfo}>
-                    <Text style={[styles.txMerchant, { color: theme.onBackground }]} numberOfLines={1}>
-                      {tx.isDuplicate ? '[Duplicate] ' : ''}{tx.merchantName ?? 'Unknown'}
-                    </Text>
-                    <Text style={[styles.txMeta, { color: theme.outline }]}>
-                      {getCategoryName(tx.categoryId)} • {new Date(tx.transactionDate).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <View style={styles.txRight}>
-                    <Text style={[styles.txAmount, { color: tx.transactionType === 'credit' ? Colors.main.success : Colors.main.error }]}>
-                      {tx.transactionType === 'credit' ? '+' : '-'}₦{tx.amount.toLocaleString()}
-                    </Text>
-                    <Chip
-                      label={tx.taxClassificationId ? getTaxClassById(tx.taxClassificationId)?.name ?? tx.taxClassificationId : 'Unset'}
-                      size="sm"
-                      selected={!!tx.taxClassificationId}
-                      color={tx.taxClassificationId ? taxClassColor(tx.taxClassificationId) : undefined}
-                      onPress={undefined}
-                    />
+                  {selectionMode && (
+                    <View style={[styles.checkboxSmall, { borderColor: isSelected ? Colors.main.primary : theme.outlineVariant, backgroundColor: isSelected ? Colors.main.primary : 'transparent' }]}>
+                      {isSelected && <MaterialIcons name="check" size={12} color="#FFFFFF" />}
+                    </View>
+                  )}
+                  <View style={styles.txRowNewContent}>
+                    <View style={styles.txRowNewLeft}>
+                      <Text style={[styles.txRowNewMerchant, { color: theme.onSurface }]} numberOfLines={1}>
+                        {tx.isDuplicate ? '[Duplicate] ' : ''}{tx.merchantName ?? 'Unknown'}
+                      </Text>
+                      <View style={styles.txRowNewMeta}>
+                        <View style={[styles.categoryChip, { backgroundColor: catName === 'Unknown' ? theme.outlineVariant : Colors.main.primary + '0D' }]}>
+                          <Text style={[styles.categoryChipText, { color: catName === 'Unknown' ? theme.outline : Colors.main.primary }]}>{catName}</Text>
+                        </View>
+                        <View style={[styles.confidenceDot, { backgroundColor: confidenceColor }]} />
+                        <Text style={[styles.confidenceLabel, { color: theme.outline }]}>
+                          {confidence === 'high' ? 'High confidence' : confidence === 'medium' ? 'Medium confidence' : 'Low confidence'}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.txRowNewRight}>
+                      <Text style={[styles.txRowNewAmount, { color: tx.transactionType === 'credit' ? Colors.main.success : Colors.main.error }]}>
+                        {tx.transactionType === 'credit' ? '+' : '-'}₦{tx.amount.toLocaleString()}
+                      </Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
@@ -407,6 +486,18 @@ export default function TaxPrepScreen() {
         visible={activeStep === 3}
         onClose={() => setActiveStep(null)}
         onComplete={handleStepComplete}
+      />
+      <TransactionReviewSheet
+        visible={!!reviewTx}
+        onClose={() => setReviewTx(null)}
+        transaction={reviewTx}
+        onUpdate={updateTransaction}
+      />
+      <TransactionFilterSheet
+        visible={showFilterSheet}
+        onClose={() => setShowFilterSheet(false)}
+        onApply={(newFilters) => setFilters(newFilters)}
+        current={filters}
       />
       <TaxClassSheet
         visible={showBatchSheet}
@@ -510,21 +601,56 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  applyDefaultsRow: {
+  headerActions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 16,
   },
-  filterRow: {
+  searchBar: {
     flexDirection: 'row',
-    marginBottom: 4,
-    marginTop: 2,
+    alignItems: 'center',
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
     gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: Typography.fonts.body,
+    fontSize: 14,
+    padding: 0,
+  },
+  summaryCard: {
+    borderRadius: Radius.sm,
+    paddingVertical: Spacing[3],
+    paddingHorizontal: Spacing[3],
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  summaryItem: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  summaryValue: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 20,
+  },
+  summaryLabel: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 11,
+  },
+  summaryDivider: {
+    width: 1,
+    height: 28,
   },
   selectionBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: Radius.sm,
     gap: 8,
@@ -532,12 +658,20 @@ const styles = StyleSheet.create({
   selectionCount: {
     fontFamily: Typography.fonts.medium,
     fontSize: 13,
+    flex: 1,
   },
   selectionActions: {
     flexDirection: 'row',
     gap: 6,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+  },
+  bulkActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+  },
+  bulkActionText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 12,
   },
   emptyState: {
     alignItems: 'center',
@@ -548,66 +682,80 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: 14,
   },
-  txRow: {
+  applyDefaultsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: Radius.sm,
+    justifyContent: 'center',
     gap: 6,
-    marginBottom: -6,
+    paddingVertical: 8,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
   },
-  checkbox: {
+  applyDefaultsText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 12,
+  },
+  txRowNew: {
+    borderRadius: Radius.sm,
+    overflow: 'hidden',
+  },
+  checkboxSmall: {
+    position: 'absolute',
+    left: 8,
+    top: '50%',
+    marginTop: -10,
     width: 20,
     height: 20,
     borderRadius: 4,
     borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 2,
   },
-  txInfo: {
+  txRowNewContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: Spacing[3],
+    gap: 8,
+  },
+  txRowNewLeft: {
     flex: 1,
-    gap: 3,
+    gap: 4,
   },
-  txMerchant: {
+  txRowNewMerchant: {
     fontFamily: Typography.fonts.display,
     fontSize: 14,
   },
-  txMeta: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 12,
-  },
-  txRight: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  txAmount: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 15,
-  },
-  legendBox: {
-    padding: Spacing[3],
-    borderRadius: Radius.sm,
-    gap: 6,
-  },
-  legendItem: {
+  txRowNewMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
-  legendPill: {
+  categoryChip: {
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: Radius.full,
   },
-  legendPillText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 10,
-  },
-  legendText: {
+  categoryChipText: {
     fontFamily: Typography.fonts.body,
-    fontSize: 12,
-    flex: 1,
+    fontSize: 11,
+  },
+  confidenceDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  confidenceLabel: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 11,
+  },
+  txRowNewRight: {
+    alignItems: 'flex-end',
+  },
+  txRowNewAmount: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 15,
   },
   progressCard: {
     marginHorizontal: Spacing[5],

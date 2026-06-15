@@ -12,6 +12,7 @@ export default function OnboardingLayout() {
       <Stack.Screen name="sms-permission" />
       <Stack.Screen name="email-connection" />
       <Stack.Screen name="import-progress" />
+      <Stack.Screen name="verify-email" />
     </Stack>
   );
 }

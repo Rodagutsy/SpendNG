@@ -1,6 +1,8 @@
 import * as Crypto from 'expo-crypto';
 import { Parser } from './parser';
 import { CategorizationEngine } from './categorization-engine';
+import { MerchantNormalizationEngine } from './merchant-normalization-engine';
+import { RecurringPaymentDetector } from './recurring-payment-detector';
 import { supabase } from './supabase';
 import { useTransactionStore } from './stores/transactionStore';
 import { useCategoryDefaultStore } from './stores/categoryDefaultStore';
@@ -19,15 +21,9 @@ export class IngestionEngine {
     timestamp: number,
     sourceChannel: 'sms' | 'email' = 'sms',
   ): Promise<{ success: boolean; transactionId?: string }> {
+    const boundaryHash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawBody);
     try {
       if (sourceChannel === 'sms' && !this.isTransactionAlert(rawBody)) {
-        console.log(`[IngestionEngine] Ignored non-transaction alert from ${sender}`);
-        return { success: false };
-      }
-
-      const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawBody);
-      if (await this.isContentDuplicate(hash)) {
-        console.log(`[IngestionEngine] Duplicate raw content hash detected: ${hash}`);
         return { success: false };
       }
 
@@ -36,17 +32,22 @@ export class IngestionEngine {
         : Parser.parseSMS(rawBody, sender, timestamp);
 
       if (!parseResult) {
-        await this.logFailedParse(sourceChannel, sender, 'Could not parse message', rawBody);
+        await this.logFailedParse(sourceChannel, sender, 'Could not parse message', rawBody, boundaryHash);
         return { success: false };
       }
 
-      if (await this.isDuplicate(parseResult.amount, parseResult.merchantName, parseResult.transactionDate)) {
-        console.log(`[IngestionEngine] Duplicate transaction detected (amount+merchant+time window)`);
+      const canonicalMerchant = await MerchantNormalizationEngine.normalize(parseResult.merchantName);
+      const normalizedStripped = (canonicalMerchant || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const dateMinute = Math.floor(parseResult.transactionDate / 60000);
+      const hashInput = [normalizedStripped, parseResult.amount.toFixed(2), dateMinute, parseResult.currency].join('|');
+      const contentHash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, hashInput);
+
+      if (await this.isContentDuplicate(contentHash)) {
         return { success: false };
       }
 
       const category = await CategorizationEngine.categorizeWithAmountDisambiguation(
-        parseResult.merchantName,
+        canonicalMerchant,
         parseResult.transactionType,
         parseResult.amount,
       );
@@ -62,7 +63,7 @@ export class IngestionEngine {
         amount: parseResult.amount,
         currency: parseResult.currency,
         transactionType: parseResult.transactionType,
-        merchantName: parseResult.merchantName,
+        merchantName: canonicalMerchant,
         categoryId: category.categoryId,
         accountName: parseResult.accountName,
         accountNumberLast4: parseResult.accountNumberLast4,
@@ -75,6 +76,7 @@ export class IngestionEngine {
         taxClassificationId: null,
         confidenceLevel,
         receiptImageUri: null,
+        contentHash,
       });
 
       if (newTransaction) {
@@ -89,7 +91,7 @@ export class IngestionEngine {
       return { success: true, transactionId: newTransaction.id };
     } catch (error) {
       console.error('Ingestion engine error:', error);
-      await this.logFailedParse(sourceChannel, sender, `Error: ${error}`, rawBody);
+      await this.logFailedParse(sourceChannel, sender, `Error: ${error}`, rawBody, boundaryHash);
       return { success: false };
     }
   }
@@ -114,6 +116,12 @@ export class IngestionEngine {
       onProgress?.(processed, alerts.length);
     }
 
+    if (success > 0) {
+      RecurringPaymentDetector.detect().catch(err =>
+        console.error('[IngestionEngine] Recurring detection error:', err)
+      );
+    }
+
     return { success, failed };
   }
 
@@ -122,7 +130,7 @@ export class IngestionEngine {
       const { data } = await supabase
         .from('transactions')
         .select('id')
-        .eq('raw_source_text', hash);
+        .eq('content_hash', hash);
 
       return (data?.length || 0) > 0;
     } catch {
@@ -152,7 +160,7 @@ export class IngestionEngine {
       }
 
       const targetMerchant = merchantName.trim().toLowerCase();
-      return matches.some(m => m.merchant_name && m.merchant_name.trim().toLowerCase() === targetMerchant);
+      return matches.some((m: any) => m.merchant_name && m.merchant_name.trim().toLowerCase() === targetMerchant);
     } catch {
       return false;
     }
@@ -163,14 +171,18 @@ export class IngestionEngine {
     senderIdentifier: string,
     failureReason: string,
     rawContent: string,
+    contentHash?: string,
   ): Promise<void> {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       await supabase.from('failed_parses').insert({
         id: Crypto.randomUUID(),
+        user_id: user?.id,
         source_channel: sourceChannel,
         sender_identifier: senderIdentifier,
         failure_reason: failureReason,
         raw_source_text: rawContent,
+        content_hash: contentHash,
         is_reviewed: false,
         created_at: Date.now(),
       });

@@ -21,7 +21,11 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.rodagutsy.spendngapp",
-      "newArchEnabled": true
+      "newArchEnabled": true,
+      "permissions": [
+        "android.permission.READ_SMS",
+        "android.permission.RECEIVE_SMS"
+      ]
     },
     "web": {
       "output": "static",
@@ -52,6 +56,7 @@
       "eas": {
         "projectId": "eada8dcf-d548-4517-9bba-d31e9cd05d4d"
       }
-    }
+    },
+    "owner": "rodagutsy"
   }
 }
