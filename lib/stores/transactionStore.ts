@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../supabase';
 import * as Crypto from 'expo-crypto';
+import { useAuthStore } from './authStore';
 
 export interface TransactionRecord {
   id: string;
@@ -118,13 +119,13 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   fetchTransactions: async (filters) => {
     set({ loading: true, error: null });
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      const userId = useAuthStore.getState().userId;
+      if (!userId) {
         set({ transactions: [], loading: false });
         return;
       }
       const activeFilters = filters || get().filters;
-      let query = supabase.from('transactions').select('*').eq('user_id', user.id);
+      let query = supabase.from('transactions').select('*').eq('user_id', userId);
 
       if (activeFilters.categoryId) {
         query = query.eq('category_id', activeFilters.categoryId);
@@ -168,9 +169,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
 
   fetchHomeTransactions: async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      let query = supabase.from('transactions').select('*').eq('user_id', user.id);
+      const userId = useAuthStore.getState().userId;
+      if (!userId) return;
+      let query = supabase.from('transactions').select('*').eq('user_id', userId);
       query = query.order('transaction_date', { ascending: false });
 
       const { data, error } = await query;
@@ -187,12 +188,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   addTransaction: async (data) => {
     const newId = Crypto.randomUUID();
     const nowTs = Date.now();
-    const { data: { user } } = await supabase.auth.getUser();
+    const userId = useAuthStore.getState().userId;
     const { contentHash } = data;
 
     const insertData = {
       id: newId,
-      user_id: user?.id,
+      user_id: userId,
       amount: data.amount,
       currency: data.currency,
       original_currency: data.originalCurrency ?? null,
@@ -330,9 +331,9 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
   },
 
   clearAllTransactions: async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No authenticated user');
-    const { error } = await supabase.from('transactions').delete().eq('user_id', user.id);
+    const userId = useAuthStore.getState().userId;
+    if (!userId) throw new Error('No authenticated user');
+    const { error } = await supabase.from('transactions').delete().eq('user_id', userId);
     if (error) throw error;
 
     set({ transactions: [], homeTransactions: [] });

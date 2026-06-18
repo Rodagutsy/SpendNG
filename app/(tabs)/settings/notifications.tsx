@@ -1,37 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
+  const { user } = useAuth();
+  const prefs = user?.user_metadata?.notification_preferences || {};
 
-  const [monthlyReport, setMonthlyReport] = useState(false);
-  const [overspendAlert, setOverspendAlert] = useState(false);
-  const [taxReminder, setTaxReminder] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const prefs = user?.user_metadata?.notification_preferences;
-      if (prefs) {
-        setMonthlyReport(prefs.monthly_report ?? false);
-        setOverspendAlert(prefs.overspend_alert ?? false);
-        setTaxReminder(prefs.tax_reminder ?? false);
-      }
-      setLoading(false);
-    })();
-  }, []);
+  const [monthlyReport, setMonthlyReport] = useState(prefs.monthly_report ?? false);
+  const [overspendAlert, setOverspendAlert] = useState(prefs.overspend_alert ?? false);
+  const [taxReminder, setTaxReminder] = useState(prefs.tax_reminder ?? false);
 
   const updatePreference = async (key: string, value: boolean) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    const current = user?.user_metadata?.notification_preferences || {};
+    const current = { monthly_report: monthlyReport, overspend_alert: overspendAlert, tax_reminder: taxReminder };
     const { error } = await supabase.auth.updateUser({
       data: {
         notification_preferences: { ...current, [key]: value },
@@ -56,8 +44,6 @@ export default function NotificationsScreen() {
     setTaxReminder(val);
     updatePreference('tax_reminder', val);
   };
-
-  if (loading) return null;
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>

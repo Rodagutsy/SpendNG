@@ -15,6 +15,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useAlert } from '@/context/AlertContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { OptionPickerModal } from '@/components/ui/OptionPickerModal';
 import { CalendarModal } from '@/components/CalendarModal';
 import { ExportService, ExportFormat } from '@/lib/export-service';
 import { useTransactionStore, TransactionRecord } from '@/lib/stores/transactionStore';
@@ -312,26 +313,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({ visible, onClose }) =>
         </Animated.View>
       </View>
 
-      {/* Export Type Picker */}
-      {showTypePicker && (
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowTypePicker(false)}>
-          <View style={[styles.pickerModal, { backgroundColor: theme.surface }]}>
-            <Text style={[styles.pickerTitle, { color: theme.onSurface }]}>Select Export Type</Text>
-            {EXPORT_TYPES.map((t) => (
-              <TouchableOpacity
-                key={t.key}
-                style={[styles.pickerOption, exportType === t.key && { backgroundColor: theme.primaryContainer }]}
-                onPress={() => { setExportType(t.key); setShowTypePicker(false); }}
-              >
-                <Text style={[styles.pickerOptionText, { color: theme.onSurface }, exportType === t.key && { fontFamily: Typography.fonts.display }]}>
-                  {t.label}
-                </Text>
-                {exportType === t.key && <MaterialIcons name="check" size={18} color={theme.primary} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      )}
+      <OptionPickerModal
+        visible={showTypePicker}
+        title="Select Export Type"
+        options={EXPORT_TYPES.map((t) => ({ id: t.key, label: t.label }))}
+        selected={exportType}
+        onSelect={(id) => setExportType(id)}
+        onClose={() => setShowTypePicker(false)}
+      />
 
       <CalendarModal
         visible={showStartCalendar}
@@ -560,43 +549,5 @@ const createStyles = (theme: typeof Colors.light) => StyleSheet.create({
   secondaryBtnText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 14,
-  },
-  pickerOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    zIndex: 100,
-  },
-  pickerModal: {
-    width: '80%',
-    maxHeight: '60%',
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[4],
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  pickerTitle: {
-    fontFamily: Typography.fonts.display,
-    fontSize: Typography.sizes.titleS,
-    paddingHorizontal: Spacing[5],
-    paddingBottom: Spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.ripple,
-  },
-  pickerOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: Spacing[5],
-  },
-  pickerOptionText: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 15,
   },
 });

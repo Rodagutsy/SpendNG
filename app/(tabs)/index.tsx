@@ -20,6 +20,7 @@ import { formatCurrency } from '@/lib/utils';
 import { BellIcon } from '@/components/ui/CustomSvgIcon';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useMonthlyBalances, useTransactionStore } from '@/lib/stores/transactionStore';
+import { useNotificationStore } from '@/lib/stores/notificationStore';
 import { CashflowEngine } from '@/lib/cashflow-engine';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
@@ -48,7 +49,7 @@ export default function HomeScreen() {
   const [showTxModal, setShowTxModal] = useState(false);
   const [txModalPrefill, setTxModalPrefill] = useState<{ receiptUri?: string; type?: 'credit' | 'debit'; amount?: string; merchant?: string } | null>(null);
   const [bannerDismissedAt, setBannerDismissedAt] = useState<number | null>(null);
-  const [clearedNotificationIds, setClearedNotificationIds] = useState<Set<string>>(new Set());
+  const clearedNotificationIds = useNotificationStore((s) => s.clearedIds);
   const [showConnectPrompt, setShowConnectPrompt] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [scanningReceipt, setScanningReceipt] = useState(false);
@@ -143,10 +144,10 @@ export default function HomeScreen() {
     transactions.filter((tx) => tx.isFlaggedForReview).forEach((tx) =>
       push(tx, `${tx.merchantName || 'Unknown'} — ${formatCurrency(tx.amount, tx.currency)} requires review`)
     );
-    transactions.slice(0, 10).forEach((tx) =>
-      push(tx, `${tx.transactionType === 'credit' ? 'Received' : 'Sent'} ${formatCurrency(tx.amount, tx.currency)}${tx.merchantName ? ` at ${tx.merchantName}` : ''}`)
+    transactions.filter((tx) => tx.isDuplicate).forEach((tx) =>
+      push(tx, `Duplicate detected${tx.merchantName ? ` — ${tx.merchantName}` : ''}`)
     );
-    return items.slice(0, 10).filter((n) => !clearedNotificationIds.has(n.id));
+    return items.filter((n) => !clearedNotificationIds.includes(n.id));
   }, [transactions, clearedNotificationIds]);
 
   const openNotifications = useCallback(() => {
@@ -326,7 +327,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <TouchableOpacity style={styles.notifClearBtn} onPress={() => { setClearedNotificationIds(new Set(notificationItems.map((n) => n.id))); closeNotifications(); }} activeOpacity={0.7}>
+              <TouchableOpacity style={styles.notifClearBtn} onPress={() => { useNotificationStore.getState().clearAll(notificationItems.map((n) => n.id)); closeNotifications(); }} activeOpacity={0.7}>
                 <Text style={styles.notifClearText}>Clear all notifications</Text>
               </TouchableOpacity>
             </View>

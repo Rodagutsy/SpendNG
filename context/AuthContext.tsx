@@ -3,6 +3,7 @@ import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { AppState, AppStateStatus, Platform } from 'react-native';
+import { useAuthStore } from '@/lib/stores/authStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }: any) => {
       setSession(session);
       setUser(session?.user ?? null);
+      useAuthStore.getState().setUserId(session?.user?.id ?? null);
       setLoading(false);
       if (session?.user) {
         useTransactionStore.getState().fetchHomeTransactions();
@@ -48,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       setSession(session);
       setUser(session?.user ?? null);
+      useAuthStore.getState().setUserId(session?.user?.id ?? null);
       if (session?.user) {
         useTransactionStore.getState().fetchHomeTransactions();
         useTransactionStore.getState().fetchTransactions();

@@ -1,14 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  TextInput,
+  TextInput as RNTextInput,
   TouchableOpacity,
   ScrollView,
   Modal,
   Platform,
-  Image,
   useWindowDimensions,
   Alert,
   Animated,
@@ -22,9 +21,12 @@ import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { TaxClassSheet } from '@/components/tax/TaxClassSheet';
-import { FormField } from '@/components/ui/FormField';
+import { OptionPickerModal } from '@/components/ui/OptionPickerModal';
+import { TextInput } from '@/components/ui/TextInput';
 import { AmountInput } from '@/components/ui/AmountInput';
 import { DropdownField } from '@/components/ui/DropdownField';
+import { TextArea } from '@/components/ui/TextArea';
+import { ReceiptPicker } from '@/components/ui/ReceiptPicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { CalendarModal } from '@/components/CalendarModal';
@@ -86,8 +88,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const [nameFocused, setNameFocused] = useState(false);
-  const [notesFocused, setNotesFocused] = useState(false);
   const [whtEnabled, setWhtEnabled] = useState(false);
   const [whtAmountText, setWhtAmountText] = useState('');
   const [whtClientName, setWhtClientName] = useState('');
@@ -97,6 +97,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [currency, setCurrency] = useState('NGN');
   const [nairaEquivalent, setNairaEquivalent] = useState<string | null>(null);
   const CURRENCY_ORDER = ['NGN', 'USD', 'GBP', 'EUR'];
+  const amountInputRef = useRef<RNTextInput>(null);
+  const notesInputRef = useRef<RNTextInput>(null);
 
   useEffect(() => {
     if (transaction && visible) {
@@ -153,6 +155,22 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     });
     return () => { cancelled = true; };
   }, [currency, amount]);
+
+  const prevModalsRef = useRef({ showCalendar, showCategoryPicker, showPaymentPicker, showTaxClassSheet });
+  useEffect(() => {
+    const prev = prevModalsRef.current;
+    const closed = (
+      (prev.showCalendar && !showCalendar) ||
+      (prev.showCategoryPicker && !showCategoryPicker) ||
+      (prev.showPaymentPicker && !showPaymentPicker) ||
+      (prev.showTaxClassSheet && !showTaxClassSheet)
+    );
+    prevModalsRef.current = { showCalendar, showCategoryPicker, showPaymentPicker, showTaxClassSheet };
+    if (closed) {
+      amountInputRef.current?.blur();
+      notesInputRef.current?.blur();
+    }
+  }, [showCalendar, showCategoryPicker, showPaymentPicker, showTaxClassSheet]);
 
   const cycleCurrency = () => {
     const idx = CURRENCY_ORDER.indexOf(currency);
@@ -389,24 +407,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
           ) : (
             <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
               {/* Sender/Receiver Name */}
-              <FormField label={type === 'credit' ? 'Sender Name' : 'Receiver Name'}>
-                <View style={[styles.textInputWrap, nameFocused && styles.textInputWrapFocused]}>
-                  <MaterialIcons name="person-outline" size={18} color={nameFocused ? theme.primary : theme.outlineVariant} />
-                  <TextInput
-                    style={[styles.textInputInner, { outlineStyle: 'none' } as any]}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder={type === 'credit' ? 'e.g. TechCorp Ltd' : 'e.g. Shoprite'}
-                    placeholderTextColor={theme.outline}
-                    onFocus={() => setNameFocused(true)}
-                    onBlur={() => setNameFocused(false)}
-                    underlineColorAndroid="transparent"
-                  />
-                </View>
-              </FormField>
+              <TextInput
+                label={type === 'credit' ? 'Sender Name' : 'Receiver Name'}
+                value={name}
+                onChangeText={setName}
+                placeholder={type === 'credit' ? 'e.g. TechCorp Ltd' : 'e.g. Shoprite'}
+                containerStyle={{ marginBottom: 0 }}
+              />
 
               {/* Amount */}
-              <FormField label="Amount">
+              <View>
+                <Text style={[styles.amountLabel, { color: theme.onBackground }]}>Amount</Text>
                 <View style={[styles.currencyInputRow, { borderColor: theme.outlineVariant }]}>
                   <TouchableOpacity onPress={cycleCurrency} activeOpacity={0.7} style={styles.currencyToggle}>
                     <Text style={[styles.currencySymbolText, { color: theme.primary }]}>
@@ -414,7 +425,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                     </Text>
                     <MaterialIcons name="unfold-more" size={14} color={theme.primary} />
                   </TouchableOpacity>
-                  <TextInput
+                  <RNTextInput
+                    ref={amountInputRef}
                     style={[styles.currencyAmountInput, { color: theme.onSurface, outlineStyle: 'none' } as any]}
                     value={amount}
                     onChangeText={setAmount}
@@ -426,17 +438,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                 </View>
                 {currency === 'NGN' ? (
                   <Text style={[styles.rateHint, { color: theme.outline }]}>
-                    Tap the currency symbol to report in $, etc.
+                    Change currency by tapping the symbol.
                   </Text>
                 ) : nairaEquivalent ? (
                   <Text style={[styles.rateHint, { color: theme.outline }]}>{nairaEquivalent}</Text>
                 ) : amount && parseFloat(amount) > 0 ? (
                   <Text style={[styles.rateHint, { color: theme.outline }]}>Fetching exchange rate...</Text>
                 ) : null}
-              </FormField>
+              </View>
 
               {/* Date */}
-              <FormField label="Date">
+              <View>
+                <Text style={[styles.amountLabel, { color: theme.onBackground }]}>Date</Text>
                 <TouchableOpacity
                   style={[styles.textInputWrap, { borderColor: theme.outlineVariant }]}
                   onPress={() => setShowCalendar(true)}
@@ -447,25 +460,23 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                     {dateText || 'DD/MM/YYYY'}
                   </Text>
                 </TouchableOpacity>
-              </FormField>
+              </View>
 
               {/* Category */}
-              <FormField label="Category">
-                <DropdownField
-                  value={category ? categories.find(c => c.id === category)?.label ?? '' : ''}
-                  placeholder="Select category"
-                  onPress={() => setShowCategoryPicker(true)}
-                />
-              </FormField>
+              <DropdownField
+                label="Category"
+                value={category ? categories.find(c => c.id === category)?.label ?? '' : ''}
+                placeholder="Select category"
+                onPress={() => setShowCategoryPicker(true)}
+              />
 
               {/* Payment Method */}
-              <FormField label="Payment Method">
-                <DropdownField
-                  value={paymentMethod ? PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? '' : ''}
-                  placeholder="Select payment method"
-                  onPress={() => setShowPaymentPicker(true)}
-                />
-              </FormField>
+              <DropdownField
+                label="Payment Method"
+                value={paymentMethod ? PAYMENT_METHODS.find(p => p.id === paymentMethod)?.label ?? '' : ''}
+                placeholder="Select payment method"
+                onPress={() => setShowPaymentPicker(true)}
+              />
 
               {/* WHT — income only */}
               {type === 'credit' && (
@@ -479,71 +490,37 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                   </TouchableOpacity>
                   {whtEnabled && (
                     <View style={styles.whtFields}>
-                      <FormField label="WHT Amount">
-                        <AmountInput value={whtAmountText} onChangeText={setWhtAmountText} placeholder="0.00" />
-                      </FormField>
-                      <FormField label="Client Name (optional)">
-                        <View style={[styles.textInputWrap, { borderColor: theme.outlineVariant }]}>
-                          <TextInput
-                            style={[styles.textInputInner, { outlineStyle: 'none' } as any]}
-                            value={whtClientName}
-                            onChangeText={setWhtClientName}
-                            placeholder="e.g. Payoneer, Upwork"
-                            placeholderTextColor={theme.outline}
-                            underlineColorAndroid="transparent"
-                          />
-                        </View>
-                      </FormField>
+                      <AmountInput label="WHT Amount" value={whtAmountText} onChangeText={setWhtAmountText} placeholder="0.00" />
+                      <TextInput
+                        label="Client Name (optional)"
+                        value={whtClientName}
+                        onChangeText={setWhtClientName}
+                        placeholder="e.g. Payoneer, Upwork"
+                        containerStyle={{ marginBottom: 0 }}
+                      />
                     </View>
                   )}
                 </View>
               )}
 
               {/* Notes */}
-              <FormField label="Notes (optional)">
-                <View style={[styles.textInputWrap, styles.notesWrap, notesFocused && styles.textInputWrapFocused]}>
-                  <TextInput
-                    style={[styles.textInputInner, styles.notesInput, { outlineStyle: 'none' } as any]}
-                    value={notes}
-                    onChangeText={setNotes}
-                    placeholder="Add notes about this transaction..."
-                    placeholderTextColor={theme.outline}
-                    multiline
-                    textAlignVertical="top"
-                    onFocus={() => setNotesFocused(true)}
-                    onBlur={() => setNotesFocused(false)}
-                    underlineColorAndroid="transparent"
-                  />
-                </View>
-              </FormField>
+              <TextArea
+                label="Notes (optional)"
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Add notes about this transaction..."
+              />
 
               {/* Receipt Image */}
-              <View style={styles.receiptSection}>
-                <Text style={styles.receiptLabel}>Receipt</Text>
-                {receiptUri ? (
-                  <View style={styles.receiptPreviewWrap}>
-                    <Image source={{ uri: receiptUri }} style={styles.receiptImage} />
-                    <TouchableOpacity style={styles.receiptReplaceBtn} onPress={pickReceiptImage} activeOpacity={0.8}>
-                      <MaterialIcons name="camera-alt" size={16} color={theme.onPrimary} />
-                      <Text style={styles.receiptReplaceText}>Replace</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <TouchableOpacity style={styles.addReceiptBtn} onPress={pickReceiptImage} activeOpacity={0.8}>
-                    <MaterialIcons name="add-a-photo" size={20} color={theme.primary} />
-                    <Text style={styles.addReceiptText}>Add Receipt Image</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+              <ReceiptPicker label="Receipt" value={receiptUri} onPick={pickReceiptImage} />
 
               {/* Tax Classification — auto-filled, scroll to see */}
-              <FormField label="Tax Classification">
-                <DropdownField
-                  value={taxClassId ? getTaxClassById(taxClassId)?.name ?? '' : ''}
-                  placeholder="Auto from category"
-                  onPress={() => setShowTaxClassSheet(true)}
-                />
-              </FormField>
+              <DropdownField
+                label="Tax Classification"
+                value={taxClassId ? getTaxClassById(taxClassId)?.name ?? '' : ''}
+                placeholder="Auto from category"
+                onPress={() => setShowTaxClassSheet(true)}
+              />
             </ScrollView>
           )}
 
@@ -561,47 +538,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
               <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
             </TouchableOpacity>
           </View>
-          </Animated.View>
-        {showCategoryPicker && (
-          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowCategoryPicker(false)}>
-            <View style={[styles.pickerModal, { backgroundColor: theme.surface }]}>
-              <Text style={[styles.pickerTitle, { color: theme.onSurface }]}>Select Category</Text>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={[styles.pickerOption, category === cat.id && { backgroundColor: theme.primaryContainer }]}
-                  onPress={() => { setCategory(cat.id); setShowCategoryPicker(false); }}
-                >
-                  <Text style={[styles.pickerOptionText, { color: theme.onSurface }, category === cat.id && { fontFamily: Typography.fonts.display }]}>
-                    {cat.label}
-                  </Text>
-                  {category === cat.id && <MaterialIcons name="check" size={18} color={theme.primary} />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        )}
+        </Animated.View>
+        <OptionPickerModal
+          visible={showCategoryPicker}
+          title="Select Category"
+          options={categories}
+          selected={category}
+          onSelect={(id) => setCategory(id)}
+          onClose={() => setShowCategoryPicker(false)}
+        />
 
-        {/* Payment Picker */}
-        {showPaymentPicker && (
-          <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowPaymentPicker(false)}>
-            <View style={[styles.pickerModal, { backgroundColor: theme.surface }]}>
-              <Text style={[styles.pickerTitle, { color: theme.onSurface }]}>Select Payment Method</Text>
-              {PAYMENT_METHODS.map((pm) => (
-                <TouchableOpacity
-                  key={pm.id}
-                  style={[styles.pickerOption, paymentMethod === pm.id && { backgroundColor: theme.primaryContainer }]}
-                  onPress={() => { setPaymentMethod(pm.id); setShowPaymentPicker(false); }}
-                >
-                  <Text style={[styles.pickerOptionText, { color: theme.onSurface }, paymentMethod === pm.id && { fontFamily: Typography.fonts.display }]}>
-                    {pm.label}
-                  </Text>
-                  {paymentMethod === pm.id && <MaterialIcons name="check" size={18} color={theme.primary} />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          </TouchableOpacity>
-        )}
+        <OptionPickerModal
+          visible={showPaymentPicker}
+          title="Select Payment Method"
+          options={PAYMENT_METHODS}
+          selected={paymentMethod}
+          onSelect={(id) => setPaymentMethod(id)}
+          onClose={() => setShowPaymentPicker(false)}
+        />
 
         {/* Tax Classification Sheet */}
         <TaxClassSheet
@@ -734,7 +688,7 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
   },
   bodyContent: {
     paddingHorizontal: Spacing[5],
-    gap: 12,
+    gap: 16,
     paddingBottom: 4,
   },
   currencyInputRow: {
@@ -744,7 +698,7 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
     borderRadius: Radius.sm,
     borderWidth: 1,
     borderColor: theme.outlineVariant,
-    paddingLeft: 4,
+    paddingLeft: 16,
     paddingRight: 16,
     gap: 4,
     backgroundColor: theme.surface,
@@ -752,9 +706,7 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
   currencyToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 4,
     borderRadius: Radius.sm,
   },
   currencySymbolText: {
@@ -765,13 +717,11 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
     flex: 1,
     fontFamily: Typography.fonts.body,
     fontSize: 16,
-    padding: 0,
-    height: '100%',
   },
   rateHint: {
     fontFamily: Typography.fonts.body,
     fontSize: 12,
-    marginTop: 4,
+    marginTop: Spacing[1]
   },
   textInputWrap: {
     flexDirection: 'row',
@@ -784,74 +734,17 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
     gap: 10,
     backgroundColor: theme.surface,
   },
-  textInputWrapFocused: {
-    borderColor: theme.primary,
-  },
-  textInputInner: {
-    flex: 1,
-    fontFamily: Typography.fonts.body,
-    fontSize: 14,
-    padding: 0,
-    height: '100%',
-    color: theme.onSurface,
-  },
   dateFieldText: {
     flex: 1,
     fontFamily: Typography.fonts.body,
     fontSize: 14,
     color: theme.onSurface,
   },
-  notesWrap: {
-    height: 90,
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-  },
-  notesInput: {
-    height: '100%',
-    textAlignVertical: 'top',
-  },
-  pickerOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    zIndex: 100,
-  },
-  pickerModal: {
-    width: '80%',
-    maxHeight: '60%',
-    backgroundColor: theme.surface,
-    borderRadius: Radius.md,
-    paddingVertical: Spacing[4],
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-      android: { elevation: 8 },
-    }),
-  },
-  pickerTitle: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 16,
-    paddingHorizontal: Spacing[4],
-    paddingBottom: Spacing[3],
-    borderBottomWidth: 1,
-    borderBottomColor: theme.ripple,
-  },
-  pickerOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: Spacing[4],
-  },
-  pickerOptionText: {
+  amountLabel: {
     fontFamily: Typography.fonts.body,
-    fontSize: 15,
+    fontSize: Typography.sizes.labelL,
+    marginBottom: Spacing[1],
+    fontWeight: '500',
   },
   footer: {
     flexDirection: 'row',
@@ -887,7 +780,6 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
     color: theme.onPrimary,
   },
   whtSection: {
-    marginTop: 16,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: theme.ripple,
@@ -919,57 +811,5 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
   whtFields: {
     marginTop: 12,
     gap: 10,
-  },
-  receiptSection: {
-    marginTop: 8,
-  },
-  receiptLabel: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 13,
-    color: theme.onSurface,
-    marginBottom: 6,
-  },
-  receiptPreviewWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  receiptImage: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: theme.outlineVariant,
-  },
-  receiptReplaceBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.primary,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.full,
-  },
-  receiptReplaceText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 12,
-    color: theme.onPrimary,
-  },
-  addReceiptBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: Radius.sm,
-    borderWidth: 1.5,
-    borderColor: theme.primary,
-    borderStyle: 'dashed',
-    backgroundColor: theme.primary + '0A',
-  },
-  addReceiptText: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 13,
-    color: theme.primary,
   },
 });

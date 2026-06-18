@@ -87,9 +87,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   container: {
-    width: '85%',
-    maxWidth: 340,
-    borderRadius: 24,
+    width: '70%',
+    maxWidth: 300,
+    borderRadius: Radius.sm,
     padding: 24,
     paddingTop: 48,
   },
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   title: {
-    fontFamily: Typography.fonts.display,
+    fontFamily: Typography.fonts.medium,
     fontSize: Typography.sizes.titleS,
     marginBottom: 4,
     textAlign: 'center',
@@ -110,11 +110,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.bodyM,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 24,
+    marginBottom: Spacing[2],
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
   },
   button: {
     flex: 1,

@@ -18,6 +18,7 @@ import * as Crypto from 'expo-crypto';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { getNairaRate, CURRENCY_SYMBOLS } from '@/lib/exchange-rate';
+import { TextArea } from '@/components/ui/TextArea';
 
 const STEPS = ['Type', 'Amount', 'Category', 'Payment', 'Description', 'Save'];
 
@@ -361,17 +362,12 @@ export default function ManualEntryScreen() {
           <View style={styles.stepBody}>
             <Text style={[styles.stepHeading, { color: theme.onBackground }]}>Description</Text>
             <Text style={[styles.stepSubtext, { color: theme.outline }]}>Add a short note (optional)</Text>
-            <View style={[styles.descCard, { backgroundColor: theme.surfaceContainerLow }]}>
-              <TextInput
-                style={[styles.descInput, { color: theme.onSurface }]}
-                value={description}
-                onChangeText={setDescription}
-                placeholder="e.g. Uber to Island"
-                placeholderTextColor={theme.outline}
-                multiline
-                autoFocus
-              />
-            </View>
+            <TextArea
+              value={description}
+              onChangeText={setDescription}
+              placeholder="e.g. Uber to Island"
+              autoFocus
+            />
             <View style={styles.descHintRow}>
               <MaterialIcons name="lightbulb-outline" size={14} color={theme.outline} />
               <Text style={[styles.descHint, { color: theme.outline }]}>
@@ -653,17 +649,6 @@ const styles = StyleSheet.create({
   },
   paymentLabelActive: {
     fontFamily: Typography.fonts.display,
-  },
-  descCard: {
-    borderRadius: Radius.md,
-    padding: Spacing[4],
-    minHeight: 100,
-  },
-  descInput: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 16,
-    lineHeight: 22,
-    padding: 0,
   },
   descHintRow: {
     flexDirection: 'row',
