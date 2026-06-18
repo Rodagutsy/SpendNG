@@ -6,6 +6,12 @@ export interface TransactionRecord {
   id: string;
   amount: number;
   currency: string;
+  originalCurrency: string | null;
+  originalAmount: number | null;
+  exchangeRate: number | null;
+  amountInNaira: number | null;
+  rateSource: string | null;
+  rateDate: number | null;
   transactionType: 'credit' | 'debit';
   merchantName: string | null;
   categoryId: string;
@@ -13,7 +19,7 @@ export interface TransactionRecord {
   accountNumberLast4: string | null;
   transactionDate: number;
   availableBalance: number | null;
-  sourceChannel: 'sms' | 'email' | 'manual';
+  sourceChannel: 'sms' | 'email' | 'manual' | 'statement';
   parseConfidence: string | null;
   taxClassificationId: string | null;
   confidenceLevel: 'high' | 'medium' | 'low' | null;
@@ -49,7 +55,7 @@ interface TransactionState {
 
   fetchTransactions: (filters?: TransactionFilters) => Promise<void>;
   fetchHomeTransactions: () => Promise<void>;
-  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'whtAmount' | 'whtClientName' | 'contentHash'> & { contentHash: string }) => Promise<TransactionRecord>;
+  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'contentHash' | 'originalCurrency' | 'originalAmount' | 'exchangeRate' | 'amountInNaira' | 'rateSource' | 'rateDate'> & { contentHash: string; originalCurrency?: string | null; originalAmount?: number | null; exchangeRate?: number | null; amountInNaira?: number | null; rateSource?: string | null; rateDate?: number | null }) => Promise<TransactionRecord>;
   updateCategory: (id: string, categoryId: string) => Promise<void>;
   updateNotes: (id: string, notes: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<TransactionRecord>) => Promise<void>;
@@ -71,6 +77,12 @@ function mapRowToRecord(row: any): TransactionRecord {
     id: row.id,
     amount: row.amount,
     currency: row.currency,
+    originalCurrency: row.original_currency ?? null,
+    originalAmount: row.original_amount ?? null,
+    exchangeRate: row.exchange_rate ?? null,
+    amountInNaira: row.amount_in_naira ?? null,
+    rateSource: row.rate_source ?? null,
+    rateDate: row.rate_date ?? null,
     transactionType: row.transaction_type as 'credit' | 'debit',
     merchantName: row.merchant_name,
     categoryId: row.category_id,
@@ -78,17 +90,17 @@ function mapRowToRecord(row: any): TransactionRecord {
     accountNumberLast4: row.account_number_last4,
     transactionDate: row.transaction_date,
     availableBalance: row.available_balance,
-    sourceChannel: row.source_channel as 'sms' | 'email' | 'manual',
+    sourceChannel: row.source_channel as TransactionRecord['sourceChannel'],
     parseConfidence: row.parse_confidence,
     taxClassificationId: row.tax_classification_id ?? null,
-    confidenceLevel: null,
+    confidenceLevel: row.confidence_level ?? null,
     originalMessage: row.raw_source_text,
     isDuplicate: row.is_duplicate,
     isFlaggedForReview: row.is_flagged_for_review,
     notes: row.notes,
-    receiptImageUri: null,
-    whtAmount: null,
-    whtClientName: null,
+    receiptImageUri: row.receipt_image_uri ?? null,
+    whtAmount: row.wht_amount ?? null,
+    whtClientName: row.wht_client_name ?? null,
     isSynced: row.is_synced,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -168,6 +180,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       set({ homeTransactions: txs });
     } catch (err: any) {
       console.error('fetchHomeTransactions error:', err?.message || err);
+      set({ error: err.message || 'Failed to fetch transactions', loading: false });
     }
   },
 
@@ -182,6 +195,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       user_id: user?.id,
       amount: data.amount,
       currency: data.currency,
+      original_currency: data.originalCurrency ?? null,
+      original_amount: data.originalAmount ?? null,
+      exchange_rate: data.exchangeRate ?? null,
+      amount_in_naira: data.amountInNaira ?? null,
+      rate_source: data.rateSource ?? null,
+      rate_date: data.rateDate ?? null,
       transaction_type: data.transactionType,
       merchant_name: data.merchantName,
       category_id: data.categoryId,
@@ -193,6 +212,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       raw_source_text: data.originalMessage,
       content_hash: contentHash,
       parse_confidence: null,
+      confidence_level: data.confidenceLevel ?? null,
+      receipt_image_uri: data.receiptImageUri ?? null,
+      wht_amount: data.whtAmount ?? null,
+      wht_client_name: data.whtClientName ?? null,
+      tax_classification_id: data.taxClassificationId ?? null,
       is_duplicate: false,
       is_flagged_for_review: data.isFlaggedForReview || false,
       notes: data.notes,
@@ -257,6 +281,12 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     const updateData: any = { updated_at: nowTs };
     if (data.amount !== undefined) updateData.amount = data.amount;
     if (data.currency !== undefined) updateData.currency = data.currency;
+    if (data.originalCurrency !== undefined) updateData.original_currency = data.originalCurrency;
+    if (data.originalAmount !== undefined) updateData.original_amount = data.originalAmount;
+    if (data.exchangeRate !== undefined) updateData.exchange_rate = data.exchangeRate;
+    if (data.amountInNaira !== undefined) updateData.amount_in_naira = data.amountInNaira;
+    if (data.rateSource !== undefined) updateData.rate_source = data.rateSource;
+    if (data.rateDate !== undefined) updateData.rate_date = data.rateDate;
     if (data.transactionType !== undefined) updateData.transaction_type = data.transactionType;
     if (data.merchantName !== undefined) updateData.merchant_name = data.merchantName;
     if (data.categoryId !== undefined) updateData.category_id = data.categoryId;
@@ -267,6 +297,11 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (data.notes !== undefined) updateData.notes = data.notes;
     if (data.isFlaggedForReview !== undefined) updateData.is_flagged_for_review = data.isFlaggedForReview;
     if (data.isDuplicate !== undefined) updateData.is_duplicate = data.isDuplicate;
+    if (data.confidenceLevel !== undefined) updateData.confidence_level = data.confidenceLevel;
+    if (data.receiptImageUri !== undefined) updateData.receipt_image_uri = data.receiptImageUri;
+    if (data.whtAmount !== undefined) updateData.wht_amount = data.whtAmount;
+    if (data.whtClientName !== undefined) updateData.wht_client_name = data.whtClientName;
+    if (data.taxClassificationId !== undefined) updateData.tax_classification_id = data.taxClassificationId;
 
     const { error } = await supabase.from('transactions')
       .update(updateData)

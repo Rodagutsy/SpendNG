@@ -2,20 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as AuthSession from 'expo-auth-session';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useAuthRequest } from 'expo-auth-session/providers/google';
-import { EmailService } from '@/lib/email-service';
 import { SMSService } from '@/lib/sms-service';
-
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
-
-const googleRedirectUri = AuthSession.makeRedirectUri({
-  useProxy: true,
-});
 
 export default function ConnectedAccountsScreen() {
   const router = useRouter();
@@ -23,80 +14,20 @@ export default function ConnectedAccountsScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
-  const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
   const [smsConnected, setSmsConnected] = useState(false);
   const { showAlert } = useAlert();
   const [loading, setLoading] = useState(true);
-  const [emailConnecting, setEmailConnecting] = useState(false);
   const [smsConnecting, setSmsConnecting] = useState(false);
-
-  const [, response, promptAsync] = useAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-    scopes: SCOPES,
-    redirectUri: googleRedirectUri,
-    extraParams: { prompt: 'consent', access_type: 'offline' },
-  });
 
   useEffect(() => {
     checkConnections();
   }, []);
 
-  useEffect(() => {
-    if (response?.type === 'success' && response.authentication?.accessToken) {
-      const { accessToken, refreshToken } = response.authentication;
-      (async () => {
-        try {
-          await EmailService.storeTokens({ accessToken, refreshToken });
-          setConnectedEmail('Gmail');
-          showAlert({ title: 'Connected', message: 'Gmail account linked successfully.' });
-        } catch (e: any) {
-          showAlert({ title: 'Error', message: e.message || 'Failed to link Gmail.' });
-        } finally {
-          setEmailConnecting(false);
-        }
-      })();
-    } else if (response?.type === 'error') {
-      setEmailConnecting(false);
-      showAlert({ title: 'Connection Failed', message: response.params?.error_description || 'Google sign-in failed.' });
-    }
-  }, [response]);
-
   const checkConnections = async () => {
     setLoading(true);
-    const [tokens, smsStatus] = await Promise.all([
-      EmailService.getStoredTokens().catch(() => null),
-      SMSService.getConnectionStatus().catch(() => ({ hasPermissions: false })),
-    ]);
-    setConnectedEmail(tokens ? 'Gmail' : null);
+    const smsStatus = await SMSService.getConnectionStatus().catch(() => ({ hasPermissions: false }));
     setSmsConnected(smsStatus.hasPermissions);
     setLoading(false);
-  };
-
-  const handleConnect = () => {
-    setEmailConnecting(true);
-    promptAsync();
-  };
-
-  const handleDisconnect = () => {
-    showAlert({
-      title: 'Disconnect Gmail',
-      message: 'This will stop email import. You can reconnect anytime.',
-      buttons: [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await EmailService.clearTokens();
-              setConnectedEmail(null);
-            } catch (e: any) {
-              showAlert({ title: 'Error', message: e.message || 'Failed to disconnect.' });
-            }
-          },
-        },
-      ],
-    });
   };
 
   const handleSmsConnect = async () => {
@@ -160,40 +91,20 @@ export default function ConnectedAccountsScreen() {
           </View>
         ) : (
           <View style={styles.section}>
-            <View style={styles.accountRow}>
+            {/* Gmail — greyed out, coming soon */}
+            <View style={[styles.accountRow, { opacity: 0.4 }]}>
               <View style={styles.accountLeft}>
                 <View style={[styles.iconBox, { backgroundColor: '#FDECEB' }]}>
                   <IconSymbol name="envelope.fill" size={16} color="#dc2626" />
                 </View>
                 <View>
                   <Text style={[styles.accountLabel, { color: theme.onBackground }]}>Gmail</Text>
-                  <Text style={[styles.accountStatus, { color: theme.outline }]}>
-                    {connectedEmail ? 'Connected' : 'Not connected'}
-                  </Text>
+                  <Text style={[styles.accountStatus, { color: theme.outline }]}>Coming soon</Text>
                 </View>
               </View>
-              {connectedEmail ? (
-                <TouchableOpacity
-                  style={[styles.disconnectBtn, { borderColor: Colors.main.error }]}
-                  onPress={handleDisconnect}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.disconnectBtnText, { color: Colors.main.error }]}>Disconnect</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.connectBtn, { backgroundColor: theme.primary }]}
-                  onPress={handleConnect}
-                  disabled={emailConnecting}
-                  activeOpacity={0.7}
-                >
-                  {emailConnecting ? (
-                    <ActivityIndicator size="small" color={theme.onPrimary} />
-                  ) : (
-                    <Text style={[styles.connectBtnText, { color: theme.onPrimary }]}>Connect</Text>
-                  )}
-                </TouchableOpacity>
-              )}
+              <View style={[styles.comingSoonBadge, { backgroundColor: theme.surfaceContainer }]}>
+                <Text style={[styles.comingSoonText, { color: theme.outline }]}>Soon</Text>
+              </View>
             </View>
 
             {/* SMS Row — Android only */}
@@ -234,6 +145,28 @@ export default function ConnectedAccountsScreen() {
                 )}
               </View>
             )}
+
+            {/* Bank Statement import — always available */}
+            <View style={styles.accountRow}>
+              <View style={styles.accountLeft}>
+                <View style={[styles.iconBox, { backgroundColor: '#FFF3E0' }]}>
+                  <IconSymbol name="doc.fill" size={16} color="#E65100" />
+                </View>
+                <View>
+                  <Text style={[styles.accountLabel, { color: theme.onBackground }]}>Bank Statement</Text>
+                  <Text style={[styles.accountStatus, { color: theme.outline }]}>
+                    Upload CSV or PDF statements
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.connectBtn, { backgroundColor: theme.primary }]}
+                onPress={() => router.push('/statement-import' as any)}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.connectBtnText, { color: theme.onPrimary }]}>Import</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -315,5 +248,14 @@ const styles = StyleSheet.create({
   disconnectBtnText: {
     fontFamily: Typography.fonts.medium,
     fontSize: 13,
+  },
+  comingSoonBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: Radius.full,
+  },
+  comingSoonText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 12,
   },
 });

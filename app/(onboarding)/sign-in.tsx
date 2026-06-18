@@ -8,7 +8,6 @@ import { GoogleLogo } from '@/components/GoogleLogo';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SMSService } from '@/lib/sms-service';
-import { EmailService } from '@/lib/email-service';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -26,7 +25,6 @@ export default function SignInScreen() {
     if (Platform.OS === 'android') {
       SMSService.rescanMissedAlerts();
     }
-    EmailService.rescanMissedEmails();
   };
 
   const handleSignIn = async () => {
@@ -123,7 +121,7 @@ export default function SignInScreen() {
       </TouchableOpacity>
 
       <Text style={[styles.footerText, { color: theme.onBackground }]}>
-        Don't have an account?{' '}
+        {"Don't have an account? "}
         <Text style={{ color: theme.primary }} onPress={() => router.push('/(onboarding)/account-creation')}>
           Sign Up
         </Text>

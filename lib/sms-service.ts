@@ -2,16 +2,22 @@ import { NativeModules, NativeEventEmitter, Platform, PermissionsAndroid } from 
 import * as Keychain from 'react-native-keychain';
 import { IngestionEngine } from './ingestion-engine';
 
-const { SMSModule } = NativeModules;
-let smsEventEmitter: NativeEventEmitter | null = null;
-if (Platform.OS === 'android' && SMSModule) {
-  try {
-    smsEventEmitter = new NativeEventEmitter(SMSModule);
-  } catch {
-    console.warn('SpendNG: SMSModule native emitter not available');
-  }
-}
 const KEYCHAIN_SMS = 'spendng.sms';
+
+function getSMSModule() {
+  return NativeModules.SMSModule ?? null;
+}
+
+function getSMSEventEmitter(): NativeEventEmitter | null {
+  const mod = getSMSModule();
+  if (!mod) return null;
+  try {
+    return new NativeEventEmitter(mod);
+    } catch (err) {
+      console.warn('[SMSService] Failed to get SMS event emitter:', err);
+      return null;
+    }
+  }
 
 export interface SMSConnectionStatus {
   hasPermissions: boolean;
@@ -21,11 +27,18 @@ export interface SMSConnectionStatus {
 }
 
 export class SMSService {
+  private static keychainAvailable(): boolean {
+    return !!(NativeModules.RNKeychainManager || NativeModules.RNKeychain);
+  }
+
   private static async readStorage(): Promise<Record<string, any>> {
+    if (!this.keychainAvailable()) return {};
     try {
       const creds = await Keychain.getGenericPassword({ service: KEYCHAIN_SMS });
       if (creds) return JSON.parse(creds.password);
-    } catch {}
+    } catch (err) {
+      console.warn('[SMSService] Failed to read storage:', err);
+    }
     return {};
   }
 
@@ -98,7 +111,8 @@ export class SMSService {
         receiveGranted === PermissionsAndroid.RESULTS.GRANTED &&
         readGranted === PermissionsAndroid.RESULTS.GRANTED
       );
-    } catch {
+    } catch (err) {
+      console.warn('[SMSService] Failed to request permissions:', err);
       return false;
     }
   }
@@ -111,8 +125,9 @@ export class SMSService {
       return;
     }
 
-    if (smsEventEmitter) {
-      smsEventEmitter.addListener('onSMSReceived', async (event) => {
+    const emitter = getSMSEventEmitter();
+    if (emitter) {
+      emitter.addListener('onSMSReceived', async (event) => {
         const { body, sender, timestamp } = event;
         await this.onMessageReceived(body, sender, timestamp);
       });
@@ -122,6 +137,12 @@ export class SMSService {
   static async scanInbox(startDate?: number, endDate?: number) {
     if (Platform.OS !== 'android') return;
 
+    const module = getSMSModule();
+    if (!module) {
+      console.error('SpendNG: SMSModule not available on native bridge');
+      return;
+    }
+
     const hasPermission = await this.requestPermissions();
     if (!hasPermission) {
       return;
@@ -130,7 +151,7 @@ export class SMSService {
     try {
       const resolvedEnd = endDate ?? Date.now();
       const resolvedStart = startDate ?? 0;
-      const messages = await SMSModule.getInboxMessages(resolvedStart, resolvedEnd);
+      const messages = await module.getInboxMessages(resolvedStart, resolvedEnd);
 
       const alerts = messages
         .filter((msg: any) => IngestionEngine.isTransactionAlert(msg.body))

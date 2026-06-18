@@ -65,10 +65,18 @@ function makeMockClient() {
 
   return {
     auth: {
-      getSession: async () => ({ data: { session: null }, error: null }),
-      getUser: async () => ({ data: { user: null }, error: null }),
+      getSession: async () => ({ data: { session: mockSession }, error: null }),
+      getUser: async () => ({ data: { user: mockUser }, error: null }),
+      updateUser: async (attributes: any) => {
+        if (attributes.data) {
+          mockUser.user_metadata = { ...mockUser.user_metadata, ...attributes.data };
+        }
+        return { data: { user: mockUser }, error: null };
+      },
       onAuthStateChange: (callback: (event: string, session: any) => void) => {
         listeners.push(callback);
+        // Trigger initial sign-in callback so auth context initializes correctly
+        setTimeout(() => callback('SIGNED_IN', mockSession), 0);
         return {
           data: { subscription: { unsubscribe: () => {} } },
           error: null,

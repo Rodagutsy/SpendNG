@@ -85,7 +85,8 @@ export class CategorizationEngine {
         .lte('transaction_date', transactionDate + fiveMinutes);
 
       return (matches?.length || 0) > 0;
-    } catch {
+    } catch (err) {
+      console.warn('[CategorizationEngine] Self-transfer detection failed:', err);
       return false;
     }
   }
@@ -102,7 +103,8 @@ export class CategorizationEngine {
         .eq('merchant_name', merchantName);
 
       return { showPrompt: (count || 0) > 1 };
-    } catch {
+    } catch (err) {
+      console.warn('[CategorizationEngine] Process user correction failed:', err);
       return { showPrompt: false };
     }
   }

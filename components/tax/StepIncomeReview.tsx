@@ -56,6 +56,7 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
     const cat = getCategoryById(tx.categoryId);
     const catName = cat?.name ?? 'Unknown';
     const taxName = tx.taxClassificationId ? getTaxClassById(tx.taxClassificationId)?.name : null;
+    const isForeign = tx.originalCurrency && tx.originalCurrency !== 'NGN' && tx.originalAmount != null;
     return (
       <View key={tx.id} style={styles.txRow}>
         <View style={styles.txLeft}>
@@ -63,6 +64,11 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
           <View style={styles.txMetaRow}>
             <Text style={styles.txCategory}>{catName}</Text>
             <Text style={styles.txDate}>{new Date(tx.transactionDate).toLocaleDateString()}</Text>
+            {isForeign && (
+              <View style={[styles.foreignBadge, { backgroundColor: Colors.main.primary + '1A' }]}>
+                <Text style={styles.foreignBadgeText}>{tx.originalCurrency}</Text>
+              </View>
+            )}
             {taxName && (
               <View style={[styles.taxBadge, { backgroundColor: Colors.main.warning + '1A' }]}>
                 <Text style={styles.taxBadgeText}>{taxName.slice(0, 3)}</Text>
@@ -242,6 +248,16 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: 9,
     color: Colors.main.warning,
+  },
+  foreignBadge: {
+    paddingVertical: 1,
+    paddingHorizontal: 6,
+    borderRadius: Radius.full,
+  },
+  foreignBadgeText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 9,
+    color: Colors.main.primary,
   },
   txRight: {
     flexDirection: 'row',

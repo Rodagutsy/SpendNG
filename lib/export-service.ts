@@ -91,7 +91,8 @@ export class ExportService {
     onProgress: (progress: number) => void,
   ): Promise<string> {
     const headers = [
-      'Date', 'Amount', 'Currency', 'Type', 'Merchant', 'Category',
+      'Date', 'Amount (NGN)', 'Currency', 'Original Amount', 'Original Currency',
+      'Exchange Rate', 'Type', 'Merchant', 'Category',
       'Account Name', 'Account (Last 4)', 'Available Balance', 'Source',
       'Notes', 'Flagged for Review',
     ];
@@ -113,6 +114,9 @@ export class ExportService {
         this.escapeCSV(format(new Date(t.transactionDate), 'yyyy-MM-dd HH:mm:ss')),
         this.escapeCSV(t.amount),
         this.escapeCSV(t.currency),
+        this.escapeCSV(t.originalAmount ?? ''),
+        this.escapeCSV(t.originalCurrency ?? ''),
+        this.escapeCSV(t.exchangeRate ?? ''),
         this.escapeCSV(t.transactionType),
         this.escapeCSV(t.merchantName),
         this.escapeCSV(categoryName),
@@ -174,6 +178,8 @@ export class ExportService {
     const receiptTxns = transactions.filter(t => t.receiptImageUri);
 
     const allSameCurrency = transactions.every(t => t.currency === currency);
+    const foreignTxns = transactions.filter(t => t.originalCurrency && t.originalCurrency !== 'NGN');
+    const hasForeignTxns = foreignTxns.length > 0;
 
     const esc = (v: unknown) => this.escapeHTML(v);
 
@@ -181,6 +187,9 @@ export class ExportService {
     const fmtDateTime = (ts: number) => format(new Date(ts), 'MMM dd, yyyy HH:mm');
 
     const fmtAmount = (amount: number) => formatCurrency(amount, currency);
+    const fmtAmountOriginal = (amount: number) => {
+      return amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
 
     const metricsBlock = (label: string, value: string, color?: string) => `
       <tr>
@@ -211,12 +220,16 @@ export class ExportService {
     const ledgerRows = sortedTxns.map(t => {
       const catName = categoryNames?.[t.categoryId] || t.categoryId || 'Uncategorized';
       const tint = typeRowTint(t.transactionType);
+      const originalCol = t.originalCurrency && t.originalAmount
+        ? `${esc(t.originalCurrency)} ${fmtAmountOriginal(t.originalAmount)}`
+        : '—';
       return `<tr style="${tint}">
         <td class="cell">${fmtDate(t.transactionDate)}</td>
         <td class="cell">${esc(t.merchantName || t.originalMessage || '-')}</td>
         <td class="cell">${typeLabel(t.transactionType)}</td>
         <td class="cell">${esc(catName)}</td>
         <td class="cell amt">${fmtAmount(t.amount)}</td>
+        <td class="cell">${originalCol}</td>
         <td class="cell">${esc(t.accountName || '-')}</td>
         <td class="cell flag-col">${flagIcons(t)}</td>
       </tr>`;
@@ -452,6 +465,13 @@ export class ExportService {
       ${metricsBlock('Number of Expense Entries', String(expenseTxns.length))}
     </table>
 
+    ${hasForeignTxns ? `
+    <div class="data-source" style="margin-top:12px;background:#eff6ff;border:1px solid #93c5fd;">
+      <p><strong>Foreign Currency Transactions</strong></p>
+      <p>${foreignTxns.length} transaction(s) in foreign currency converted at CBN/API rate.</p>
+      <p>Exchange rates applied on transaction date. Original amounts preserved in ledger below.</p>
+    </div>` : ''}
+
     <div class="data-source">
       <p><strong>Data Sources</strong></p>
       <p>Bank Accounts: ${bankAccounts.length > 0 ? bankAccounts.join(', ') : 'Not specified'}</p>
@@ -465,14 +485,14 @@ export class ExportService {
   <div class="section-title">Transaction Ledger</div>
   <div class="section-sub">Chronological order • All transactions in ${currency}</div>
 
-  <table>
+      <table>
     <thead>
       <tr>
-        <th>Date</th><th>Description</th><th>Type</th><th>Category (Suggested)</th><th class="amt">Amount</th><th>Account</th><th>Flags</th>
+        <th>Date</th><th>Description</th><th>Type</th><th>Category</th><th class="amt">Amount (NGN)</th><th>Original</th><th>Account</th><th>Flags</th>
       </tr>
     </thead>
     <tbody>
-      ${ledgerRows || '<tr><td class="cell" colspan="7" style="text-align:center;color:#9ca3af;">No transactions found</td></tr>'}
+      ${ledgerRows || '<tr><td class="cell" colspan="8" style="text-align:center;color:#9ca3af;">No transactions found</td></tr>'}
     </tbody>
   </table>
 

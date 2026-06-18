@@ -3,9 +3,11 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
+import { useAlert } from '@/context/AlertContext';
 
 export default function AuthCallbackScreen() {
   const router = useRouter();
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     const handleUrl = async (url: string | null) => {
@@ -25,7 +27,9 @@ export default function AuthCallbackScreen() {
             return;
           }
         }
-      } catch {}
+      } catch {
+        showAlert({ title: 'Authentication failed', message: 'Please try signing in again.' });
+      }
 
       router.replace('/(onboarding)/sign-in');
     };

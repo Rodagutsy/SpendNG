@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
-import { signUpWithEmail, signInWithGoogle } from '@/lib/auth-utils';
+import { sendOtp, storePendingPassword, consumePendingPassword, signInWithGoogle } from '@/lib/auth-utils';
 import { useState } from 'react';
 import { GoogleLogo } from '@/components/GoogleLogo';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
@@ -34,21 +34,16 @@ export default function AccountCreationScreen() {
     if (!agreed) { setFormError('You must agree to the Terms of Service and Privacy Policy'); return; }
     setLoading(true);
     try {
-      const { user, session } = await signUpWithEmail(email, password);
-
-      if (user && !session) {
-        router.replace(`/(onboarding)/verify-email?email=${encodeURIComponent(email)}`);
-        return;
-      }
-      router.replace('/(onboarding)/connect-source');
+      storePendingPassword(email, password);
+      await sendOtp(email, true);
+      router.replace(`/(onboarding)/verify-pin?email=${encodeURIComponent(email)}&mode=signup&name=${encodeURIComponent(name)}`);
     } catch (error: any) {
+      if (error instanceof Error) consumePendingPassword(email);
       const msg = error?.message || '';
-      if (msg.toLowerCase().includes('user already registered') || msg.toLowerCase().includes('already been registered')) {
-        setEmailError('An account with this email already exists');
-      } else if (msg.toLowerCase().includes('password')) {
-        setPasswordError(msg);
-      } else if (msg.toLowerCase().includes('invalid email')) {
+      if (msg.toLowerCase().includes('invalid email')) {
         setEmailError('Enter a valid email address');
+      } else if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already been registered') || msg.toLowerCase().includes('user already exists')) {
+        setEmailError('An account with this email already exists. Sign in instead.');
       } else {
         setFormError(msg);
       }
@@ -62,6 +57,7 @@ export default function AccountCreationScreen() {
     setLoading(true);
     try {
       await signInWithGoogle();
+      router.replace('/(onboarding)/connect-source');
     } catch (error: any) {
       setFormError(error?.message || 'Google sign-in failed');
     } finally {
@@ -96,14 +92,13 @@ export default function AccountCreationScreen() {
       />
       <TextInput
         label="Password"
-        placeholder="Min 8 characters"
+        placeholder="Min 6 characters"
         secureTextEntry
         value={password}
-        onChangeText={(v) => { setPassword(v); setPasswordError(''); }}
+        onChangeText={(v) => { setPassword(v); setPasswordError(''); setFormError(''); }}
         error={passwordError}
         containerStyle={{ marginBottom: 8 }}
       />
-
       <TouchableOpacity
         style={styles.termsRow}
         onPress={() => setAgreed(!agreed)}

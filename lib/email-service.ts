@@ -1,5 +1,6 @@
 import * as Keychain from 'react-native-keychain';
 import { IngestionEngine } from './ingestion-engine';
+import { stripHtml } from './utils';
 
 const KEYCHAIN_PREFIX = 'spendng.gmail';
 const ACCOUNTS_LIST_KEY = 'spendng.gmail.accounts';
@@ -39,7 +40,8 @@ export class EmailService {
       const creds = await Keychain.getGenericPassword({ service: ACCOUNTS_LIST_KEY });
       if (!creds) return [];
       return JSON.parse(creds.password) as string[];
-    } catch {
+    } catch (err) {
+      console.warn('[EmailService] Failed to get account list:', err);
       return [];
     }
   }
@@ -56,7 +58,8 @@ export class EmailService {
       if (!res.ok) return null;
       const data = await res.json();
       return data.emailAddress || null;
-    } catch {
+    } catch (err) {
+      console.warn('[EmailService] Failed to get account email:', err);
       return null;
     }
   }
@@ -85,7 +88,9 @@ export class EmailService {
     try {
       const creds = await Keychain.getGenericPassword({ service: this.keyForEmail(email) });
       if (creds) return JSON.parse(creds.password) as StoredAccount;
-    } catch {}
+    } catch (err) {
+      console.warn('[EmailService] Failed to read account:', err);
+    }
     return null;
   }
 
@@ -118,7 +123,8 @@ export class EmailService {
       if (!data.access_token) return null;
       const expiryTime = Date.now() + (data.expires_in || 3600) * 1000;
       return { accessToken: data.access_token, expiryTime };
-    } catch {
+    } catch (err) {
+      console.warn('[EmailService] Failed to refresh access token:', err);
       return null;
     }
   }
@@ -219,6 +225,9 @@ export class EmailService {
   }
 
   static async pollAllAccounts(): Promise<{ processed: number; failed: number; accounts: number }> {
+    const FEATURE_GMAIL_ENABLED = false;
+    if (!FEATURE_GMAIL_ENABLED) return { processed: 0, failed: 0, accounts: 0 };
+
     const accounts = await this.getConnectedAccounts();
     let totalProcessed = 0;
     let totalFailed = 0;
@@ -270,6 +279,9 @@ export class EmailService {
   }
 
   static async rescanMissedEmails(): Promise<void> {
+    const FEATURE_GMAIL_ENABLED = false;
+    if (!FEATURE_GMAIL_ENABLED) return;
+
     const connected = await this.isConnected();
     if (!connected) return;
     await this.pollAllAccounts();
@@ -291,14 +303,39 @@ export class EmailService {
   }
 
   private static getEmailBody(payload: any): string | null {
-    if (payload?.body?.data) {
+    if (payload?.mimeType === 'text/plain' && payload?.body?.data) {
       return decodeBase64Url(payload.body.data);
+    }
+    if (payload?.mimeType === 'text/html' && payload?.body?.data) {
+      const decoded = decodeBase64Url(payload.body.data);
+      return stripHtml(decoded);
     }
     if (payload?.parts) {
       for (const part of payload.parts) {
-        const body = this.getEmailBody(part);
-        if (body) return body;
+        if (part.mimeType === 'text/plain') {
+          const body = this.getEmailBody(part);
+          if (body) return body;
+        }
       }
+      for (const part of payload.parts) {
+        if (part.mimeType === 'text/html') {
+          const body = this.getEmailBody(part);
+          if (body) return body;
+        }
+      }
+      for (const part of payload.parts) {
+        if (part.mimeType?.startsWith('multipart/')) {
+          const body = this.getEmailBody(part);
+          if (body) return body;
+        }
+      }
+    }
+    if (payload?.body?.data) {
+      const decoded = decodeBase64Url(payload.body.data);
+      if (payload.mimeType === 'text/html') {
+        return stripHtml(decoded);
+      }
+      return decoded;
     }
     return null;
   }

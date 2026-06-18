@@ -26,8 +26,9 @@ import { useTaxStore } from '@/lib/stores/taxStore';
 import { useAuth } from '@/context/AuthContext';
 import { TransactionModal } from '@/components/TransactionModal';
 import { TransactionItem } from '@/components/ui/TransactionItem';
-import { EmailService } from '@/lib/email-service';
 import { SMSService } from '@/lib/sms-service';
+import * as ImagePicker from 'expo-image-picker';
+import { recognizeText, extractTransactionInfo } from '@/lib/ocr';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -45,18 +46,18 @@ export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const [showTxModal, setShowTxModal] = useState(false);
+  const [txModalPrefill, setTxModalPrefill] = useState<{ receiptUri?: string; type?: 'credit' | 'debit'; amount?: string; merchant?: string } | null>(null);
   const [bannerDismissedAt, setBannerDismissedAt] = useState<number | null>(null);
   const [clearedNotificationIds, setClearedNotificationIds] = useState<Set<string>>(new Set());
   const [showConnectPrompt, setShowConnectPrompt] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
+  const [scanningReceipt, setScanningReceipt] = useState(false);
 
   useEffect(() => {
     fetchHomeTransactions();
     (async () => {
-      const [tokens, smsStatus] = await Promise.all([
-        EmailService.getStoredTokens().catch(() => null),
-        SMSService.getConnectionStatus().catch(() => ({ hasPermissions: false })),
-      ]);
-      if (!tokens && !smsStatus.hasPermissions) {
+      const smsStatus = await SMSService.getConnectionStatus().catch(() => ({ hasPermissions: false }));
+      if (!smsStatus.hasPermissions) {
         setShowConnectPrompt(true);
       }
     })();
@@ -332,16 +333,85 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Floating Action Button (FAB) exactly as in image */}
+        {/* Floating Action Button (FAB) */}
         <TouchableOpacity
           style={[styles.fab, Shadows.large]}
-          onPress={() => setShowTxModal(true)}
+          onPress={() => setShowFabMenu(true)}
           activeOpacity={0.85}
         >
           <MaterialIcons name="add" size={24} color={theme.onPrimary} />
         </TouchableOpacity>
 
-        <TransactionModal visible={showTxModal} onClose={() => setShowTxModal(false)} />
+        <TransactionModal visible={showTxModal} onClose={() => { setShowTxModal(false); setTxModalPrefill(null); }} initialReceiptUri={txModalPrefill?.receiptUri} />
+
+        {/* FAB Menu */}
+        {showFabMenu && (
+          <TouchableOpacity style={styles.fabOverlay} activeOpacity={1} onPress={() => setShowFabMenu(false)}>
+            <View style={[styles.fabMenu, { backgroundColor: theme.surface }]}>
+              <Text style={[styles.fabMenuTitle, { color: theme.onSurface }]}>Add Transaction</Text>
+
+              <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setShowFabMenu(false); setShowTxModal(true); }} activeOpacity={0.7}>
+                <View style={[styles.fabMenuIcon, { backgroundColor: theme.primaryContainer }]}>
+                  <MaterialIcons name="edit" size={20} color={theme.primary} />
+                </View>
+                <View style={styles.fabMenuTextWrap}>
+                  <Text style={[styles.fabMenuLabel, { color: theme.onSurface }]}>Manual Entry</Text>
+                  <Text style={[styles.fabMenuDesc, { color: theme.outline }]}>Type in transaction details</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.fabMenuItem} onPress={async () => {
+                setShowFabMenu(false);
+                setScanningReceipt(true);
+                try {
+                  const result = await ImagePicker.launchCameraAsync({
+                    mediaTypes: ['images'],
+                    allowsEditing: true,
+                    aspect: [4, 3],
+                    quality: 0.8,
+                  });
+                  if (!result.canceled && result.assets[0]) {
+                    const uri = result.assets[0].uri;
+                    const recognizedText = await recognizeText(uri);
+                    const info = extractTransactionInfo(recognizedText);
+                    setTxModalPrefill({
+                      receiptUri: uri,
+                      type: info.transactionType ?? 'debit',
+                      amount: info.amount ? info.amount.toFixed(2) : undefined,
+                      merchant: info.merchant ?? undefined,
+                    });
+                    setShowTxModal(true);
+                  }
+                } catch {
+                  // fallback to blank modal
+                  setTxModalPrefill({ receiptUri: undefined });
+                  setShowTxModal(true);
+                } finally {
+                  setScanningReceipt(false);
+                }
+              }} activeOpacity={0.7}>
+                <View style={[styles.fabMenuIcon, { backgroundColor: '#FFF3E0' }]}>
+                  <MaterialIcons name="camera-alt" size={20} color="#E65100" />
+                </View>
+                <View style={styles.fabMenuTextWrap}>
+                  <Text style={[styles.fabMenuLabel, { color: theme.onSurface }]}>Scan Receipt</Text>
+                  <Text style={[styles.fabMenuDesc, { color: theme.outline }]}>Snap a photo to auto-fill</Text>
+                </View>
+                {scanningReceipt && <ActivityIndicator size="small" color={theme.primary} />}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setShowFabMenu(false); router.push('/statement-import' as any); }} activeOpacity={0.7}>
+                <View style={[styles.fabMenuIcon, { backgroundColor: '#E8F5E9' }]}>
+                  <MaterialIcons name="description" size={20} color="#2E7D32" />
+                </View>
+                <View style={styles.fabMenuTextWrap}>
+                  <Text style={[styles.fabMenuLabel, { color: theme.onSurface }]}>Upload Statement</Text>
+                  <Text style={[styles.fabMenuDesc, { color: theme.outline }]}>Import CSV or PDF bank statement</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        )}
 
         {/* Connect source prompt */}
         <Modal visible={showConnectPrompt} transparent animationType="fade" onRequestClose={() => setShowConnectPrompt(false)}>
@@ -350,9 +420,9 @@ export default function HomeScreen() {
               <View style={[styles.connectIconCircle, { backgroundColor: theme.primaryContainer }]}>
                 <MaterialIcons name="link" size={28} color={theme.primary} />
               </View>
-              <Text style={[styles.connectTitle, { color: theme.onSurface }]}>Connect Your Accounts</Text>
+              <Text style={[styles.connectTitle, { color: theme.onSurface }]}>Import Your Transactions</Text>
               <Text style={[styles.connectMessage, { color: theme.outline }]}>
-                Link your Gmail or SMS to automatically import bank transaction alerts and keep your finances up to date.
+                Enable SMS import or upload bank statements to automatically track your finances.
               </Text>
               <View style={styles.connectActions}>
                 <TouchableOpacity
@@ -704,6 +774,53 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: 10,
     color: Colors.light.surface,
+  },
+  fabOverlay: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  fabMenu: {
+    width: '85%',
+    maxWidth: 340,
+    borderRadius: 20,
+    padding: 20,
+    gap: 4,
+  },
+  fabMenuTitle: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 18,
+    marginBottom: 8,
+  },
+  fabMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: Radius.sm,
+    gap: 12,
+  },
+  fabMenuIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fabMenuTextWrap: {
+    flex: 1,
+  },
+  fabMenuLabel: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 15,
+  },
+  fabMenuDesc: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 12,
+    marginTop: 1,
   },
   connectOverlay: {
     flex: 1,

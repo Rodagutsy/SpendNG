@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAlert } from '@/context/AlertContext';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore, CategoryRecord } from '@/lib/stores/categoryStore';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -15,6 +16,7 @@ export default function RecategorizationScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
 
+  const { showAlert } = useAlert();
   const { transactions, updateCategory } = useTransactionStore();
   const { categories, loading, fetchCategories } = useCategoryStore();
 
@@ -45,7 +47,8 @@ export default function RecategorizationScreen() {
         await Promise.all(sameMerchant.map((t) => updateCategory(t.id, categoryId)));
       }
       router.back();
-    } catch {
+    } catch (err: any) {
+      showAlert({ title: 'Error', message: err?.message || 'Failed to update category. Please try again.' });
       setSaving(false);
     }
   };
@@ -123,7 +126,7 @@ export default function RecategorizationScreen() {
             <View style={styles.applyTextContainer}>
               <Text style={[styles.applyLabel, { color: theme.onBackground }]}>Apply to all similar</Text>
               <Text style={[styles.applySubtitle, { color: theme.outline }]}>
-                Update all transactions from "{transaction.merchantName}"
+                Update all transactions from &quot;{transaction.merchantName}&quot;
               </Text>
             </View>
             <Switch

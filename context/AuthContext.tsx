@@ -9,7 +9,6 @@ import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { SMSService } from '@/lib/sms-service';
-import { EmailService } from '@/lib/email-service';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -43,7 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (Platform.OS === 'android') {
           SMSService.rescanMissedAlerts();
         }
-        EmailService.rescanMissedEmails();
       }
     });
 
@@ -63,7 +61,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (Platform.OS === 'android') {
             SMSService.rescanMissedAlerts();
           }
-          EmailService.rescanMissedEmails();
         }
       } else {
         supabase.auth.stopAutoRefresh();

@@ -2,9 +2,9 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { TextInput } from '@/components/ui/TextInput';
-import { supabase } from '@/lib/supabase';
-import { useState, useEffect } from 'react';
-import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
+import { sendOtp } from '@/lib/auth-utils';
+import { useState } from 'react';
+import { Colors, Typography, Spacing } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ForgotPasswordScreen() {
@@ -15,23 +15,6 @@ export default function ForgotPasswordScreen() {
   const [emailError, setEmailError] = useState('');
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [countdown, setCountdown] = useState(3);
-
-  useEffect(() => {
-    if (!sent) return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          router.replace('/(onboarding)/sign-in');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [sent]);
 
   const handleSendLink = async () => {
     setEmailError('');
@@ -39,13 +22,14 @@ export default function ForgotPasswordScreen() {
     if (!email) { setEmailError('Enter your email address'); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      setSent(true);
+      await sendOtp(email, false);
+      router.replace(`/(onboarding)/verify-pin?email=${encodeURIComponent(email)}&mode=reset`);
     } catch (error: any) {
       const msg = error?.message || '';
       if (msg.toLowerCase().includes('invalid email') || msg.toLowerCase().includes('email')) {
         setEmailError(msg);
+      } else if (msg.toLowerCase().includes('not found') || msg.toLowerCase().includes('does not exist')) {
+        setEmailError('No account found with this email');
       } else {
         setFormError(msg);
       }
@@ -54,33 +38,12 @@ export default function ForgotPasswordScreen() {
     }
   };
 
-  if (sent) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <View style={styles.content}>
-          <Text style={[styles.confirmIcon, { color: theme.primary }]}>✓</Text>
-          <Text style={[styles.confirmTitle, { color: theme.onBackground }]}>
-            Check Your Email
-          </Text>
-          <Text style={[styles.confirmBody, { color: theme.outline }]}>
-            We've sent a password reset link to{' '}
-            <Text style={{ color: theme.onBackground, fontWeight: '600' }}>{email}</Text>
-            . Follow the instructions in the email to reset your password.
-          </Text>
-          <Text style={[styles.redirectText, { color: theme.outline }]}>
-            Redirecting to sign in in {countdown}s...
-          </Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.content}>
         <Text style={[styles.title, { color: theme.onBackground }]}>Reset Your Password</Text>
         <Text style={[styles.body, { color: theme.outline }]}>
-          Enter your email address and we will send instructions to regain access.
+          Enter your email address and we will send a code to reset your password.
         </Text>
 
         {formError ? <Text style={[styles.formError, { color: Colors.main.error }]}>{formError}</Text> : null}
@@ -97,7 +60,7 @@ export default function ForgotPasswordScreen() {
         />
 
         <Button
-          title="Send Reset Link"
+          title="Send Code"
           onPress={handleSendLink}
           loading={loading}
         />
@@ -122,10 +85,10 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 32,
-    marginTop: 24,
+    marginTop: 20,
   },
   title: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '600',
     lineHeight: 40,
     marginBottom: Spacing[1],
@@ -153,29 +116,5 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: Typography.sizes.labelM,
     marginBottom: 12,
-  },
-  confirmIcon: {
-    fontSize: 64,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  confirmTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 12,
-    fontFamily: Typography.fonts.display,
-  },
-  confirmBody: {
-    fontSize: Typography.sizes.bodyM,
-    lineHeight: 24,
-    textAlign: 'center',
-    fontFamily: Typography.fonts.body,
-    marginBottom: 24,
-  },
-  redirectText: {
-    fontSize: Typography.sizes.bodyS,
-    textAlign: 'center',
-    fontFamily: Typography.fonts.body,
   },
 });

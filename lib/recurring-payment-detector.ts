@@ -61,8 +61,8 @@ export class RecurringPaymentDetector {
       for (const [merchant, txns] of byMerchant.entries()) {
         if (txns.length < 2) continue;
 
-        const dates = txns.map(t => t.transaction_date).sort((a, b) => a - b);
-        const amounts = txns.map(t => t.amount);
+        const dates = txns.map((t: any) => t.transaction_date).sort((a: number, b: number) => a - b);
+        const amounts = txns.map((t: any) => t.amount);
 
         const gaps: number[] = [];
         for (let i = 1; i < dates.length; i++) {
@@ -99,7 +99,7 @@ export class RecurringPaymentDetector {
           amountTolerance: amountResult.tolerance,
           lastTransactionDate: lastDate,
           nextExpectedDate: lastDate + intervalMs,
-          transactionIds: txns.map(t => t.id),
+          transactionIds: txns.map((t: any) => t.id),
           occurrences: txns.length,
           isActive: true,
         });

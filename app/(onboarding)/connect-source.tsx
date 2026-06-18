@@ -2,27 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform, ActivityIndicator, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as AuthSession from 'expo-auth-session';
-import { useAuthRequest } from 'expo-auth-session/providers/google';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SMSService } from '@/lib/sms-service';
-import { EmailService } from '@/lib/email-service';
 import { supabase } from '@/lib/supabase';
 import { useUIStore } from '@/lib/stores/uiStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
-const SCOPES = [
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/userinfo.email',
-];
-
-const redirectUri = AuthSession.makeRedirectUri({
-  useProxy: true,
-});
 
 const DURATION_OPTIONS = [
   { label: '3 months', value: 90 },
@@ -30,7 +18,7 @@ const DURATION_OPTIONS = [
   { label: '12 months', value: 365 },
 ] as const;
 
-type SourceType = 'gmail' | 'sms' | null;
+type SourceType = 'sms' | null;
 type ScreenState = 'selection' | 'duration' | 'scanning' | 'success';
 
 export default function ConnectSourceScreen() {
@@ -38,9 +26,7 @@ export default function ConnectSourceScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { showAlert } = useAlert();
-  const isIOS = Platform.OS === 'ios';
   const importProgress = useUIStore((s) => s.importProgress);
-  const setImportProgress = useUIStore((s) => s.setImportProgress);
 
   const [screenState, setScreenState] = useState<ScreenState>('selection');
   const [selectedSource, setSelectedSource] = useState<SourceType>(null);
@@ -49,27 +35,6 @@ export default function ConnectSourceScreen() {
 
   const closeDurationModal = useCallback(() => setScreenState('selection'), []);
   const { translateY: durationTranslateY, panResponder: durationPanResponder } = useSwipeToClose(closeDurationModal);
-
-  const [request, response, promptAsync] = useAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    scopes: SCOPES,
-    redirectUri,
-    extraParams: { prompt: 'consent', access_type: 'offline' },
-  });
-
-  // Handle Gmail OAuth response
-  useEffect(() => {
-    if (response?.type === 'success' && response.authentication?.accessToken) {
-      const { accessToken, refreshToken, expiresIn, issuedAt } = response.authentication;
-      const expiryTime = expiresIn && issuedAt ? (issuedAt + expiresIn) * 1000 : undefined;
-      startGmailScan(accessToken, refreshToken, expiryTime);
-    } else if (response?.type === 'error') {
-      showAlert({ title: 'Connection Failed', message: response.params?.error_description || 'Google sign-in failed.' });
-      setScreenState('selection');
-    }
-  }, [response]);
 
   const startSMSScan = useCallback(async (startDate: number, endDate: number) => {
     setScanLabel('Scanning SMS messages...');
@@ -82,20 +47,8 @@ export default function ConnectSourceScreen() {
       setScreenState('success');
     } catch (e) {
       console.warn('SMS scan error:', e);
+      showAlert({ title: 'SMS Scan Error', message: 'SMS scanning encountered an error. You can try again from Settings later.' });
       setScreenState('success');
-    }
-  }, []);
-
-  const startGmailScan = useCallback(async (accessToken: string, refreshToken?: string, expiryTime?: number) => {
-    setScanLabel('Importing from Gmail...');
-    setScreenState('scanning');
-    try {
-      await EmailService.storeTokens({ accessToken, refreshToken, expiryTime });
-      await EmailService.pollNewEmails(accessToken);
-      setScreenState('success');
-    } catch (err: any) {
-      showAlert({ title: 'Import Error', message: err.message || 'Failed to import emails.' });
-      setScreenState('selection');
     }
   }, []);
 
@@ -119,14 +72,7 @@ export default function ConnectSourceScreen() {
   const handleDurationConfirm = () => {
     const startDate = selectedDuration === 0 ? 0 : Date.now() - selectedDuration * 24 * 60 * 60 * 1000;
     const endDate = Date.now();
-
-    if (selectedSource === 'sms') {
-      startSMSScan(startDate, endDate);
-    } else if (selectedSource === 'gmail') {
-      setScanLabel('Connecting to Gmail...');
-      setScreenState('scanning');
-      promptAsync();
-    }
+    startSMSScan(startDate, endDate);
   };
 
   const found = importProgress?.found ?? 0;
@@ -138,40 +84,22 @@ export default function ConnectSourceScreen() {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.content}>
-          <IconSymbol name="antenna.radiowaves.left.and.right" size={56} color={theme.primary} />
-          <Text style={[styles.title, { color: theme.onBackground }]}>Connect Your Bank Alerts</Text>
+          <View style={[styles.iconContainer, { backgroundColor: theme.primaryContainer }]}>
+            <MaterialIcons name="sms" size={40} color={theme.primary} />
+          </View>
+          <Text style={[styles.title, { color: theme.onBackground }]}>Connect your bank alerts</Text>
           <Text style={[styles.subtitle, { color: theme.outline }]}>
             SpendNG automatically imports your transaction alerts so you can track every naira.
           </Text>
 
-          {isIOS ? (
+          {Platform.OS === 'android' && (
             <TouchableOpacity
               style={[styles.sourceBtn, { backgroundColor: theme.primary }, Shadows.sm]}
-              onPress={() => handleSourceSelect('gmail')}
+              onPress={() => handleSourceSelect('sms')}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="mail-outline" size={22} color={theme.onPrimary} />
-              <Text style={[styles.sourceBtnText, { color: theme.onPrimary }]}>By Email</Text>
+              <Text style={[styles.sourceBtnText, { color: theme.onSecondary }]}>Connect by SMS</Text>
             </TouchableOpacity>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={[styles.sourceBtn, { backgroundColor: theme.primary }, Shadows.sm]}
-                onPress={() => handleSourceSelect('gmail')}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="mail-outline" size={22} color={theme.onPrimary} />
-                <Text style={[styles.sourceBtnText, { color: theme.onPrimary }]}>By Gmail</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.sourceBtn, { backgroundColor: theme.secondary }, Shadows.sm]}
-                onPress={() => handleSourceSelect('sms')}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="sms" size={22} color={theme.onSecondary} />
-                <Text style={[styles.sourceBtnText, { color: theme.onSecondary }]}>By SMS</Text>
-              </TouchableOpacity>
-            </>
           )}
 
           <TouchableOpacity style={styles.skipBtn} onPress={async () => { await supabase.auth.updateUser({ data: { onboarding_completed: true } }); router.replace('/(tabs)'); }} activeOpacity={0.7}>
@@ -199,7 +127,7 @@ export default function ConnectSourceScreen() {
                 <View style={[styles.handle, { backgroundColor: theme.outlineVariant }]} {...durationPanResponder.panHandlers} />
                 <Text style={[styles.sheetTitle, { color: theme.onSurface }]}>Select scan duration</Text>
                 <Text style={[styles.sheetSubtitle, { color: theme.outline }]}>
-                  How far back should we scan your {selectedSource === 'sms' ? 'SMS' : 'email'}?
+                  How far back should we scan your SMS?
                 </Text>
 
                 {DURATION_OPTIONS.map((opt) => (
@@ -224,9 +152,9 @@ export default function ConnectSourceScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.confirmBtnText, { color: theme.onPrimary }]}>Start Scan</Text>
-              </TouchableOpacity>
-            </Animated.View>
-          </TouchableOpacity>
+                </TouchableOpacity>
+              </Animated.View>
+            </TouchableOpacity>
           </Modal>
         </View>
       </SafeAreaView>
@@ -284,17 +212,23 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   content: {
     paddingTop: 40,
-    paddingHorizontal: 32,
+    paddingHorizontal: 40,
     alignItems: 'center',
   },
   title: {
     fontFamily: Typography.fonts.display,
-    fontSize: 24,
+    fontSize: 20,
     textAlign: 'center',
-    marginTop: 20,
-    marginBottom: 12,
   },
   subtitle: {
     fontFamily: Typography.fonts.body,
@@ -307,11 +241,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%',
-    height: 52,
+    paddingHorizontal: 24,
+    height: 48,
     borderRadius: Radius.sm,
     gap: 10,
-    marginBottom: 14,
   },
   sourceBtnText: {
     fontFamily: Typography.fonts.medium,

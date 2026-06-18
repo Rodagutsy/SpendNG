@@ -28,6 +28,8 @@ import { DropdownField } from '@/components/ui/DropdownField';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { CalendarModal } from '@/components/CalendarModal';
+import { recognizeText, extractTransactionInfo } from '@/lib/ocr';
+import { getNairaRate, CURRENCY_SYMBOLS } from '@/lib/exchange-rate';
 
 const PAYMENT_METHODS = [
   { id: 'cash', label: 'Cash' },
@@ -46,14 +48,21 @@ interface TransactionModalProps {
   visible: boolean;
   onClose: () => void;
   transaction?: TransactionRecord;
+  initialReceiptUri?: string;
 }
 
-export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onClose, transaction }) => {
+export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onClose, transaction, initialReceiptUri }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { height: windowHeight } = useWindowDimensions();
   const { translateY, panResponder } = useSwipeToClose(onClose);
   const step2MaxHeight = windowHeight * 0.9 - 180;
+
+  useEffect(() => {
+    if (visible) {
+      translateY.setValue(0);
+    }
+  }, [visible, translateY]);
   const styles = useMemo(() => createStyles(theme, step2MaxHeight), [theme, step2MaxHeight]);
   const addTransaction = useTransactionStore((s) => s.addTransaction);
   const updateTransaction = useTransactionStore((s) => s.updateTransaction);
@@ -74,7 +83,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [notes, setNotes] = useState('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showPaymentPicker, setShowPaymentPicker] = useState(false);
-  const [receiptUploading, setReceiptUploading] = useState(false);
   const [receiptUri, setReceiptUri] = useState<string | null>(null);
   const [showCalendar, setShowCalendar] = useState(false);
 
@@ -86,6 +94,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
   const [taxClassId, setTaxClassId] = useState<string | null>(null);
   const [showTaxClassSheet, setShowTaxClassSheet] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [currency, setCurrency] = useState('NGN');
+  const [nairaEquivalent, setNairaEquivalent] = useState<string | null>(null);
+  const CURRENCY_ORDER = ['NGN', 'USD', 'GBP', 'EUR'];
 
   useEffect(() => {
     if (transaction && visible) {
@@ -108,8 +119,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
       setWhtEnabled(transaction.whtAmount != null);
       setWhtAmountText(transaction.whtAmount ? String(transaction.whtAmount) : '');
       setWhtClientName(transaction.whtClientName ?? '');
+      setCurrency(transaction.currency ?? 'NGN');
+    } else if (initialReceiptUri && visible && !transaction) {
+      setReceiptUri(initialReceiptUri);
     }
-  }, [transaction, visible]);
+  }, [transaction, visible, initialReceiptUri]);
 
   useEffect(() => {
     if (!isEditing && category) {
@@ -119,6 +133,31 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
       }
     }
   }, [category, isEditing]);
+
+  useEffect(() => {
+    if (currency === 'NGN' || !amount || parseFloat(amount) <= 0) {
+      setNairaEquivalent(null);
+      return;
+    }
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount)) return;
+    let cancelled = false;
+    getNairaRate(currency, new Date()).then((result) => {
+      if (cancelled) return;
+      if (result.rate > 0) {
+        const converted = numericAmount * result.rate;
+        setNairaEquivalent(`≈ ₦${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} @ ${result.rate.toFixed(2)}`);
+      } else {
+        setNairaEquivalent('(rate unavailable)');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [currency, amount]);
+
+  const cycleCurrency = () => {
+    const idx = CURRENCY_ORDER.indexOf(currency);
+    setCurrency(CURRENCY_ORDER[(idx + 1) % CURRENCY_ORDER.length]);
+  };
 
   const categories = useMemo(() => {
     const typeHint = type === 'credit' ? 'credit' : 'debit';
@@ -138,12 +177,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     setDescription('');
     setConfidenceLevel(null);
     setNotes('');
-    setReceiptUploading(false);
     setReceiptUri(null);
     setWhtEnabled(false);
     setWhtAmountText('');
     setWhtClientName('');
     setTaxClassId(null);
+    setCurrency('NGN');
+    setNairaEquivalent(null);
   };
 
   const handleClose = () => {
@@ -151,20 +191,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     onClose();
   };
 
-  const handleUploadReceipt = async () => {
-    setReceiptUploading(true);
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setReceiptUri(result.assets[0].uri);
-      setType('debit');
-      setStep(2);
+  const runOCR = async (uri: string) => {
+    try {
+      const recognizedText = await recognizeText(uri);
+      if (!recognizedText.trim()) return;
+
+      const info = extractTransactionInfo(recognizedText);
+      if (info.amount !== null && !amount) setAmount(info.amount.toFixed(2));
+      if (info.transactionType !== null && !type) setType(info.transactionType);
+      if (info.merchant !== null && !name) setName(info.merchant);
+      if (info.date !== null && !dateText) setDateText(info.date);
+    } catch {
+      // OCR failed silently — user can still enter data manually
     }
-    setReceiptUploading(false);
   };
 
   const pickReceiptImage = async () => {
@@ -176,6 +215,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
     });
     if (!result.canceled && result.assets[0]) {
       setReceiptUri(result.assets[0].uri);
+      runOCR(result.assets[0].uri);
     }
   };
 
@@ -201,11 +241,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
         }
       }
 
+      let amountInNaira: number | null = null;
+      let exchangeRateResult: { rate: number; source: string; date: string } | null = null;
+      if (currency !== 'NGN') {
+        exchangeRateResult = await getNairaRate(currency, new Date(parsedDate));
+        if (exchangeRateResult.rate > 0) {
+          amountInNaira = numericAmount * exchangeRateResult.rate;
+        }
+      }
+
       const whtVal = whtEnabled && whtAmountText ? parseFloat(whtAmountText) : null;
 
       if (isEditing && transaction) {
-        await updateTransaction(transaction.id, {
-          amount: numericAmount,
+        const updateData: any = {
+          amount: currency === 'NGN' ? numericAmount : (amountInNaira ?? numericAmount),
+          currency,
           transactionType: type as 'credit' | 'debit',
           merchantName: name || null,
           categoryId: category,
@@ -217,16 +267,25 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
           whtAmount: whtVal,
           whtClientName: whtEnabled ? (whtClientName || null) : null,
           taxClassificationId: taxClassId,
-        });
+        };
+        if (currency !== 'NGN') {
+          updateData.originalCurrency = currency;
+          updateData.originalAmount = numericAmount;
+          updateData.exchangeRate = exchangeRateResult?.rate ?? null;
+          updateData.amountInNaira = amountInNaira;
+          updateData.rateSource = exchangeRateResult?.source ?? null;
+          updateData.rateDate = exchangeRateResult ? new Date(exchangeRateResult.date).getTime() : null;
+        }
+        await updateTransaction(transaction.id, updateData);
       } else {
         const dateMinute = Math.floor(parsedDate / 60000);
-        const hashInput = [(name || '').trim().toLowerCase(), numericAmount.toFixed(2), dateMinute, 'NGN'].join('|');
+        const hashInput = [(name || '').trim().toLowerCase(), numericAmount.toFixed(2), dateMinute, currency].join('|');
         const contentHash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, hashInput);
 
         try {
           await addTransaction({
-            amount: numericAmount,
-            currency: 'NGN',
+            amount: currency === 'NGN' ? numericAmount : (amountInNaira ?? numericAmount),
+            currency,
             transactionType: type as 'credit' | 'debit',
             merchantName: name || null,
             categoryId: category,
@@ -241,7 +300,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
             originalMessage: null,
             isFlaggedForReview: false,
             receiptImageUri: receiptUri,
+            whtAmount: null,
+            whtClientName: null,
             contentHash,
+            originalCurrency: currency === 'NGN' ? null : currency,
+            originalAmount: currency === 'NGN' ? null : numericAmount,
+            exchangeRate: exchangeRateResult?.rate ?? null,
+            amountInNaira,
+            rateSource: exchangeRateResult?.source ?? null,
+            rateDate: exchangeRateResult ? new Date(exchangeRateResult.date).getTime() : null,
           });
 
           handleClose();
@@ -294,7 +361,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
               <View style={styles.typeCardRow}>
                 <TouchableOpacity
                   style={[styles.typeCard, type === 'credit' && { borderColor: Colors.main.success, backgroundColor: Colors.main.success + '0D' }]}
-                  onPress={() => setType('credit')}
+                  onPress={() => { setType('credit'); setStep(2); }}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.typeCardIconWrap, { backgroundColor: Colors.light.success + '1A' }]}>
@@ -306,7 +373,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
 
                 <TouchableOpacity
                   style={[styles.typeCard, type === 'debit' && { borderColor: Colors.main.error, backgroundColor: Colors.main.error + '0A' }]}
-                  onPress={() => setType('debit')}
+                  onPress={() => { setType('debit'); setStep(2); }}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.typeCardIconWrap, { backgroundColor: Colors.light.error + '14' }]}>
@@ -317,26 +384,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
                 </TouchableOpacity>
               </View>
 
-              {/* Divider */}
-              <View style={styles.step1Divider}>
-                <View style={styles.step1DividerLine} />
-                <Text style={styles.step1DividerText}>OR</Text>
-                <View style={styles.step1DividerLine} />
-              </View>
 
-              {/* Upload receipt */}
-              <TouchableOpacity
-                style={styles.uploadBtn}
-                onPress={handleUploadReceipt}
-                activeOpacity={0.7}
-                disabled={receiptUploading}
-              >
-                <MaterialIcons name="photo-camera" size={20} color={theme.primary} />
-                <Text style={styles.uploadBtnText}>
-                  {receiptUploading ? 'Parsing receipt...' : 'Upload Receipt'}
-                </Text>
-              </TouchableOpacity>
-              <Text style={styles.uploadHint}>We&apos;ll extract the details automatically</Text>
             </View>
           ) : (
             <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
@@ -359,7 +407,32 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
 
               {/* Amount */}
               <FormField label="Amount">
-                <AmountInput value={amount} onChangeText={setAmount} placeholder="0.00" />
+                <View style={[styles.currencyInputRow, { borderColor: theme.outlineVariant }]}>
+                  <TouchableOpacity onPress={cycleCurrency} activeOpacity={0.7} style={styles.currencyToggle}>
+                    <Text style={[styles.currencySymbolText, { color: theme.primary }]}>
+                      {CURRENCY_SYMBOLS[currency] || currency}
+                    </Text>
+                    <MaterialIcons name="unfold-more" size={14} color={theme.primary} />
+                  </TouchableOpacity>
+                  <TextInput
+                    style={[styles.currencyAmountInput, { color: theme.onSurface, outlineStyle: 'none' } as any]}
+                    value={amount}
+                    onChangeText={setAmount}
+                    placeholder="0.00"
+                    placeholderTextColor={theme.outline}
+                    keyboardType="decimal-pad"
+                    underlineColorAndroid="transparent"
+                  />
+                </View>
+                {currency === 'NGN' ? (
+                  <Text style={[styles.rateHint, { color: theme.outline }]}>
+                    Tap the currency symbol to report in $, etc.
+                  </Text>
+                ) : nairaEquivalent ? (
+                  <Text style={[styles.rateHint, { color: theme.outline }]}>{nairaEquivalent}</Text>
+                ) : amount && parseFloat(amount) > 0 ? (
+                  <Text style={[styles.rateHint, { color: theme.outline }]}>Fetching exchange rate...</Text>
+                ) : null}
               </FormField>
 
               {/* Date */}
@@ -476,36 +549,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
 
           {/* Footer */}
           <View style={styles.footer}>
-            {step === 1 ? (
-              <>
-                <TouchableOpacity style={[styles.footerBtn, styles.cancelBtn]} onPress={handleClose} activeOpacity={0.8}>
-                  <Text style={[styles.cancelBtnText, { color: theme.outline }]}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.footerBtn, styles.primaryBtn, !type && { opacity: 0.5 }]}
-                  onPress={() => { if (type) setStep(2); }}
-                  activeOpacity={0.8}
-                  disabled={!type}
-                >
-                  <Text style={styles.primaryBtnText}>Continue</Text>
-                  <MaterialIcons name="arrow-forward" size={18} color={theme.onPrimary} />
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity style={[styles.footerBtn, styles.cancelBtn]} onPress={() => setStep(1)} activeOpacity={0.8}>
-                  <Text style={[styles.cancelBtnText, { color: theme.outline }]}>Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.footerBtn, styles.primaryBtn, (!formValid || saving) && { opacity: 0.5 }]}
-                  onPress={handleSave}
-                  activeOpacity={0.8}
-                  disabled={!formValid || saving}
-                >
-                  <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
-                </TouchableOpacity>
-              </>
-            )}
+            <TouchableOpacity style={[styles.footerBtn, styles.cancelBtn]} onPress={() => setStep(1)} activeOpacity={0.8}>
+              <Text style={[styles.cancelBtnText, { color: theme.outline }]}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.footerBtn, styles.primaryBtn, (!formValid || saving) && { opacity: 0.5 }]}
+              onPress={handleSave}
+              activeOpacity={0.8}
+              disabled={!formValid || saving}
+            >
+              <Text style={styles.primaryBtnText}>{saving ? 'Saving...' : 'Save'}</Text>
+            </TouchableOpacity>
           </View>
           </Animated.View>
         {showCategoryPicker && (
@@ -674,46 +728,6 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
     color: theme.outline,
     textAlign: 'center',
   },
-  step1Divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginVertical: Spacing[5],
-    gap: 12,
-  },
-  step1DividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: theme.outlineVariant,
-  },
-  step1DividerText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 12,
-    color: theme.outline,
-  },
-  uploadBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 14,
-    paddingHorizontal: Spacing[6],
-    borderRadius: Radius.full,
-    borderWidth: 1.5,
-    borderColor: theme.primary,
-    borderStyle: 'dashed',
-    backgroundColor: theme.primary + '0A',
-  },
-  uploadBtnText: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 14,
-    color: theme.primary,
-  },
-  uploadHint: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 12,
-    color: theme.outline,
-    marginTop: 8,
-  },
   // Step 2
   body: {
     maxHeight: step2MaxHeight,
@@ -722,6 +736,42 @@ const createStyles = (theme: Theme, step2MaxHeight: number) => StyleSheet.create
     paddingHorizontal: Spacing[5],
     gap: 12,
     paddingBottom: 4,
+  },
+  currencyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 48,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: theme.outlineVariant,
+    paddingLeft: 4,
+    paddingRight: 16,
+    gap: 4,
+    backgroundColor: theme.surface,
+  },
+  currencyToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+  },
+  currencySymbolText: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 16,
+  },
+  currencyAmountInput: {
+    flex: 1,
+    fontFamily: Typography.fonts.body,
+    fontSize: 16,
+    padding: 0,
+    height: '100%',
+  },
+  rateHint: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 12,
+    marginTop: 4,
   },
   textInputWrap: {
     flexDirection: 'row',

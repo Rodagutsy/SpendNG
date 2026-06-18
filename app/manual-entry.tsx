@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import * as Crypto from 'expo-crypto';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { getNairaRate, CURRENCY_SYMBOLS } from '@/lib/exchange-rate';
 
 const STEPS = ['Type', 'Amount', 'Category', 'Payment', 'Description', 'Save'];
 
@@ -54,13 +55,48 @@ export default function ManualEntryScreen() {
   const theme = Colors[colorScheme];
   const addTransaction = useTransactionStore((s) => s.addTransaction);
 
+  const CURRENCY_ORDER = ['NGN', 'USD', 'GBP', 'EUR'];
   const [step, setStep] = useState(0);
   const [transactionType, setTransactionType] = useState<'credit' | 'debit' | null>(null);
   const [amount, setAmount] = useState('');
+  const [currency, setCurrency] = useState('NGN');
+  const [nairaEquivalent, setNairaEquivalent] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (currency === 'NGN' || !amount || parseFloat(amount) <= 0) {
+      setNairaEquivalent(null);
+      return;
+    }
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount)) return;
+    let cancelled = false;
+    getNairaRate(currency, new Date()).then((result) => {
+      if (cancelled) return;
+      if (result.rate > 0) {
+        const converted = numericAmount * result.rate;
+        setNairaEquivalent(`≈ ₦${converted.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      } else {
+        setNairaEquivalent('(rate unavailable, enter NGN value below)');
+      }
+    });
+    return () => { cancelled = true; };
+  }, [currency, amount]);
+
+  const cycleCurrency = () => {
+    const idx = CURRENCY_ORDER.indexOf(currency);
+    setCurrency(CURRENCY_ORDER[(idx + 1) % CURRENCY_ORDER.length]);
+  };
+
+  const getNairaAmount = (): number => {
+    const raw = parseFloat(amount);
+    if (isNaN(raw) || raw <= 0) return NaN;
+    if (currency === 'NGN') return raw;
+    return raw;
+  };
 
   const categories = transactionType === 'credit' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
 
@@ -98,13 +134,39 @@ export default function ManualEntryScreen() {
     setSaving(true);
     try {
       const dateNow = Date.now();
+
+      let finalAmount = numericAmount;
+      let originalCurrency: string | null = null;
+      let originalAmount: number | null = null;
+      let exchangeRate: number | null = null;
+      let amountInNaira: number | null = null;
+      let rateSource: string | null = null;
+
+      if (currency !== 'NGN') {
+        originalCurrency = currency;
+        originalAmount = numericAmount;
+        const rateResult = await getNairaRate(currency, new Date());
+        if (rateResult.rate > 0) {
+          exchangeRate = rateResult.rate;
+          amountInNaira = Math.round(numericAmount * rateResult.rate * 100) / 100;
+          finalAmount = amountInNaira;
+          rateSource = rateResult.source;
+        }
+      }
+
       const dateMinute = Math.floor(dateNow / 60000);
-      const hashInput = [(description || '').trim().toLowerCase(), numericAmount.toFixed(2), dateMinute, 'NGN'].join('|');
+      const hashInput = [(description || '').trim().toLowerCase(), numericAmount.toFixed(2), dateMinute, currency].join('|');
       const contentHash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, hashInput);
 
       await addTransaction({
-        amount: numericAmount,
-        currency: 'NGN',
+        amount: finalAmount,
+        currency,
+        originalCurrency,
+        originalAmount,
+        exchangeRate,
+        amountInNaira,
+        rateSource,
+        rateDate: originalCurrency ? dateNow : null,
         transactionType: transactionType as 'credit' | 'debit',
         merchantName: description || null,
         categoryId: category,
@@ -119,6 +181,8 @@ export default function ManualEntryScreen() {
         originalMessage: null,
         isFlaggedForReview: false,
         receiptImageUri: null,
+        whtAmount: null,
+        whtClientName: null,
         contentHash,
       });
 
@@ -201,7 +265,11 @@ export default function ManualEntryScreen() {
             <Text style={[styles.stepHeading, { color: theme.onBackground }]}>Amount</Text>
             <Text style={[styles.stepSubtext, { color: theme.outline }]}>Enter the transaction amount</Text>
             <View style={styles.amountRow}>
-              <Text style={[styles.currencySymbol, { color: theme.onBackground }]}>₦</Text>
+              <TouchableOpacity onPress={cycleCurrency} activeOpacity={0.7}>
+                <Text style={[styles.currencySymbol, { color: theme.primary }]}>
+                  {CURRENCY_SYMBOLS[currency] || currency}
+                </Text>
+              </TouchableOpacity>
               <TextInput
                 style={[styles.amountInput, { color: theme.onBackground }]}
                 value={amount}
@@ -212,6 +280,16 @@ export default function ManualEntryScreen() {
                 autoFocus
               />
             </View>
+            {currency !== 'NGN' && (
+              <Text style={[styles.currencyHint, { color: theme.outline }]}>
+                Tap currency to change · {currency} amounts auto-converted to NGN for tax
+              </Text>
+            )}
+            {nairaEquivalent && (
+              <Text style={[styles.nairaEquiv, { color: theme.primary }]}>
+                {nairaEquivalent}
+              </Text>
+            )}
           </View>
         )}
 
@@ -297,7 +375,7 @@ export default function ManualEntryScreen() {
             <View style={styles.descHintRow}>
               <MaterialIcons name="lightbulb-outline" size={14} color={theme.outline} />
               <Text style={[styles.descHint, { color: theme.outline }]}>
-                Examples: "Shoprite groceries", "Client payment for design work"
+                Examples: &quot;Shoprite groceries&quot;, &quot;Client payment for design work&quot;
               </Text>
             </View>
           </View>
@@ -319,7 +397,10 @@ export default function ManualEntryScreen() {
               <View style={styles.reviewDivider} />
               <View style={styles.reviewRow}>
                 <Text style={styles.reviewLabel}>Amount</Text>
-                <Text style={styles.reviewValueBold}>₦{parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
+                <Text style={styles.reviewValueBold}>
+                  {CURRENCY_SYMBOLS[currency] || currency}{parseFloat(amount).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {currency !== 'NGN' && nairaEquivalent ? ` (${nairaEquivalent})` : ''}
+                </Text>
               </View>
               <View style={styles.reviewDivider} />
               <View style={styles.reviewRow}>
@@ -497,6 +578,18 @@ const styles = StyleSheet.create({
     minWidth: 120,
     textAlign: 'center',
     padding: 0,
+  },
+  currencyHint: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: Spacing[2],
+  },
+  nairaEquiv: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 18,
+    textAlign: 'center',
+    marginTop: Spacing[2],
   },
   categoryGrid: {
     flexDirection: 'row',

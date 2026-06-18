@@ -77,6 +77,7 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
 
   const totalWht = whtCredits.reduce((s, c) => s + c.whtAmount, 0);
   const estimatedTaxableIncome = totalIncome - totalDeductibleExpenses;
+  const foreignTxns = useMemo(() => incomeTxs.filter((t) => t.originalCurrency && t.originalCurrency !== 'NGN'), [incomeTxs]);
 
   const generateAndShare = async (title: string) => {
     setPdfLoading(true);
@@ -160,6 +161,23 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
                 <Text style={styles.cardTotal}>₦{totalWht.toLocaleString()}</Text>
               </View>
             </View>
+
+            {foreignTxns.length > 0 && (
+              <View style={[styles.foreignNote, { backgroundColor: Colors.main.primary + '0D' }]}>
+                <View style={styles.foreignNoteRow}>
+                  <MaterialIcons name="language" size={16} color={Colors.main.primary} />
+                  <Text style={styles.foreignNoteText}>
+                    {foreignTxns.length} foreign income transaction(s) auto-converted to NGN
+                  </Text>
+                </View>
+                {foreignTxns.map((ft) => (
+                  <Text key={ft.id} style={styles.foreignDetailText}>
+                    {ft.originalCurrency} {ft.originalAmount?.toLocaleString()} → ₦{ft.amount.toLocaleString()}
+                    {ft.exchangeRate ? ` (rate: ${ft.exchangeRate})` : ''}
+                  </Text>
+                ))}
+              </View>
+            )}
 
             <View style={[styles.taxableCard, { backgroundColor: Colors.main.primary }]}>
               <Text style={styles.taxableLabel}>Estimated Taxable Income</Text>
@@ -281,6 +299,29 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.body,
     fontSize: 13,
     color: Colors.light.onSurface,
+  },
+  foreignNote: {
+    borderRadius: Radius.sm,
+    padding: Spacing[3],
+    marginBottom: Spacing[2],
+  },
+  foreignNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  foreignNoteText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 13,
+    color: Colors.main.primary,
+  },
+  foreignDetailText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 11,
+    color: Colors.light.outline,
+    paddingLeft: 22,
+    lineHeight: 18,
   },
   taxableCard: {
     borderRadius: Radius.sm,

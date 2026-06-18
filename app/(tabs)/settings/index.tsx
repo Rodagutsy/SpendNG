@@ -23,6 +23,7 @@ export default function SettingsScreen() {
       await signOut();
       router.replace('/(onboarding)/sign-in');
     } catch (err) {
+      showAlert({ title: 'Error', message: 'Failed to sign out. Please try again.' });
       console.error(err);
     }
   };
@@ -42,6 +43,7 @@ export default function SettingsScreen() {
               await signOut();
               router.replace('/(onboarding)/account-creation');
             } catch (err) {
+              showAlert({ title: 'Error', message: 'Failed to clear your data. Please try again.' });
               console.error(err);
             }
           },

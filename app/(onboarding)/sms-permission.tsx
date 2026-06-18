@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAlert } from '@/context/AlertContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SMSService } from '@/lib/sms-service';
 import { useUIStore } from '@/lib/stores/uiStore';
 
@@ -46,17 +46,18 @@ export default function SMSPermissionScreen() {
       if (!result.permissionsGranted) {
         showAlert({ title: 'Permission Denied', message: 'SMS access was denied. You can enable it later in Settings.' });
       }
-      router.push('/(onboarding)/email-connection');
+      router.push('/(onboarding)/import-progress');
     } catch (e) {
       console.warn('SMS setup error:', e);
-      router.push('/(onboarding)/email-connection');
+      showAlert({ title: 'SMS Setup Error', message: 'SMS setup encountered an issue. You can configure it later in Settings.' });
+      router.push('/(onboarding)/import-progress');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSkip = () => {
-    router.push('/(onboarding)/email-connection');
+    router.push('/(onboarding)/import-progress');
   };
 
   if (loading) {
@@ -67,7 +68,9 @@ export default function SMSPermissionScreen() {
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.content}>
-          <IconSymbol name="bubble.left.fill" size={48} color={theme.primary} />
+          <View style={[styles.iconContainer, { backgroundColor: theme.primaryContainer }]}>
+            <MaterialIcons name="sms" size={40} color={theme.primary} />
+          </View>
           <Text style={[styles.title, { color: theme.onBackground }]}>Import Bank Alerts</Text>
           <Text style={[styles.subtitle, { color: theme.outline }]}>Scanning your SMS inbox...</Text>
 
@@ -92,7 +95,9 @@ export default function SMSPermissionScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={styles.content}>
-        <IconSymbol name="bubble.left.fill" size={48} color={theme.primary} />
+        <View style={[styles.iconContainer, { backgroundColor: theme.primaryContainer }]}>
+          <MaterialIcons name="sms" size={40} color={theme.primary} />
+        </View>
         <Text style={[styles.title, { color: theme.onBackground }]}>Import Bank Alerts</Text>
         <Text style={[styles.subtitle, { color: theme.outline }]}>
           {isIOS
@@ -145,7 +150,7 @@ export default function SMSPermissionScreen() {
             onPress={handleSkip}
             activeOpacity={0.8}
           >
-            <Text style={[styles.allowBtnText, { color: theme.outline }]}>Continue to Email Setup</Text>
+            <Text style={[styles.allowBtnText, { color: theme.outline }]}>Skip</Text>
           </TouchableOpacity>
         )}
 
@@ -155,7 +160,7 @@ export default function SMSPermissionScreen() {
             onPress={handleSkip}
             activeOpacity={0.7}
           >
-            <Text style={[styles.skipText, { color: theme.outline }]}>Skip, I'll do this later</Text>
+            <Text style={[styles.skipText, { color: theme.outline }]}>{"Skip, I'll do this later"}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -167,9 +172,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   content: {
-    paddingTop: 32,
-    paddingHorizontal: 32,
+    paddingTop: 40,
+    paddingHorizontal: 40,
     alignItems: 'center',
   },
   progressSection: {
@@ -194,16 +207,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Typography.fonts.display,
-    fontSize: 24,
+    fontSize: 20,
     textAlign: 'center',
-    marginTop: 16,
   },
   subtitle: {
     fontFamily: Typography.fonts.body,
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 28,
+    marginBottom: 40,
   },
 
   rangeLabel: {
@@ -230,8 +242,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   allowBtn: {
-    width: '70%',
-    height: 50,
+    paddingHorizontal: 24,
+    height: 48,
     borderRadius: Radius.sm,
     justifyContent: 'center',
     alignItems: 'center',
