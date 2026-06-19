@@ -57,7 +57,7 @@ interface TransactionState {
 
   fetchTransactions: (filters?: TransactionFilters) => Promise<void>;
   fetchHomeTransactions: () => Promise<void>;
-  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'contentHash' | 'originalCurrency' | 'originalAmount' | 'exchangeRate' | 'amountInNaira' | 'rateSource' | 'rateDate'> & { contentHash: string; originalCurrency?: string | null; originalAmount?: number | null; exchangeRate?: number | null; amountInNaira?: number | null; rateSource?: string | null; rateDate?: number | null; receiptPath?: string | null }) => Promise<TransactionRecord>;
+  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'contentHash' | 'originalCurrency' | 'originalAmount' | 'exchangeRate' | 'amountInNaira' | 'rateSource' | 'rateDate' | 'receiptPath'> & { contentHash: string; originalCurrency?: string | null; originalAmount?: number | null; exchangeRate?: number | null; amountInNaira?: number | null; rateSource?: string | null; rateDate?: number | null; receiptPath?: string | null }) => Promise<TransactionRecord>;
   updateCategory: (id: string, categoryId: string) => Promise<void>;
   updateNotes: (id: string, notes: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<TransactionRecord>) => Promise<void>;

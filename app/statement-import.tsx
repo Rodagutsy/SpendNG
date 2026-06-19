@@ -7,7 +7,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -18,9 +17,9 @@ import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as DocumentPicker from 'expo-document-picker';
-import { File } from 'expo-file-system/next';
-import { StatementParser, ParsedStatementRow, ColumnMapping } from '@/lib/statement-parser';
-import { parsePDFWithEdgeFunction } from '@/lib/statement-parser/pdf-parse';
+import { ParsedStatementRow } from '@/lib/statement-parser';
+import { importCsvStatement } from '@/lib/statement-parser/csv-generic';
+import { importPdfStatement } from '@/lib/statement-parser/pdf-parse';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import * as Crypto from 'expo-crypto';
 import { getNairaRate } from '@/lib/exchange-rate';
@@ -53,16 +52,15 @@ export default function StatementImportScreen() {
       const isPdf = file.name?.toLowerCase().endsWith('.pdf');
 
       if (isPdf) {
-        const parseResult = await parsePDFWithEdgeFunction(file.uri);
-        setParsedRows(parseResult.rows);
+        const rows = await importPdfStatement(file.uri);
+        setParsedRows(rows ?? []);
         setDetectedBank(null);
-        setTotalRows(parseResult.rows.length);
+        setTotalRows(rows?.length ?? 0);
       } else {
-        const content = await new File(file.uri).text();
-        const parseResult = await StatementParser.parse(content, 'csv');
-        setParsedRows(parseResult.rows);
-        setDetectedBank(parseResult.detectedBank);
-        setTotalRows(parseResult.totalRows);
+        const parseResult = await importCsvStatement(file.uri);
+        setParsedRows(parseResult?.rows ?? []);
+        setDetectedBank(parseResult?.detectedBank ?? null);
+        setTotalRows(parseResult?.rows.length ?? 0);
       }
 
       setStep('preview');
@@ -313,7 +311,7 @@ const styles = StyleSheet.create({
   uploadIcon: {
     width: 72,
     height: 72,
-    borderRadius: 40,
+    borderRadius: 36,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,

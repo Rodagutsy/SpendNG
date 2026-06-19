@@ -1,3 +1,6 @@
+import Papa from 'papaparse';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
 import { BankFormat, detectBankFormat } from './bank-formats';
 
 export interface ParsedStatementRow {
@@ -15,6 +18,78 @@ export interface ColumnMapping {
   inflowIndex: number;
   outflowIndex: number;
   balanceIndex: number | null;
+}
+
+export async function importCsvStatement(fileUri?: string): Promise<{
+  rows: ParsedStatementRow[];
+  detectedBank: string | null;
+} | null> {
+  let uri = fileUri;
+  if (!uri) {
+    const file = await DocumentPicker.getDocumentAsync({
+      type: 'text/csv',
+      copyToCacheDirectory: true,
+    });
+    if (file.canceled) return null;
+    uri = file.assets[0].uri;
+  }
+
+  const raw = await FileSystem.readAsStringAsync(uri);
+
+  const result = Papa.parse<Record<string, any>>(raw, {
+    header: true,
+    skipEmptyLines: true,
+    dynamicTyping: true,
+  });
+
+  if (!result.data || result.data.length === 0) return { rows: [], detectedBank: null };
+
+  const headers = Object.keys(result.data[0]);
+  const format = detectBankFormat(headers, []);
+  const mapping = autoDetectColumnMapping(headers, format);
+  const rows: ParsedStatementRow[] = [];
+
+  for (const row of result.data) {
+    const dateVal = row[headers[mapping.dateIndex]];
+    if (!dateVal) continue;
+
+    const date = String(dateVal);
+    const description = mapping.descriptionIndex >= 0
+      ? String(row[headers[mapping.descriptionIndex]] || '')
+      : '';
+
+    let amount = 0;
+    let type: 'credit' | 'debit' = 'debit';
+    let currency: string | undefined;
+
+    if (mapping.inflowIndex >= 0) {
+      const inflow = parseFloat(row[headers[mapping.inflowIndex]]);
+      if (!isNaN(inflow) && inflow > 0) {
+        amount = inflow;
+        type = 'credit';
+      }
+    }
+
+    if (amount === 0 && mapping.outflowIndex >= 0) {
+      const outflow = parseFloat(row[headers[mapping.outflowIndex]]);
+      if (!isNaN(outflow) && outflow > 0) {
+        amount = outflow;
+        type = 'debit';
+      }
+    }
+
+    if (amount === 0) continue;
+
+    let balance: number | null = null;
+    if (mapping.balanceIndex !== null) {
+      const bal = parseFloat(row[headers[mapping.balanceIndex]]);
+      if (!isNaN(bal)) balance = bal;
+    }
+
+    rows.push({ date, amount, type, description, balance, currency });
+  }
+
+  return { rows, detectedBank: format?.name ?? null };
 }
 
 function parseCSVLine(line: string): string[] {

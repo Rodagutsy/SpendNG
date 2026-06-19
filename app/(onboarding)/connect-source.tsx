@@ -7,7 +7,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
 import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { SMSService } from '@/lib/sms-service';
+import { importHistoricalSms } from '@/lib/sms-import';
+import { IngestionEngine } from '@/lib/ingestion-engine';
 import { supabase } from '@/lib/supabase';
 import { useUIStore } from '@/lib/stores/uiStore';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -36,14 +37,25 @@ export default function ConnectSourceScreen() {
   const closeDurationModal = useCallback(() => setScreenState('selection'), []);
   const { translateY: durationTranslateY, panResponder: durationPanResponder } = useSwipeToClose(closeDurationModal);
 
-  const startSMSScan = useCallback(async (startDate: number, endDate: number) => {
-    setScanLabel('Scanning SMS messages...');
+  const startSMSScan = useCallback(async (startDate: number) => {
+    setScanLabel('Reading SMS messages...');
     setScreenState('scanning');
     try {
-      const result = await SMSService.requestAndScan(startDate, endDate);
-      if (!result.permissionsGranted) {
-        showAlert({ title: 'Permission Denied', message: 'SMS access was denied. You can enable it later in Settings.' });
+      const messages = await importHistoricalSms(startDate);
+      if (messages.length === 0) {
+        showAlert({ title: 'No Messages', message: 'No SMS messages found in the selected date range.' });
+        setScreenState('success');
+        return;
       }
+
+      const alerts = messages.map((msg) => ({
+        body: msg.body,
+        sender: msg.address,
+        timestamp: msg.date,
+        sourceChannel: 'sms' as const,
+      }));
+
+      await IngestionEngine.processBatch(alerts);
       setScreenState('success');
     } catch (e) {
       console.warn('SMS scan error:', e);
@@ -71,8 +83,7 @@ export default function ConnectSourceScreen() {
 
   const handleDurationConfirm = () => {
     const startDate = selectedDuration === 0 ? 0 : Date.now() - selectedDuration * 24 * 60 * 60 * 1000;
-    const endDate = Date.now();
-    startSMSScan(startDate, endDate);
+    startSMSScan(startDate);
   };
 
   const found = importProgress?.found ?? 0;

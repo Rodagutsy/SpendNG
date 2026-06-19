@@ -28,10 +28,7 @@ import { useAuth } from '@/context/AuthContext';
 import { TransactionModal } from '@/components/TransactionModal';
 import { TransactionItem } from '@/components/ui/TransactionItem';
 import { SMSService } from '@/lib/sms-service';
-import * as ImagePicker from 'expo-image-picker';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { uploadReceipt } from '@/lib/receipt-upload';
-import { supabase } from '@/lib/supabase';
+import { scanReceipt } from '@/lib/ocr';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -49,19 +46,9 @@ export default function HomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const [showTxModal, setShowTxModal] = useState(false);
-  const [txModalPrefill, setTxModalPrefill] = useState<{ receiptUri?: string; type?: 'credit' | 'debit'; amount?: string; merchant?: string } | null>(null);
-  const [receiptDraft, setReceiptDraft] = useState<{
-    merchant: string | null;
-    amount: number | null;
-    currency: string | null;
-    transaction_date: string | null;
-    tax_amount: number | null;
-    receiptPath: string;
-  } | null>(null);
   const [bannerDismissedAt, setBannerDismissedAt] = useState<number | null>(null);
   const clearedNotificationIds = useNotificationStore((s) => s.clearedIds);
   const [showConnectPrompt, setShowConnectPrompt] = useState(false);
-  const [scanningReceipt, setScanningReceipt] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHomeTransactions();
@@ -240,38 +227,19 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.quickToolCard, { backgroundColor: theme.surfaceContainer }]} onPress={async () => {
-            setScanningReceipt('Opening camera...');
             try {
-              const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: ['images'],
-                quality: 0.8,
-              });
-              if (!result.canceled && result.assets[0]) {
-                const originalUri = result.assets[0].uri;
-                setScanningReceipt('Processing image...');
-                const resized = await manipulateAsync(originalUri, [{ resize: { width: 800 } }], { format: SaveFormat.JPEG, compress: 0.7 });
-                const uri = resized.uri;
-                setScanningReceipt('Uploading receipt...');
-                const { filePath } = await uploadReceipt(uri);
-                setScanningReceipt('Extracting details...');
-                const { data, error } = await supabase.functions.invoke('extract-receipt', {
-                  body: { filePath },
+              const result = await scanReceipt();
+              if (result) {
+                router.push({
+                  pathname: '/manual-entry',
+                  params: {
+                    prefillAmount: result.amount ?? '',
+                    prefillMerchant: result.merchant ?? '',
+                  },
                 });
-                if (error) throw new Error(error.message || 'Edge function error');
-                setReceiptDraft({
-                  merchant: data.merchant ?? null,
-                  amount: data.amount ?? null,
-                  currency: data.currency ?? null,
-                  transaction_date: data.transaction_date ?? null,
-                  tax_amount: data.tax_amount ?? null,
-                  receiptPath: filePath,
-                });
-                setShowTxModal(true);
               }
             } catch (e: any) {
               console.error('Receipt scan failed:', e);
-            } finally {
-              setScanningReceipt(null);
             }
           }} activeOpacity={0.7}>
             <MaterialIcons name="camera-alt" size={20} color="#E65100" />
@@ -279,12 +247,6 @@ export default function HomeScreen() {
               <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Scan</Text>
               <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Receipt</Text>
             </View>
-            {scanningReceipt && (
-              <View style={{ position: 'absolute', alignItems: 'center', gap: 2 }}>
-                <ActivityIndicator size="small" color={theme.primary} />
-                <Text style={{ fontFamily: Typography.fonts.body, fontSize: 8, color: theme.primary, textAlign: 'center' }}>{scanningReceipt}</Text>
-              </View>
-            )}
           </TouchableOpacity>
 
           <TouchableOpacity style={[styles.quickToolCard, { backgroundColor: theme.surfaceContainer }]} onPress={() => router.push('/statement-import' as any)} activeOpacity={0.7}>
@@ -331,7 +293,7 @@ export default function HomeScreen() {
       )}
 
     </View>
-  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications, bannerVisible, bannerOverlayColor, bannerTitle, bannerCta, hasStartedReview, bannerDismissedAt, theme, scanningReceipt]);
+  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications, bannerVisible, bannerOverlayColor, bannerTitle, bannerCta, hasStartedReview, bannerDismissedAt, theme]);
 
   return (
     <>
@@ -413,7 +375,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        <TransactionModal visible={showTxModal} onClose={() => { setShowTxModal(false); setTxModalPrefill(null); setReceiptDraft(null); }} initialReceiptUri={txModalPrefill?.receiptUri} receiptDraft={receiptDraft} />
+        <TransactionModal visible={showTxModal} onClose={() => setShowTxModal(false)} />
 
         {/* Connect source prompt */}
         <Modal visible={showConnectPrompt} transparent animationType="fade" onRequestClose={() => setShowConnectPrompt(false)}>

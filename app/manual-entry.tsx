@@ -11,7 +11,7 @@ import {
   StatusBar,
   Alert
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import * as Crypto from 'expo-crypto';
@@ -52,6 +52,7 @@ const PAYMENT_METHODS = [
 
 export default function ManualEntryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ prefillAmount?: string; prefillMerchant?: string }>();
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const addTransaction = useTransactionStore((s) => s.addTransaction);
@@ -66,6 +67,12 @@ export default function ManualEntryScreen() {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Pre-fill from receipt OCR params
+  useEffect(() => {
+    if (params.prefillAmount) setAmount(params.prefillAmount);
+    if (params.prefillMerchant) setDescription(params.prefillMerchant);
+  }, [params.prefillAmount, params.prefillMerchant]);
 
   useEffect(() => {
     if (currency === 'NGN' || !amount || parseFloat(amount) <= 0) {

@@ -4,12 +4,12 @@ import { supabase } from '@/lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useUIStore } from '@/lib/stores/uiStore';
 import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
-import { SMSService } from '@/lib/sms-service';
+import { startReadSMS, checkIfHasSMSPermission } from '@maniac-tech/react-native-expo-read-sms';
+import { IngestionEngine } from '@/lib/ingestion-engine';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -26,8 +26,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const sessionRef = useRef(session);
-  sessionRef.current = session;
+
+  const listenerStartedRef = useRef(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }: any) => {
@@ -41,8 +41,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         useCategoryStore.getState().fetchCategories();
         useCategoryDefaultStore.getState().fetchDefaults();
         useTaxClassificationStore.getState().fetchClassifications();
-        if (Platform.OS === 'android') {
-          SMSService.rescanMissedAlerts();
+        if (Platform.OS === 'android' && !listenerStartedRef.current) {
+          listenerStartedRef.current = true;
+          checkIfHasSMSPermission().then((hasPermission) => {
+            if (!hasPermission) return;
+            startReadSMS(
+              (address: string, body: string) => {
+                IngestionEngine.processAlert(body, address, Date.now(), 'sms').catch((err) =>
+                  console.warn('[SMSListener] Failed to process:', err),
+                );
+              },
+              (error: string) => {
+                console.warn('[SMSListener] Error:', error);
+              },
+            );
+          });
         }
       }
     });
@@ -60,11 +73,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleAppState = (state: AppStateStatus) => {
       if (state === 'active') {
         supabase.auth.startAutoRefresh();
-        if (sessionRef.current?.user) {
-          if (Platform.OS === 'android') {
-            SMSService.rescanMissedAlerts();
-          }
-        }
       } else {
         supabase.auth.stopAutoRefresh();
       }
