@@ -7,7 +7,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  TextInput,
   Alert,
   ActivityIndicator,
 } from 'react-native';
@@ -36,28 +35,10 @@ export default function StatementImportScreen() {
   const addTransaction = useTransactionStore((s) => s.addTransaction);
 
   const [step, setStep] = useState<ScreenStep>('select');
-  const [csvText, setCsvText] = useState('');
   const [parsedRows, setParsedRows] = useState<ParsedStatementRow[]>([]);
   const [detectedBank, setDetectedBank] = useState<string | null>(null);
   const [totalRows, setTotalRows] = useState(0);
   const [progress, setProgress] = useState({ saved: 0, skipped: 0 });
-
-  const handleParsePasted = useCallback(async () => {
-    if (!csvText.trim()) {
-      showAlert({ title: 'Empty', message: 'Paste your bank statement CSV content first.' });
-      return;
-    }
-
-    try {
-      const result = await StatementParser.parse(csvText, 'csv');
-      setParsedRows(result.rows);
-      setDetectedBank(result.detectedBank);
-      setTotalRows(result.totalRows);
-      setStep('preview');
-    } catch (e: any) {
-      showAlert({ title: 'Parse Error', message: e.message || 'Failed to parse statement.' });
-    }
-  }, [csvText]);
 
   const handlePickFile = useCallback(async () => {
     try {
@@ -163,7 +144,6 @@ export default function StatementImportScreen() {
 
   const reset = () => {
     setStep('select');
-    setCsvText('');
     setParsedRows([]);
     setProgress({ saved: 0, skipped: 0 });
   };
@@ -186,23 +166,12 @@ export default function StatementImportScreen() {
           <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
             <View style={styles.uploadSection}>
               <View style={[styles.uploadIcon, { backgroundColor: theme.primaryContainer }]}>
-                <IconSymbol name="doc.text.fill" size={40} color={theme.primary} />
+                <MaterialIcons name="description" size={40} color={theme.primary} />
               </View>
               <Text style={[styles.uploadTitle, { color: theme.onBackground }]}>Upload Bank Statement</Text>
               <Text style={[styles.uploadSubtitle, { color: theme.outline }]}>
-                Upload a CSV or PDF file, or paste CSV content below
+                Select a CSV or PDF file from your device to import transactions
               </Text>
-            </View>
-
-            <View style={styles.fileTypeRow}>
-              <View style={[styles.fileTypeChip, { backgroundColor: theme.primaryContainer }]}>
-                <MaterialIcons name="description" size={16} color={theme.primary} />
-                <Text style={[styles.fileTypeText, { color: theme.primary }]}>CSV</Text>
-              </View>
-              <View style={[styles.fileTypeChip, { backgroundColor: theme.surfaceContainer }]}>
-                <MaterialIcons name="picture-as-pdf" size={16} color={theme.outline} />
-                <Text style={[styles.fileTypeText, { color: theme.outline }]}>PDF</Text>
-              </View>
             </View>
 
             <TouchableOpacity
@@ -210,30 +179,8 @@ export default function StatementImportScreen() {
               onPress={handlePickFile}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="folder-open" size={20} color={theme.onPrimary} />
-              <Text style={[styles.pickFileBtnText, { color: theme.onPrimary }]}>Choose CSV or PDF File</Text>
+              <Text style={[styles.pickFileBtnText, { color: theme.onPrimary }]}>Choose file</Text>
             </TouchableOpacity>
-
-              <View style={[styles.pasteSection, { backgroundColor: theme.surfaceContainer }]}>
-              
-              <TextInput
-                style={[styles.pasteInput, { color: theme.onSurface, backgroundColor: theme.surface }]}
-                value={csvText}
-                onChangeText={setCsvText}
-                placeholder="Paste your CSV bank statement here..."
-                placeholderTextColor={theme.outline}
-                multiline
-                textAlignVertical="top"
-              />
-              <TouchableOpacity
-                style={[styles.parseBtn, { backgroundColor: theme.primary }]}
-                onPress={handleParsePasted}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="play-arrow" size={20} color={theme.onPrimary} />
-                <Text style={[styles.parseBtnText, { color: theme.onPrimary }]}>Parse & Preview</Text>
-              </TouchableOpacity>
-            </View>
           </ScrollView>
         )}
 
@@ -354,15 +301,18 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.titleS,
   },
   scrollContent: {
-    padding: Spacing[6],
+    paddingHorizontal: Spacing[6],
+    paddingBottom: Spacing[6],
   },
   uploadSection: {
     alignItems: 'center',
-    paddingVertical: Spacing[8],
+    paddingTop: Spacing[4],
+    marginBottom: Spacing[5],
+    paddingHorizontal: Spacing[10],
   },
   uploadIcon: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
@@ -370,74 +320,24 @@ const styles = StyleSheet.create({
   },
   uploadTitle: {
     fontFamily: Typography.fonts.display,
-    fontSize: 20,
-    marginBottom: 8,
+    fontSize: 16,
+    marginBottom: Spacing[1],
   },
   uploadSubtitle: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
     textAlign: 'center',
-    lineHeight: 20,
-  },
-  fileTypeRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: Spacing[6],
-  },
-  fileTypeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: Radius.full,
-  },
-  fileTypeText: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: Spacing[2]
   },
   pickFileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 52,
+    alignSelf: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 28,
     borderRadius: Radius.sm,
-    gap: 8,
-    marginBottom: Spacing[5],
   },
   pickFileBtnText: {
     fontFamily: Typography.fonts.display,
-    fontSize: 15,
-  },
-  pasteSection: {
-    borderRadius: Radius.md,
-    padding: Spacing[4],
-  },
-  pasteLabel: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 14,
-    marginBottom: 8,
-  },
-  pasteInput: {
-    minHeight: 160,
-    borderRadius: Radius.sm,
-    padding: Spacing[3],
-    fontFamily: Typography.fonts.body,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  parseBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 48,
-    borderRadius: Radius.sm,
-    gap: 8,
-    marginTop: Spacing[3],
-  },
-  parseBtnText: {
-    fontFamily: Typography.fonts.medium,
     fontSize: 15,
   },
   previewHeader: {

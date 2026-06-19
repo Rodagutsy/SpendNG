@@ -29,7 +29,9 @@ import { TransactionModal } from '@/components/TransactionModal';
 import { TransactionItem } from '@/components/ui/TransactionItem';
 import { SMSService } from '@/lib/sms-service';
 import * as ImagePicker from 'expo-image-picker';
-import { recognizeText, extractTransactionInfo } from '@/lib/ocr';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { uploadReceipt } from '@/lib/receipt-upload';
+import { supabase } from '@/lib/supabase';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -48,11 +50,18 @@ export default function HomeScreen() {
   const [bellPos, setBellPos] = useState({ top: 0, right: 0 });
   const [showTxModal, setShowTxModal] = useState(false);
   const [txModalPrefill, setTxModalPrefill] = useState<{ receiptUri?: string; type?: 'credit' | 'debit'; amount?: string; merchant?: string } | null>(null);
+  const [receiptDraft, setReceiptDraft] = useState<{
+    merchant: string | null;
+    amount: number | null;
+    currency: string | null;
+    transaction_date: string | null;
+    tax_amount: number | null;
+    receiptPath: string;
+  } | null>(null);
   const [bannerDismissedAt, setBannerDismissedAt] = useState<number | null>(null);
   const clearedNotificationIds = useNotificationStore((s) => s.clearedIds);
   const [showConnectPrompt, setShowConnectPrompt] = useState(false);
-  const [showFabMenu, setShowFabMenu] = useState(false);
-  const [scanningReceipt, setScanningReceipt] = useState(false);
+  const [scanningReceipt, setScanningReceipt] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHomeTransactions();
@@ -218,6 +227,76 @@ export default function HomeScreen() {
         </View>
       </View>
 
+      {/* Quick Tools */}
+      <View style={styles.quickToolsSection}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.quickToolsRow}>
+          <TouchableOpacity style={[styles.quickToolCard, { backgroundColor: theme.surfaceContainer }]} onPress={() => setShowTxModal(true)} activeOpacity={0.7}>
+            <MaterialIcons name="edit" size={20} color={theme.primary} />
+            <View>
+              <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Manual</Text>
+              <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Entry</Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.quickToolCard, { backgroundColor: theme.surfaceContainer }]} onPress={async () => {
+            setScanningReceipt('Opening camera...');
+            try {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ['images'],
+                quality: 0.8,
+              });
+              if (!result.canceled && result.assets[0]) {
+                const originalUri = result.assets[0].uri;
+                setScanningReceipt('Processing image...');
+                const resized = await manipulateAsync(originalUri, [{ resize: { width: 800 } }], { format: SaveFormat.JPEG, compress: 0.7 });
+                const uri = resized.uri;
+                setScanningReceipt('Uploading receipt...');
+                const { filePath } = await uploadReceipt(uri);
+                setScanningReceipt('Extracting details...');
+                const { data, error } = await supabase.functions.invoke('extract-receipt', {
+                  body: { filePath },
+                });
+                if (error) throw new Error(error.message || 'Edge function error');
+                setReceiptDraft({
+                  merchant: data.merchant ?? null,
+                  amount: data.amount ?? null,
+                  currency: data.currency ?? null,
+                  transaction_date: data.transaction_date ?? null,
+                  tax_amount: data.tax_amount ?? null,
+                  receiptPath: filePath,
+                });
+                setShowTxModal(true);
+              }
+            } catch (e: any) {
+              console.error('Receipt scan failed:', e);
+            } finally {
+              setScanningReceipt(null);
+            }
+          }} activeOpacity={0.7}>
+            <MaterialIcons name="camera-alt" size={20} color="#E65100" />
+            <View>
+              <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Scan</Text>
+              <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Receipt</Text>
+            </View>
+            {scanningReceipt && (
+              <View style={{ position: 'absolute', alignItems: 'center', gap: 2 }}>
+                <ActivityIndicator size="small" color={theme.primary} />
+                <Text style={{ fontFamily: Typography.fonts.body, fontSize: 8, color: theme.primary, textAlign: 'center' }}>{scanningReceipt}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.quickToolCard, { backgroundColor: theme.surfaceContainer }]} onPress={() => router.push('/statement-import' as any)} activeOpacity={0.7}>
+            <MaterialIcons name="description" size={20} color="#2E7D32" />
+            <View>
+              <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Upload</Text>
+              <Text style={[styles.quickToolLabel, { color: theme.onSurface }]}>Statement</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Tax Filing Alert */}
       {bannerVisible && (
         <ImageBackground
@@ -252,7 +331,7 @@ export default function HomeScreen() {
       )}
 
     </View>
-  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications, bannerVisible, bannerOverlayColor, bannerTitle, bannerCta, hasStartedReview, bannerDismissedAt]);
+  ), [insets.top, router, moneyIn, moneyOut, netBalance, transactionCount, userName, openNotifications, bannerVisible, bannerOverlayColor, bannerTitle, bannerCta, hasStartedReview, bannerDismissedAt, theme, scanningReceipt]);
 
   return (
     <>
@@ -334,85 +413,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Floating Action Button (FAB) */}
-        <TouchableOpacity
-          style={[styles.fab, Shadows.large]}
-          onPress={() => setShowFabMenu(true)}
-          activeOpacity={0.85}
-        >
-          <MaterialIcons name="add" size={24} color={theme.onPrimary} />
-        </TouchableOpacity>
-
-        <TransactionModal visible={showTxModal} onClose={() => { setShowTxModal(false); setTxModalPrefill(null); }} initialReceiptUri={txModalPrefill?.receiptUri} />
-
-        {/* FAB Menu */}
-        {showFabMenu && (
-          <TouchableOpacity style={styles.fabOverlay} activeOpacity={1} onPress={() => setShowFabMenu(false)}>
-            <View style={[styles.fabMenu, { backgroundColor: theme.surface }]}>
-              <Text style={[styles.fabMenuTitle, { color: theme.onSurface }]}>Add Transaction</Text>
-
-              <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setShowFabMenu(false); setShowTxModal(true); }} activeOpacity={0.7}>
-                <View style={[styles.fabMenuIcon, { backgroundColor: theme.primaryContainer }]}>
-                  <MaterialIcons name="edit" size={20} color={theme.primary} />
-                </View>
-                <View style={styles.fabMenuTextWrap}>
-                  <Text style={[styles.fabMenuLabel, { color: theme.onSurface }]}>Manual Entry</Text>
-                  <Text style={[styles.fabMenuDesc, { color: theme.outline }]}>Type in transaction details</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.fabMenuItem} onPress={async () => {
-                setShowFabMenu(false);
-                setScanningReceipt(true);
-                try {
-                  const result = await ImagePicker.launchCameraAsync({
-                    mediaTypes: ['images'],
-                    allowsEditing: true,
-                    aspect: [4, 3],
-                    quality: 0.8,
-                  });
-                  if (!result.canceled && result.assets[0]) {
-                    const uri = result.assets[0].uri;
-                    const recognizedText = await recognizeText(uri);
-                    const info = extractTransactionInfo(recognizedText);
-                    setTxModalPrefill({
-                      receiptUri: uri,
-                      type: info.transactionType ?? 'debit',
-                      amount: info.amount ? info.amount.toFixed(2) : undefined,
-                      merchant: info.merchant ?? undefined,
-                    });
-                    setShowTxModal(true);
-                  }
-                } catch {
-                  // fallback to blank modal
-                  setTxModalPrefill({ receiptUri: undefined });
-                  setShowTxModal(true);
-                } finally {
-                  setScanningReceipt(false);
-                }
-              }} activeOpacity={0.7}>
-                <View style={[styles.fabMenuIcon, { backgroundColor: '#FFF3E0' }]}>
-                  <MaterialIcons name="camera-alt" size={20} color="#E65100" />
-                </View>
-                <View style={styles.fabMenuTextWrap}>
-                  <Text style={[styles.fabMenuLabel, { color: theme.onSurface }]}>Scan Receipt</Text>
-                  <Text style={[styles.fabMenuDesc, { color: theme.outline }]}>Snap a photo to auto-fill</Text>
-                </View>
-                {scanningReceipt && <ActivityIndicator size="small" color={theme.primary} />}
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.fabMenuItem} onPress={() => { setShowFabMenu(false); router.push('/statement-import' as any); }} activeOpacity={0.7}>
-                <View style={[styles.fabMenuIcon, { backgroundColor: '#E8F5E9' }]}>
-                  <MaterialIcons name="description" size={20} color="#2E7D32" />
-                </View>
-                <View style={styles.fabMenuTextWrap}>
-                  <Text style={[styles.fabMenuLabel, { color: theme.onSurface }]}>Upload Statement</Text>
-                  <Text style={[styles.fabMenuDesc, { color: theme.outline }]}>Import CSV or PDF bank statement</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        )}
+        <TransactionModal visible={showTxModal} onClose={() => { setShowTxModal(false); setTxModalPrefill(null); setReceiptDraft(null); }} initialReceiptUri={txModalPrefill?.receiptUri} receiptDraft={receiptDraft} />
 
         {/* Connect source prompt */}
         <Modal visible={showConnectPrompt} transparent animationType="fade" onRequestClose={() => setShowConnectPrompt(false)}>
@@ -470,8 +471,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
-    marginTop: 16,
+    marginBottom: Spacing[4],
   },
   welcomeLabel: {
     fontFamily: Typography.fonts.body,
@@ -524,10 +524,13 @@ const styles = StyleSheet.create({
   },
   moneyContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
+    paddingLeft: 24,
+    paddingRight: 24,
+    justifyContent: "center",
+    alignItems: "center",
     marginTop: 24,
     height: 104,
-    gap: Spacing[1],
+    gap: Spacing[3],
   },
   moneyHalf: {
     padding: 16,
@@ -744,17 +747,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.light.primary,
   },
-  fab: {
-    position: 'absolute',
-    bottom: Spacing[6],
-    right: Spacing[6],
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.light.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   nairaSymbol: {
     fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     fontWeight: '500',
@@ -775,53 +767,6 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.medium,
     fontSize: 10,
     color: Colors.light.surface,
-  },
-  fabOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  fabMenu: {
-    width: '85%',
-    maxWidth: 340,
-    borderRadius: 20,
-    padding: 20,
-    gap: 4,
-  },
-  fabMenuTitle: {
-    fontFamily: Typography.fonts.display,
-    fontSize: 18,
-    marginBottom: 8,
-  },
-  fabMenuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderRadius: Radius.sm,
-    gap: 12,
-  },
-  fabMenuIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fabMenuTextWrap: {
-    flex: 1,
-  },
-  fabMenuLabel: {
-    fontFamily: Typography.fonts.medium,
-    fontSize: 15,
-  },
-  fabMenuDesc: {
-    fontFamily: Typography.fonts.body,
-    fontSize: 12,
-    marginTop: 1,
   },
   connectOverlay: {
     flex: 1,
@@ -847,20 +792,21 @@ const styles = StyleSheet.create({
   },
   connectTitle: {
     fontFamily: Typography.fonts.display,
-    fontSize: 20,
+    fontSize: 18,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: Spacing[1],
   },
   connectMessage: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 24,
+    marginBottom: Spacing[2],
   },
   connectActions: {
-    width: '100%',
-    gap: 10,
+    padding: Spacing[4],
+    gap: Spacing[2],
+    width: '70%',
   },
   connectPrimaryBtn: {
     height: 48,
@@ -874,10 +820,35 @@ const styles = StyleSheet.create({
   },
   connectSkipBtn: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: Spacing[1],
   },
   connectSkipText: {
     fontFamily: Typography.fonts.body,
     fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  quickToolsSection: {
+    marginTop: Spacing[6],
+    marginHorizontal: Spacing[5],
+  },
+  quickToolsRow: {
+    flexDirection: 'row',
+    gap: Spacing[3],
+  },
+  quickToolCard: {
+    flex: 1,
+    height: 88,
+    width: 88,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: "center",
+    gap: Spacing[1],
+  },
+  quickToolLabel: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 18,
+    letterSpacing: -0.5
   },
 });

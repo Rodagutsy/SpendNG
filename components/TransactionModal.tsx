@@ -31,6 +31,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { CalendarModal } from '@/components/CalendarModal';
 import { recognizeText, extractTransactionInfo } from '@/lib/ocr';
+import { uploadReceipt } from '@/lib/receipt-upload';
 import { getNairaRate, CURRENCY_SYMBOLS } from '@/lib/exchange-rate';
 
 const PAYMENT_METHODS = [
@@ -51,9 +52,17 @@ interface TransactionModalProps {
   onClose: () => void;
   transaction?: TransactionRecord;
   initialReceiptUri?: string;
+  receiptDraft?: {
+    merchant: string | null;
+    amount: number | null;
+    currency: string | null;
+    transaction_date: string | null;
+    tax_amount: number | null;
+    receiptPath: string;
+  } | null;
 }
 
-export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onClose, transaction, initialReceiptUri }) => {
+export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onClose, transaction, initialReceiptUri, receiptDraft }) => {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { height: windowHeight } = useWindowDimensions();
@@ -122,10 +131,22 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
       setWhtAmountText(transaction.whtAmount ? String(transaction.whtAmount) : '');
       setWhtClientName(transaction.whtClientName ?? '');
       setCurrency(transaction.currency ?? 'NGN');
+    } else if (receiptDraft && visible) {
+      setStep(2);
+      setType('debit');
+      setName(receiptDraft.merchant ?? '');
+      setAmount(receiptDraft.amount ? String(receiptDraft.amount) : '');
+      if (receiptDraft.transaction_date) {
+        const parts = receiptDraft.transaction_date.split('-');
+        if (parts.length === 3) {
+          setDateText(`${parts[2]}/${parts[1]}/${parts[0]}`);
+        }
+      }
+      if (receiptDraft.currency) setCurrency(receiptDraft.currency);
     } else if (initialReceiptUri && visible && !transaction) {
       setReceiptUri(initialReceiptUri);
     }
-  }, [transaction, visible, initialReceiptUri]);
+  }, [transaction, visible, initialReceiptUri, receiptDraft]);
 
   useEffect(() => {
     if (!isEditing && category) {
@@ -318,6 +339,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ visible, onC
             originalMessage: null,
             isFlaggedForReview: false,
             receiptImageUri: receiptUri,
+            receiptPath: receiptDraft?.receiptPath ?? null,
             whtAmount: null,
             whtClientName: null,
             contentHash,

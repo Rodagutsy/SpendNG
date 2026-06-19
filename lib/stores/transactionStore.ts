@@ -29,6 +29,7 @@ export interface TransactionRecord {
   isFlaggedForReview: boolean;
   notes: string | null;
   receiptImageUri: string | null;
+  receiptPath: string | null;
   whtAmount: number | null;
   whtClientName: string | null;
   isSynced: boolean;
@@ -56,7 +57,7 @@ interface TransactionState {
 
   fetchTransactions: (filters?: TransactionFilters) => Promise<void>;
   fetchHomeTransactions: () => Promise<void>;
-  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'contentHash' | 'originalCurrency' | 'originalAmount' | 'exchangeRate' | 'amountInNaira' | 'rateSource' | 'rateDate'> & { contentHash: string; originalCurrency?: string | null; originalAmount?: number | null; exchangeRate?: number | null; amountInNaira?: number | null; rateSource?: string | null; rateDate?: number | null }) => Promise<TransactionRecord>;
+  addTransaction: (data: Omit<TransactionRecord, 'id' | 'createdAt' | 'updatedAt' | 'isDuplicate' | 'isSynced' | 'parseConfidence' | 'contentHash' | 'originalCurrency' | 'originalAmount' | 'exchangeRate' | 'amountInNaira' | 'rateSource' | 'rateDate'> & { contentHash: string; originalCurrency?: string | null; originalAmount?: number | null; exchangeRate?: number | null; amountInNaira?: number | null; rateSource?: string | null; rateDate?: number | null; receiptPath?: string | null }) => Promise<TransactionRecord>;
   updateCategory: (id: string, categoryId: string) => Promise<void>;
   updateNotes: (id: string, notes: string) => Promise<void>;
   updateTransaction: (id: string, data: Partial<TransactionRecord>) => Promise<void>;
@@ -100,6 +101,7 @@ function mapRowToRecord(row: any): TransactionRecord {
     isFlaggedForReview: row.is_flagged_for_review,
     notes: row.notes,
     receiptImageUri: row.receipt_image_uri ?? null,
+    receiptPath: row.receipt_path ?? null,
     whtAmount: row.wht_amount ?? null,
     whtClientName: row.wht_client_name ?? null,
     isSynced: row.is_synced,
@@ -215,6 +217,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       parse_confidence: null,
       confidence_level: data.confidenceLevel ?? null,
       receipt_image_uri: data.receiptImageUri ?? null,
+      receipt_path: data.receiptPath ?? null,
       wht_amount: data.whtAmount ?? null,
       wht_client_name: data.whtClientName ?? null,
       tax_classification_id: data.taxClassificationId ?? null,
@@ -300,6 +303,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (data.isDuplicate !== undefined) updateData.is_duplicate = data.isDuplicate;
     if (data.confidenceLevel !== undefined) updateData.confidence_level = data.confidenceLevel;
     if (data.receiptImageUri !== undefined) updateData.receipt_image_uri = data.receiptImageUri;
+    if (data.receiptPath !== undefined) updateData.receipt_path = data.receiptPath;
     if (data.whtAmount !== undefined) updateData.wht_amount = data.whtAmount;
     if (data.whtClientName !== undefined) updateData.wht_client_name = data.whtClientName;
     if (data.taxClassificationId !== undefined) updateData.tax_classification_id = data.taxClassificationId;

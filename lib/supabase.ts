@@ -108,6 +108,33 @@ function makeMockClient() {
       stopAutoRefresh: () => {},
     },
     from: (_table: string) => mockQuery,
+    functions: {
+      invoke: async (name: string, _args: any) => {
+        if (name === 'extract-receipt') {
+          return {
+            data: {
+              merchant: 'Mock Store',
+              amount: 5000,
+              currency: 'NGN',
+              transaction_date: '2026-06-19',
+              tax_amount: null,
+            },
+            error: null,
+          };
+        }
+        return { data: null, error: new Error('Mock mode — configure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY') };
+      },
+    },
+      storage: {
+        from: (_bucket: string) => ({
+          upload: async (path: string, _file: any, _opts?: any) => {
+            return { data: { path }, error: null };
+          },
+          createSignedUrl: async (_path: string, _expiresIn: number) => {
+            return { data: { signedUrl: 'https://mock.signed.url/receipt.jpg' }, error: null };
+          },
+        }),
+      },
   };
 }
 

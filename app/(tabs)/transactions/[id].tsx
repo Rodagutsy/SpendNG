@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { useMemo, useState, useEffect } from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { getReceiptUrl } from '@/lib/receipt-upload';
 
 export default function TransactionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -30,6 +31,16 @@ export default function TransactionDetailScreen() {
     () => (transaction ? getCategoryById(transaction.categoryId) : undefined),
     [transaction, categories],
   );
+
+  const [receiptSignedUrl, setReceiptSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (transaction?.receiptPath) {
+      getReceiptUrl(transaction.receiptPath).then(setReceiptSignedUrl);
+    } else {
+      setReceiptSignedUrl(null);
+    }
+  }, [transaction?.receiptPath]);
 
   const { showAlert } = useAlert();
   const [showEditModal, setShowEditModal] = useState(false);
@@ -254,9 +265,9 @@ export default function TransactionDetailScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: theme.outline }]}>Receipt</Text>
           <View style={[styles.card, { backgroundColor: theme.surface }]}>
-            {transaction.receiptImageUri ? (
+            {(receiptSignedUrl || transaction.receiptImageUri) ? (
               <View style={styles.receiptDetailWrap}>
-                <Image source={{ uri: transaction.receiptImageUri }} style={[styles.receiptDetailImage, { borderWidth: 1, borderColor: theme.outlineVariant }]} />
+                <Image source={{ uri: receiptSignedUrl ?? transaction.receiptImageUri! }} style={[styles.receiptDetailImage, { borderWidth: 1, borderColor: theme.outlineVariant }]} resizeMode="cover" />
                 <TouchableOpacity style={styles.receiptDetailBtn} onPress={handlePickReceipt} activeOpacity={0.8}>
                   <MaterialIcons name="camera-alt" size={16} color={theme.primary} />
                   <Text style={[styles.receiptDetailBtnText, { color: theme.primary }]}>Replace</Text>
