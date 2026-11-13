@@ -11,9 +11,10 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://tyjxunemmgjwbdpicirb.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_Zmivh-5hWddrXlIcIjcXhw_cxvC84r6",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "862571420427-q1v6bn1476n8s555bolntegolpjl3fik.apps.googleusercontent.com"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gtbmlolnkdoureolchov.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_5YQhqwnlpj_ytZIO6I0QdQ_2ZRKUzKN",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "862571420427-q1v6bn1476n8s555bolntegolpjl3fik.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "862571420427-m6pn2eb5mk5mcbm9n9nrpcd203sc15ec.apps.googleusercontent.com"
       }
     },
     "apkPreview": {
@@ -22,13 +23,20 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://tyjxunemmgjwbdpicirb.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_Zmivh-5hWddrXlIcIjcXhw_cxvC84r6",
-        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "862571420427-q1v6bn1476n8s555bolntegolpjl3fik.apps.googleusercontent.com"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gtbmlolnkdoureolchov.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_5YQhqwnlpj_ytZIO6I0QdQ_2ZRKUzKN",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "862571420427-q1v6bn1476n8s555bolntegolpjl3fik.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "862571420427-m6pn2eb5mk5mcbm9n9nrpcd203sc15ec.apps.googleusercontent.com"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gtbmlolnkdoureolchov.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_5YQhqwnlpj_ytZIO6I0QdQ_2ZRKUzKN",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "862571420427-q1v6bn1476n8s555bolntegolpjl3fik.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID": "862571420427-m6pn2eb5mk5mcbm9n9nrpcd203sc15ec.apps.googleusercontent.com"
+      }
     }
   },
   "submit": {
