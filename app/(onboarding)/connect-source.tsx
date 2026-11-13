@@ -38,28 +38,32 @@ export default function ConnectSourceScreen() {
   const { translateY: durationTranslateY, panResponder: durationPanResponder } = useSwipeToClose(closeDurationModal);
 
   const startSMSScan = useCallback(async (startDate: number) => {
+    useUIStore.getState().setImportProgress(null);
     setScanLabel('Reading SMS messages...');
     setScreenState('scanning');
     try {
       const messages = await importHistoricalSms(startDate);
-      if (messages.length === 0) {
-        showAlert({ title: 'No Messages', message: 'No SMS messages found in the selected date range.' });
+      const alerts = messages
+        .filter((msg) => IngestionEngine.isTransactionAlert(msg.body, msg.address))
+        .map((msg) => ({
+          body: msg.body,
+          sender: msg.address,
+          timestamp: msg.date,
+          sourceChannel: 'sms' as const,
+        }));
+
+      if (alerts.length === 0) {
+        showAlert({ title: 'No Bank Alerts', message: 'No bank transaction alerts found in the selected date range.' });
         setScreenState('success');
         return;
       }
 
-      const alerts = messages.map((msg) => ({
-        body: msg.body,
-        sender: msg.address,
-        timestamp: msg.date,
-        sourceChannel: 'sms' as const,
-      }));
-
+      setScanLabel('Importing bank alerts...');
       await IngestionEngine.processBatch(alerts);
       setScreenState('success');
     } catch (e) {
       console.warn('SMS scan error:', e);
-      showAlert({ title: 'SMS Scan Error', message: 'SMS scanning encountered an error. You can try again from Settings later.' });
+      showAlert({ title: 'SMS Scan Error', message: 'SMS scanning encountered an issue. You can try again from Settings later.' });
       setScreenState('success');
     }
   }, []);
@@ -174,13 +178,14 @@ export default function ConnectSourceScreen() {
 
   // Scanning state
   if (screenState === 'scanning') {
+    const remaining = Math.max(0, found - processed);
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
         <View style={styles.content}>
           <ActivityIndicator size="large" color={theme.primary} />
           <Text style={[styles.title, { color: theme.onBackground }]}>{scanLabel}</Text>
 
-          {found > 0 && (
+          {found > 0 ? (
             <View style={styles.progressSection}>
               <View style={[styles.progressBarBg, { backgroundColor: theme.surfaceContainer }]}>
                 <View
@@ -188,9 +193,13 @@ export default function ConnectSourceScreen() {
                 />
               </View>
               <Text style={[styles.progressText, { color: theme.outline }]}>
-                {processed} of {found} scanned ({percent}%)
+                {percent}% complete · {processed} of {found} processed ({remaining} left)
               </Text>
             </View>
+          ) : (
+            <Text style={[styles.progressText, { color: theme.outline, marginTop: 12 }]}>
+              Scanning your inbox for bank alerts...
+            </Text>
           )}
         </View>
       </SafeAreaView>

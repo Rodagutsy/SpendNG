@@ -9,12 +9,48 @@ import { useCategoryDefaultStore } from './stores/categoryDefaultStore';
 import { useUIStore } from './stores/uiStore';
 import { getNairaRate, detectCurrency, CURRENCY_SYMBOLS } from './exchange-rate';
 
+const NON_BANK_SENDER_PATTERN =
+  /^(?:mtn(?:-ng)?|airtel(?:-ng)?|glo(?:-ng)?|9mobile|etisalat|spectranet|smile|dstv|gotv|startimes|jumia|konga|uber|bolt|glovo|chowdeck|whatsapp|google|facebook|instagram|tiktok)$/i;
+const PHONE_NUMBER_SENDER_PATTERN = /^(?:\+?234|0)[789]\d{9}$/;
+const NON_TRANSACTION_PATTERN =
+  /\b(?:otp|one[\s-]*time\s*(?:pin|password|code)|verification\s*code|auth(?:entication)?\s*code|do\s+not\s+share|never\s+share|expires?\s+in\s+\d+|insufficient\s+(?:funds|balance)|transaction\s+(?:failed|declined)|unsuccessful)\b/i;
+const TELCO_PROMO_PATTERN =
+  /\b(?:recharge|recharged|airtime|data\s*bundle|tariff|bonus|dial\s+\*\d+|valid\s+for\s+\d+\s+days?|unsubscribe|opt[\s-]*out|mb|gb|pin:\s*\d{4,})\b/i;
+
 export class IngestionEngine {
-  static isTransactionAlert(rawBody: string): boolean {
-    const lower = rawBody.toLowerCase();
-    const hasTransactionKeyword = /(?:debit|credit|dr|cr|spent|received|pos|purchase|withdrawal|transfer)/i.test(lower);
-    const hasAmount = /(?:ngn|₦|\$|£|€|usd|gbp|eur|\d+\.\d{2})/i.test(lower);
-    return hasTransactionKeyword && hasAmount;
+  static isTransactionAlert(rawBody: string, sender?: string): boolean {
+    const trimmedSender = sender?.trim() ?? '';
+    if (
+      trimmedSender &&
+      (NON_BANK_SENDER_PATTERN.test(trimmedSender) || PHONE_NUMBER_SENDER_PATTERN.test(trimmedSender))
+    ) {
+      return false;
+    }
+
+    if (NON_TRANSACTION_PATTERN.test(rawBody)) {
+      return false;
+    }
+
+    const hasTransactionKeyword =
+      /\b(?:debit|credit|dr|cr|spent|received|pos|purchase|withdrawal|transfer|credited|debited|payment)\b/i.test(rawBody);
+    if (!hasTransactionKeyword) {
+      return false;
+    }
+
+    const isKnownBank = trimmedSender ? Parser.identifyBank(trimmedSender) !== null : false;
+    if (isKnownBank) {
+      return /(?:ngn|₦|\$|£|€|usd|gbp|eur|\d[\d,]*\.\d{2})/i.test(rawBody);
+    }
+
+    if (TELCO_PROMO_PATTERN.test(rawBody)) {
+      return false;
+    }
+
+    const hasCurrency = /(?:ngn|₦|\$|£|€|usd|gbp|eur)/i.test(rawBody);
+    const hasBankAlertStructure =
+      /\b(?:acct|account|avail(?:able)?\s*bal(?:ance)?|bal(?:ance)?|amt|amount|credited|debited|debit\s*alert|credit\s*alert|dr|cr)\b/i.test(rawBody);
+
+    return hasCurrency && hasBankAlertStructure;
   }
 
   static async processAlert(
@@ -25,7 +61,7 @@ export class IngestionEngine {
   ): Promise<{ success: boolean; transactionId?: string }> {
     const boundaryHash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawBody);
     try {
-      if (sourceChannel === 'sms' && !this.isTransactionAlert(rawBody)) {
+      if (sourceChannel === 'sms' && !this.isTransactionAlert(rawBody, sender)) {
         return { success: false };
       }
 
@@ -107,10 +143,12 @@ export class IngestionEngine {
       });
 
       if (newTransaction) {
-        const def = useCategoryDefaultStore.getState().getDefaultForCategory(category.categoryId);
-        if (def?.defaultTaxClassificationId) {
+        const autoTaxClass = isSelfTransfer
+          ? (parseResult.transactionType === 'credit' ? 'non-taxable-receipt' : 'personal-expense')
+          : useCategoryDefaultStore.getState().getDefaultForCategory(category.categoryId)?.defaultTaxClassificationId;
+        if (autoTaxClass) {
           await useTransactionStore.getState().updateTransaction(newTransaction.id, {
-            taxClassificationId: def.defaultTaxClassificationId,
+            taxClassificationId: autoTaxClass,
           });
         }
       }
@@ -188,6 +226,8 @@ export class IngestionEngine {
           row.amount,
         );
 
+        const isSelfTransfer = await CategorizationEngine.detectSelfTransfer(row.amount, dateMs);
+
         const newTransaction = await useTransactionStore.getState().addTransaction({
           amount: row.amount,
           currency: 'NGN',
@@ -200,8 +240,8 @@ export class IngestionEngine {
           availableBalance: row.balance,
           sourceChannel: 'statement',
           originalMessage: null,
-          isFlaggedForReview: category.isFlagged || false,
-          notes: null,
+          isFlaggedForReview: category.isFlagged || isSelfTransfer,
+          notes: isSelfTransfer ? 'Internal Transfer' : null,
           taxClassificationId: null,
           confidenceLevel: 'high',
           receiptImageUri: null,
@@ -211,10 +251,12 @@ export class IngestionEngine {
         });
 
         if (newTransaction) {
-          const def = useCategoryDefaultStore.getState().getDefaultForCategory(category.categoryId);
-          if (def?.defaultTaxClassificationId) {
+          const autoTaxClass = isSelfTransfer
+            ? (row.type === 'credit' ? 'non-taxable-receipt' : 'personal-expense')
+            : useCategoryDefaultStore.getState().getDefaultForCategory(category.categoryId)?.defaultTaxClassificationId;
+          if (autoTaxClass) {
             await useTransactionStore.getState().updateTransaction(newTransaction.id, {
-              taxClassificationId: def.defaultTaxClassificationId,
+              taxClassificationId: autoTaxClass,
             });
           }
         }

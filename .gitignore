@@ -42,3 +42,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# local tax research docs
+tax-research.md
+nigeria-tax-legal-spec.md

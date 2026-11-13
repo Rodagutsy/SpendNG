@@ -32,6 +32,10 @@ export interface TransactionRecord {
   receiptPath: string | null;
   whtAmount: number | null;
   whtClientName: string | null;
+  vatChargedOrDutyPaid?: boolean | null;
+  businessUsePct?: number | null;
+  foreignTaxWithheld?: number | null;
+  payerTin?: string | null;
   isSynced: boolean;
   createdAt: number;
   updatedAt: number;
@@ -104,6 +108,10 @@ function mapRowToRecord(row: any): TransactionRecord {
     receiptPath: row.receipt_path ?? null,
     whtAmount: row.wht_amount ?? null,
     whtClientName: row.wht_client_name ?? null,
+    vatChargedOrDutyPaid: row.vat_charged_or_duty_paid ?? true,
+    businessUsePct: row.business_use_pct != null ? Number(row.business_use_pct) : 100,
+    foreignTaxWithheld: row.foreign_tax_withheld != null ? Number(row.foreign_tax_withheld) : 0,
+    payerTin: row.payer_tin ?? null,
     isSynced: row.is_synced,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -220,6 +228,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       receipt_path: data.receiptPath ?? null,
       wht_amount: data.whtAmount ?? null,
       wht_client_name: data.whtClientName ?? null,
+      vat_charged_or_duty_paid: data.vatChargedOrDutyPaid ?? true,
+      business_use_pct: data.businessUsePct ?? 100,
+      foreign_tax_withheld: data.foreignTaxWithheld ?? 0,
+      payer_tin: data.payerTin ?? null,
       tax_classification_id: data.taxClassificationId ?? null,
       is_duplicate: false,
       is_flagged_for_review: data.isFlaggedForReview || false,
@@ -306,6 +318,10 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
     if (data.receiptPath !== undefined) updateData.receipt_path = data.receiptPath;
     if (data.whtAmount !== undefined) updateData.wht_amount = data.whtAmount;
     if (data.whtClientName !== undefined) updateData.wht_client_name = data.whtClientName;
+    if (data.vatChargedOrDutyPaid !== undefined) updateData.vat_charged_or_duty_paid = data.vatChargedOrDutyPaid;
+    if (data.businessUsePct !== undefined) updateData.business_use_pct = data.businessUsePct;
+    if (data.foreignTaxWithheld !== undefined) updateData.foreign_tax_withheld = data.foreignTaxWithheld;
+    if (data.payerTin !== undefined) updateData.payer_tin = data.payerTin;
     if (data.taxClassificationId !== undefined) updateData.tax_classification_id = data.taxClassificationId;
 
     const { error } = await supabase.from('transactions')

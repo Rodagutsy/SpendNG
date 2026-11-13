@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Platform, Animated } from 'react-native';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useSwipeToClose } from '@/hooks/use-swipe-to-close';
@@ -16,6 +16,7 @@ interface StepWhtReviewProps {
 export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, onComplete }) => {
   const { translateY, panResponder } = useSwipeToClose(onClose);
   const whtCredits = useTaxStore((s) => s.whtCredits);
+  const taxYear = useTaxStore((s) => s.taxYear);
   const addWhtCredit = useTaxStore((s) => s.addWhtCredit);
   const removeWhtCredit = useTaxStore((s) => s.removeWhtCredit);
   const setStepDone = useTaxStore((s) => s.setStepDone);
@@ -28,35 +29,63 @@ export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, 
   const [grossAmount, setGrossAmount] = useState('');
   const [whtAmount, setWhtAmount] = useState('');
   const [whtDate, setWhtDate] = useState('');
+  const [payerTin, setPayerTin] = useState('');
+  const [creditNoteRef, setCreditNoteRef] = useState('');
 
-  const totalWht = whtCredits.reduce((sum, c) => sum + c.whtAmount, 0);
+  const yearWhtCredits = useMemo(
+    () =>
+      whtCredits.filter(
+        (c) => (c.taxYear ?? new Date(c.transactionDate).getFullYear()) === taxYear
+      ),
+    [whtCredits, taxYear]
+  );
 
-  const whtFromTransactions = useState(() => {
+  const whtFromTransactions = useMemo(() => {
     return transactions
-      .filter((t) => t.transactionType === 'credit' && t.merchantName)
-      .map((t) => ({
-        id: `auto-${t.id}`,
-        clientName: t.merchantName ?? 'Unknown',
-        grossAmount: t.amount,
-        whtAmount: 0,
-        netAmount: t.amount,
-        transactionDate: t.transactionDate,
-        transactionId: t.id,
-      }));
-  })[0];
+      .filter(
+        (t) =>
+          !t.isDuplicate &&
+          t.transactionType === 'credit' &&
+          new Date(t.transactionDate).getFullYear() === taxYear &&
+          ((t.whtAmount ?? 0) > 0 ||
+            (t.foreignTaxWithheld ?? 0) > 0 ||
+            t.taxClassificationId === 'wht-credit')
+      )
+      .map((t) => {
+        const deducted = (t.whtAmount ?? 0) + (t.foreignTaxWithheld ?? 0);
+        return {
+          id: `auto-${t.id}`,
+          clientName: t.merchantName ?? 'Unknown',
+          grossAmount: t.amount + deducted,
+          whtAmount: deducted,
+          netAmount: t.amount,
+          transactionDate: t.transactionDate,
+          transactionId: t.id,
+          isForeign: (t.foreignTaxWithheld ?? 0) > 0 && (t.whtAmount ?? 0) === 0,
+        };
+      });
+  }, [transactions, taxYear]);
+
+  const totalWht =
+    yearWhtCredits.reduce((sum, c) => sum + c.whtAmount, 0) +
+    whtFromTransactions.reduce((sum, c) => sum + c.whtAmount, 0);
 
   const handleAddCredit = () => {
     const gross = parseFloat(grossAmount);
     const wht = parseFloat(whtAmount);
     if (!clientName.trim() || isNaN(gross) || isNaN(wht)) return;
 
+    const parsedDate = whtDate ? new Date(whtDate).getTime() : Date.now();
     const newCredit: WhtCredit = {
       id: Crypto.randomUUID(),
+      taxYear,
       clientName: clientName.trim(),
+      payerTin: payerTin.trim() || null,
+      creditNoteRef: creditNoteRef.trim() || null,
       grossAmount: gross,
       whtAmount: wht,
       netAmount: gross - wht,
-      transactionDate: whtDate ? new Date(whtDate).getTime() : Date.now(),
+      transactionDate: isNaN(parsedDate) ? Date.now() : parsedDate,
       transactionId: null,
     };
     addWhtCredit(newCredit);
@@ -64,6 +93,8 @@ export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, 
     setGrossAmount('');
     setWhtAmount('');
     setWhtDate('');
+    setPayerTin('');
+    setCreditNoteRef('');
     setShowForm(false);
   };
 
@@ -101,13 +132,15 @@ export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, 
 
             <Text style={styles.sectionLabel}>WHT from transactions</Text>
             {whtFromTransactions.length === 0 ? (
-              <Text style={styles.emptyText}>No transaction-based WHT records.</Text>
+              <Text style={styles.emptyText}>No transaction-based WHT records for {taxYear}.</Text>
             ) : (
               whtFromTransactions.map((item) => (
                 <View key={item.id} style={styles.whtRow}>
                   <View style={styles.whtLeft}>
                     <Text style={styles.whtClient} numberOfLines={1}>{item.clientName}</Text>
-                    <Text style={styles.whtDate}>{new Date(item.transactionDate).toLocaleDateString()}</Text>
+                    <Text style={styles.whtDate}>
+                      {new Date(item.transactionDate).toLocaleDateString()} • {item.isForeign ? 'Foreign Tax' : 'WHT'}: ₦{item.whtAmount.toLocaleString()}
+                    </Text>
                   </View>
                   <Text style={styles.whtGross}>₦{item.grossAmount.toLocaleString()}</Text>
                 </View>
@@ -146,10 +179,24 @@ export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, 
                 />
                 <TextInput
                   style={styles.input}
-                  placeholder="Date (DD/MM/YYYY)"
+                  placeholder="Date (YYYY-MM-DD)"
                   placeholderTextColor={Colors.light.outline}
                   value={whtDate}
                   onChangeText={setWhtDate}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Payer TIN (optional)"
+                  placeholderTextColor={Colors.light.outline}
+                  value={payerTin}
+                  onChangeText={setPayerTin}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="WHT Credit Note Ref (optional)"
+                  placeholderTextColor={Colors.light.outline}
+                  value={creditNoteRef}
+                  onChangeText={setCreditNoteRef}
                 />
                 <View style={styles.formActions}>
                   <TouchableOpacity style={styles.cancelFormBtn} onPress={() => setShowForm(false)} activeOpacity={0.8}>
@@ -162,14 +209,17 @@ export const StepWhtReview: React.FC<StepWhtReviewProps> = ({ visible, onClose, 
               </View>
             )}
 
-            {whtCredits.length > 0 && (
+            {yearWhtCredits.length > 0 && (
               <>
                 <Text style={[styles.sectionLabel, { marginTop: Spacing[3] }]}>Manual WHT Credits</Text>
-                {whtCredits.map((c) => (
+                {yearWhtCredits.map((c) => (
                   <View key={c.id} style={styles.whtRow}>
                     <View style={styles.whtLeft}>
                       <Text style={styles.whtClient} numberOfLines={1}>{c.clientName}</Text>
-                      <Text style={styles.whtDate}>Gross: ₦{c.grossAmount.toLocaleString()} | WHT: ₦{c.whtAmount.toLocaleString()}</Text>
+                      <Text style={styles.whtDate}>
+                        Gross: ₦{c.grossAmount.toLocaleString()} | WHT: ₦{c.whtAmount.toLocaleString()}
+                        {c.creditNoteRef ? ` | Ref: ${c.creditNoteRef}` : ''}
+                      </Text>
                     </View>
                     <TouchableOpacity onPress={() => removeWhtCredit(c.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                       <MaterialIcons name="delete-outline" size={18} color={Colors.main.error} />

@@ -23,12 +23,18 @@ export const StepIncomeReview: React.FC<StepIncomeReviewProps> = ({ visible, onC
   const { getById: getTaxClassById } = useTaxClassificationStore();
   const setStepFlagged = useTaxStore((s) => s.setStepFlagged);
   const setStepDone = useTaxStore((s) => s.setStepDone);
+  const taxYear = useTaxStore((s) => s.taxYear);
 
   const [editTx, setEditTx] = useState<{ id: string; current: string | null } | null>(null);
 
   const incomeTxs = useMemo(() => {
-    return transactions.filter((t) => !t.isDuplicate && t.transactionType === 'credit');
-  }, [transactions]);
+    return transactions.filter(
+      (t) =>
+        !t.isDuplicate &&
+        t.transactionType === 'credit' &&
+        new Date(t.transactionDate).getFullYear() === taxYear
+    );
+  }, [transactions, taxYear]);
 
   const needsAttention = useMemo(() => {
     return incomeTxs.filter((t) => !t.taxClassificationId);

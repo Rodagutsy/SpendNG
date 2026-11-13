@@ -154,7 +154,7 @@ export class SMSService {
       const messages = await module.getInboxMessages(resolvedStart, resolvedEnd);
 
       const alerts = messages
-        .filter((msg: any) => IngestionEngine.isTransactionAlert(msg.body))
+        .filter((msg: any) => IngestionEngine.isTransactionAlert(msg.body, msg.sender))
         .map((msg: any) => ({
           body: msg.body,
           sender: msg.sender,

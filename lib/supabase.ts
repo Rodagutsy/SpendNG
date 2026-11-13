@@ -145,9 +145,17 @@ if (isMock) {
   supabase = makeMockClient();
 } else {
   const { createClient } = require('@supabase/supabase-js');
+  const ssrSafeStorage = {
+    getItem: (key: string) =>
+      typeof window === 'undefined' ? Promise.resolve(null) : AsyncStorage.getItem(key),
+    setItem: (key: string, value: string) =>
+      typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.setItem(key, value),
+    removeItem: (key: string) =>
+      typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.removeItem(key),
+  };
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      storage: AsyncStorage,
+      storage: ssrSafeStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

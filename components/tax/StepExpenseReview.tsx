@@ -6,6 +6,8 @@ import { useTransactionStore, TransactionRecord } from '@/lib/stores/transaction
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
+import { useTaxProfileStore } from '@/lib/stores/taxProfileStore';
+import { CapitalAssetClass } from '@/lib/tax-engine';
 import { TaxClassSheet } from './TaxClassSheet';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
@@ -23,14 +25,32 @@ export const StepExpenseReview: React.FC<StepExpenseReviewProps> = ({ visible, o
   const { getById: getTaxClassById } = useTaxClassificationStore();
   const setStepFlagged = useTaxStore((s) => s.setStepFlagged);
   const setStepDone = useTaxStore((s) => s.setStepDone);
+  const taxYear = useTaxStore((s) => s.taxYear);
+  const assets = useTaxProfileStore((s) => s.assets);
+  const addAsset = useTaxProfileStore((s) => s.addAsset);
 
   const [editTx, setEditTx] = useState<{ id: string; current: string | null } | null>(null);
-  const [assetInfo, setAssetInfo] = useState<Record<string, { name: string; value: string }>>({});
-  const [showAssetField, setShowAssetField] = useState(false);
+  const [assetInfo, setAssetInfo] = useState<
+    Record<
+      string,
+      {
+        name: string;
+        value: string;
+        assetClass: CapitalAssetClass;
+        vatPaid: boolean;
+        saved?: boolean;
+      }
+    >
+  >({});
 
   const expenseTxs = useMemo(() => {
-    return transactions.filter((t) => !t.isDuplicate && t.transactionType === 'debit');
-  }, [transactions]);
+    return transactions.filter(
+      (t) =>
+        !t.isDuplicate &&
+        t.transactionType === 'debit' &&
+        new Date(t.transactionDate).getFullYear() === taxYear
+    );
+  }, [transactions, taxYear]);
 
   const needsAttention = useMemo(() => {
     return expenseTxs.filter((t) => !t.taxClassificationId);
@@ -46,12 +66,36 @@ export const StepExpenseReview: React.FC<StepExpenseReviewProps> = ({ visible, o
     if (!editTx) return;
     await updateTransaction(editTx.id, { taxClassificationId: classificationId } as any);
     if (classificationId === 'business-asset') {
-      setShowAssetField(true);
-      setAssetInfo((prev) => ({ ...prev, [editTx.id]: prev[editTx.id] ?? { name: '', value: '' } }));
-    } else {
-      setShowAssetField(false);
+      const tx = transactions.find((t) => t.id === editTx.id);
+      setAssetInfo((prev) => ({
+        ...prev,
+        [editTx.id]: prev[editTx.id] ?? {
+          name: tx?.merchantName ?? '',
+          value: tx ? String(tx.amount) : '',
+          assetClass: 'class_3_25pct',
+          vatPaid: tx?.vatChargedOrDutyPaid ?? true,
+        },
+      }));
     }
     setEditTx(null);
+  };
+
+  const handleSaveAsset = async (tx: TransactionRecord) => {
+    const draft = assetInfo[tx.id];
+    if (!draft || !draft.name.trim()) return;
+    const costNgn = parseFloat(draft.value) || tx.amount;
+    await addAsset({
+      name: draft.name.trim(),
+      assetClass: draft.assetClass,
+      cost: costNgn,
+      purchaseDate: tx.transactionDate,
+      vatPaid: draft.vatPaid,
+      transactionId: tx.id,
+    });
+    setAssetInfo((prev) => ({
+      ...prev,
+      [tx.id]: { ...prev[tx.id], saved: true },
+    }));
   };
 
   const handleComplete = () => {
@@ -64,7 +108,12 @@ export const StepExpenseReview: React.FC<StepExpenseReviewProps> = ({ visible, o
     const cat = getCategoryById(tx.categoryId);
     const catName = cat?.name ?? 'Unknown';
     const isAsset = tx.taxClassificationId === 'business-asset';
+    const isBusinessExpense = tx.taxClassificationId === 'business-expense';
+    const vatMissing = isBusinessExpense && tx.vatChargedOrDutyPaid === false;
+    const alreadyInAssets = assets.some((a) => a.transactionId === tx.id) || assetInfo[tx.id]?.saved;
     const taxName = tx.taxClassificationId ? getTaxClassById(tx.taxClassificationId)?.name : null;
+    const draft = assetInfo[tx.id];
+
     return (
       <View key={tx.id}>
         <View style={styles.txRow}>
@@ -80,32 +129,116 @@ export const StepExpenseReview: React.FC<StepExpenseReviewProps> = ({ visible, o
                   </Text>
                 </View>
               )}
+              {vatMissing && (
+                <View style={[styles.taxBadge, { backgroundColor: Colors.main.error + '1A' }]}>
+                  <Text style={[styles.taxBadgeText, { color: Colors.main.error }]}>
+                    No VAT (s.21(p))
+                  </Text>
+                </View>
+              )}
+              {isAsset && alreadyInAssets && (
+                <View style={[styles.taxBadge, { backgroundColor: Colors.main.success + '1A' }]}>
+                  <Text style={[styles.taxBadgeText, { color: Colors.main.success }]}>
+                    In Schedule
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.txRight}>
             <Text style={styles.txAmount}>₦{tx.amount.toLocaleString()}</Text>
+            {isAsset && !alreadyInAssets && !draft && (
+              <TouchableOpacity
+                onPress={() =>
+                  setAssetInfo((prev) => ({
+                    ...prev,
+                    [tx.id]: {
+                      name: tx.merchantName ?? '',
+                      value: String(tx.amount),
+                      assetClass: 'class_3_25pct',
+                      vatPaid: tx.vatChargedOrDutyPaid ?? true,
+                    },
+                  }))
+                }
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="add-box" size={18} color={Colors.main.primary} />
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={() => setEditTx({ id: tx.id, current: tx.taxClassificationId })} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <MaterialIcons name="edit" size={16} color={Colors.light.outline} />
             </TouchableOpacity>
           </View>
         </View>
-        {isAsset && assetInfo[tx.id] && (
+        {isAsset && draft && !alreadyInAssets && (
           <View style={styles.assetFields}>
             <TextInput
               style={styles.assetInput}
-              placeholder="Asset name (e.g. Laptop)"
+              placeholder="Asset name (e.g. MacBook Pro)"
               placeholderTextColor={Colors.light.outline}
-              value={assetInfo[tx.id]?.name ?? ''}
+              value={draft.name}
               onChangeText={(v) => setAssetInfo((prev) => ({ ...prev, [tx.id]: { ...prev[tx.id], name: v } }))}
             />
             <TextInput
               style={styles.assetInput}
-              placeholder="Approximate value (₦)"
+              placeholder="Cost (₦)"
               placeholderTextColor={Colors.light.outline}
               keyboardType="numeric"
-              value={assetInfo[tx.id]?.value ?? ''}
+              value={draft.value}
               onChangeText={(v) => setAssetInfo((prev) => ({ ...prev, [tx.id]: { ...prev[tx.id], value: v } }))}
             />
+            <View style={styles.assetClassRow}>
+              {(
+                [
+                  { id: 'class_1_10pct', label: '10% Bldg' },
+                  { id: 'class_2_20pct', label: '20% Plant' },
+                  { id: 'class_3_25pct', label: '25% IT/Veh' },
+                ] as { id: CapitalAssetClass; label: string }[]
+              ).map((opt) => {
+                const selected = draft.assetClass === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    onPress={() =>
+                      setAssetInfo((prev) => ({ ...prev, [tx.id]: { ...prev[tx.id], assetClass: opt.id } }))
+                    }
+                    style={[
+                      styles.assetClassPill,
+                      selected && { backgroundColor: Colors.main.primary, borderColor: Colors.main.primary },
+                    ]}
+                  >
+                    <Text style={[styles.assetClassPillText, selected && { color: '#FFFFFF' }]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.assetActionsRow}>
+              <TouchableOpacity
+                onPress={() =>
+                  setAssetInfo((prev) => ({
+                    ...prev,
+                    [tx.id]: { ...prev[tx.id], vatPaid: !prev[tx.id].vatPaid },
+                  }))
+                }
+                style={styles.vatToggle}
+              >
+                <MaterialIcons
+                  name={draft.vatPaid ? 'check-box' : 'check-box-outline-blank'}
+                  size={18}
+                  color={draft.vatPaid ? Colors.main.success : Colors.light.outline}
+                />
+                <Text style={styles.vatToggleText}>VAT / Import Duty Paid (s.27(2))</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveAssetBtn}
+                onPress={() => handleSaveAsset(tx)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.saveAssetBtnText}>Save Asset</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -318,5 +451,50 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.display,
     fontSize: 15,
     color: Colors.light.onPrimary,
+  },
+  assetClassRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 2,
+  },
+  assetClassPill: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.outlineVariant,
+    alignItems: 'center',
+  },
+  assetClassPillText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 11,
+    color: Colors.light.outline,
+  },
+  assetActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  vatToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  vatToggleText: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 11,
+    color: Colors.light.onSurface,
+  },
+  saveAssetBtn: {
+    backgroundColor: Colors.main.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+  },
+  saveAssetBtnText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 12,
+    color: '#FFFFFF',
   },
 });

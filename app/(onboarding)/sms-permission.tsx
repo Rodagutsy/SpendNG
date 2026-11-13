@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius, Shadows } from '@/constants/Tokens';
@@ -39,6 +39,7 @@ export default function SMSPermissionScreen() {
 
   const handleAllow = async () => {
     if (isIOS) return;
+    useUIStore.getState().setImportProgress(null);
     setLoading(true);
     try {
       const { startDate, endDate } = getDateRange();
@@ -64,6 +65,7 @@ export default function SMSPermissionScreen() {
     const found = importProgress?.found ?? 0;
     const processed = importProgress?.processed ?? 0;
     const percent = found > 0 ? Math.round((processed / found) * 100) : 0;
+    const remaining = Math.max(0, found - processed);
 
     return (
       <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
@@ -72,21 +74,29 @@ export default function SMSPermissionScreen() {
             <MaterialIcons name="sms" size={40} color={theme.primary} />
           </View>
           <Text style={[styles.title, { color: theme.onBackground }]}>Import Bank Alerts</Text>
-          <Text style={[styles.subtitle, { color: theme.outline }]}>Scanning your SMS inbox...</Text>
+          <Text style={[styles.subtitle, { color: theme.outline }]}>
+            {found > 0 ? 'Importing your bank transactions...' : 'Scanning your SMS inbox for bank alerts...'}
+          </Text>
 
-          <View style={styles.progressSection}>
-            <View style={[styles.progressBarBg, { backgroundColor: theme.surfaceContainer }]}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  { backgroundColor: theme.primary, width: `${percent}%` },
-                ]}
-              />
+          {found > 0 ? (
+            <View style={styles.progressSection}>
+              <View style={[styles.progressBarBg, { backgroundColor: theme.surfaceContainer }]}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    { backgroundColor: theme.primary, width: `${percent}%` },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.progressText, { color: theme.outline }]}>
+                {percent}% complete · {processed} of {found} processed ({remaining} left)
+              </Text>
             </View>
-            <Text style={[styles.progressText, { color: theme.outline }]}>
-              {processed} of {found} SMS scanned ({percent}%)
-            </Text>
-          </View>
+          ) : (
+            <View style={styles.progressSection}>
+              <ActivityIndicator size="large" color={theme.primary} />
+            </View>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -115,7 +125,7 @@ export default function SMSPermissionScreen() {
                   key={opt.value}
                   style={[
                     styles.rangeChip,
-                    selectedRange === opt.value && { backgroundColor: theme.primaryContainer, outlineColor: theme.primary, outlineWidth: 1 },
+                    selectedRange === opt.value && { backgroundColor: theme.primaryContainer, borderColor: theme.primary, borderWidth: 1 },
                   ]}
                   onPress={() => setSelectedRange(opt.value)}
                   activeOpacity={0.7}

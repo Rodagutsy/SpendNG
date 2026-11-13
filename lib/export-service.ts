@@ -1,6 +1,9 @@
 import { format } from 'date-fns';
 import { formatCurrency } from './utils';
 import { TransactionRecord } from './stores/transactionStore';
+import { TaxComputationResult } from './tax-engine';
+import { TaxProfileRecord, CapitalAssetRecord } from './stores/taxProfileStore';
+import { WhtCredit } from './stores/taxStore';
 import { File, Paths } from 'expo-file-system/next';
 import * as Sharing from 'expo-sharing';
 import * as Print from 'expo-print';
@@ -19,6 +22,17 @@ export interface ExportOptions {
   endDate: Date;
   transactions: TransactionRecord[];
   userName: string;
+  categoryNames?: Record<string, string>;
+}
+
+export interface TaxFilingPackOptions {
+  taxYear: number;
+  userName: string;
+  profile: TaxProfileRecord;
+  result: TaxComputationResult;
+  transactions: TransactionRecord[];
+  assets: CapitalAssetRecord[];
+  whtCredits: WhtCredit[];
   categoryNames?: Record<string, string>;
 }
 
@@ -623,6 +637,220 @@ export class ExportService {
     await sourceFile.move(new File(filePath));
     onProgress(98);
     return filePath;
+  }
+
+  static async generateTaxFilingPackPDF(options: TaxFilingPackOptions): Promise<string> {
+    const html = this.generateTaxFilingPackHtml(options);
+    const { uri } = await Print.printToFileAsync({ html });
+    const filename = `SpendNG_Tax_Filing_Pack_YA${options.taxYear}_${Date.now()}.pdf`;
+    const filePath = `${Paths.cache.uri}/${filename}`;
+    const sourceFile = new File(uri);
+    await sourceFile.move(new File(filePath));
+    return filePath;
+  }
+
+  private static generateTaxFilingPackHtml(options: TaxFilingPackOptions): string {
+    const { taxYear, userName, profile, result, transactions, assets, whtCredits } = options;
+    const esc = (v: unknown) => this.escapeHTML(v);
+    const fmt = (n: number) => `₦${n.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtDate = (ts: number) => format(new Date(ts), 'MMM dd, yyyy');
+
+    const yearTxns = transactions.filter(
+      (t) => !t.isDuplicate && new Date(t.transactionDate).getFullYear() === taxYear
+    );
+    const foreignTxns = yearTxns.filter(
+      (t) => t.transactionType === 'credit' && t.originalCurrency && t.originalCurrency !== 'NGN'
+    );
+    const excludedTxns = yearTxns.filter(
+      (t) =>
+        t.transactionType === 'credit' &&
+        (t.taxClassificationId === 'non-taxable' ||
+          t.taxClassificationId === 'self-transfer' ||
+          t.taxClassificationId === 'loan-received' ||
+          t.taxClassificationId === 'capital-injection' ||
+          t.taxClassificationId === 'final-wht-interest')
+    );
+
+    const bandRows = result.bandBreakdown
+      .map(
+        (b) => `<tr>
+          <td>${esc(b.label)}</td>
+          <td class="amt">${(b.rate * 100).toFixed(0)}%</td>
+          <td class="amt">${fmt(b.taxableInBand)}</td>
+          <td class="amt">${fmt(b.taxInBand)}</td>
+        </tr>`
+      )
+      .join('');
+
+    const fxRows =
+      foreignTxns.length === 0
+        ? `<tr><td colspan="5" class="muted">No foreign currency inflows recorded for ${taxYear}.</td></tr>`
+        : foreignTxns
+            .map(
+              (t) => `<tr>
+                <td>${fmtDate(t.transactionDate)}</td>
+                <td>${esc(t.merchantName || '-')}</td>
+                <td>${esc(t.originalCurrency)} ${(t.originalAmount ?? 0).toLocaleString()}</td>
+                <td class="amt">${t.exchangeRate ? t.exchangeRate.toFixed(2) : '—'}</td>
+                <td class="amt">${fmt(t.amount)}</td>
+              </tr>`
+            )
+            .join('');
+
+    const caRows =
+      result.capitalAllowanceSchedule.length === 0
+        ? `<tr><td colspan="5" class="muted">No qualifying capital assets recorded for ${taxYear}.</td></tr>`
+        : result.capitalAllowanceSchedule
+            .map((ca) => {
+              const asset = assets.find((a) => a.id === ca.assetId);
+              return `<tr>
+                <td>${esc(ca.name)}</td>
+                <td>${esc(ca.assetClass.replace('_', ' '))}</td>
+                <td class="amt">${fmt(ca.qualifyingCost)}</td>
+                <td class="amt">${(ca.rate * 100).toFixed(0)}%</td>
+                <td class="amt">${fmt(ca.allowanceClaimed)}${asset?.vatPaid === false ? ' (Disallowed: No VAT)' : ''}</td>
+              </tr>`;
+            })
+            .join('');
+
+    const excludedRows =
+      excludedTxns.length === 0
+        ? `<tr><td colspan="4" class="muted">No excluded non-taxable inflows recorded.</td></tr>`
+        : excludedTxns
+            .map(
+              (t) => `<tr>
+                <td>${fmtDate(t.transactionDate)}</td>
+                <td>${esc(t.merchantName || '-')}</td>
+                <td>${esc(t.taxClassificationId)}</td>
+                <td class="amt">${fmt(t.amount)}</td>
+              </tr>`
+            )
+            .join('');
+
+    const whtRows =
+      whtCredits.length === 0
+        ? `<tr><td colspan="5" class="muted">No manual WHT credit notes added.</td></tr>`
+        : whtCredits
+            .map(
+              (w) => `<tr>
+                <td>${esc(w.clientName)}</td>
+                <td>${esc(w.payerTin || '—')}</td>
+                <td>${esc(w.creditNoteRef || '—')}</td>
+                <td class="amt">${fmt(w.grossAmount)}</td>
+                <td class="amt">${fmt(w.whtAmount)}</td>
+              </tr>`
+            )
+            .join('');
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    @page { margin: 14mm; }
+    body { font-family: Helvetica, Arial, sans-serif; color: #1f2937; font-size: 10px; line-height: 1.45; }
+    h1 { font-size: 20px; color: #001133; margin: 0 0 4px 0; }
+    h2 { font-size: 13px; color: #0B5CFF; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; margin: 18px 0 8px 0; }
+    .meta { color: #6b7280; font-size: 10px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+    th, td { border-bottom: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; }
+    th { background: #f8fafc; font-weight: 700; color: #374151; }
+    .amt { text-align: right; font-variant-numeric: tabular-nums; }
+    .bold { font-weight: 700; }
+    .muted { color: #6b7280; text-align: center; }
+    .hero { background: #f0f5ff; border: 1px solid #c7d7fe; border-radius: 6px; padding: 12px; margin-bottom: 14px; }
+    .disclaimer { background: #fefce8; border: 1px solid #fde68a; border-radius: 6px; padding: 10px; font-size: 9px; color: #78350f; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <h1>Personal Income Tax Filing Pack — YA ${taxYear}</h1>
+  <div class="meta">
+    Regime: <strong>${result.regime === 'NTA_2025' ? 'Nigeria Tax Act 2025' : 'Legacy PITA'}</strong> |
+    Generated: ${format(new Date(), 'MMM dd, yyyy')} |
+    Prepared for: <strong>${esc(userName)}</strong>
+  </div>
+
+  <h2>1. Taxpayer Profile & Self-Assessment Attestation (NTAA s. 13)</h2>
+  <table>
+    <tr><td>Taxpayer Name</td><td class="bold">${esc(userName)}</td><td>State of Residence</td><td class="bold">${esc(profile.stateOfResidence)}</td></tr>
+    <tr><td>Tax ID / NIN</td><td>${esc(profile.taxId || 'Not provided')}</td><td>Income Streams</td><td>${esc(profile.incomeStreams.join(', '))}</td></tr>
+    <tr><td>Filing Deadline</td><td>31 March ${taxYear + 1}</td><td>Late Filing Penalty</td><td>₦100,000 + ₦50,000/month</td></tr>
+  </table>
+
+  <div class="hero">
+    <strong>Summary Result:</strong>
+    ${result.taxRefundable > 0 ? `Estimated Tax Refundable: <strong>${fmt(result.taxRefundable)}</strong>` : `Estimated Net Tax Payable: <strong>${fmt(result.netTaxPayable)}</strong>`}
+    | Effective Tax Rate: <strong>${(result.effectiveTaxRate * 100).toFixed(2)}%</strong>
+    ${result.minimumWageExempt ? ' | <em>Minimum Wage Exempt</em>' : ''}
+    ${result.minimumTaxApplied ? ' | <em>1% Minimum Tax Applied</em>' : ''}
+  </div>
+
+  <h2>2. Statutory Tax Computation Waterfall</h2>
+  <table>
+    <tr><th>Description</th><th class="amt">Amount (NGN)</th></tr>
+    <tr><td>Gross Reportable Income</td><td class="amt">${fmt(result.grossReportableIncome)}</td></tr>
+    <tr><td>Less: Allowable Business Expenses</td><td class="amt">(${fmt(result.allowableBusinessExpenses)})</td></tr>
+    <tr><td>Less: Capital Allowances (Table I)</td><td class="amt">(${fmt(result.capitalAllowancesTotal)})</td></tr>
+    <tr class="bold"><td>Net Business Profit</td><td class="amt">${fmt(result.netBusinessProfit)}</td></tr>
+    <tr class="bold"><td>Total Income (All Streams)</td><td class="amt">${fmt(result.totalIncome)}</td></tr>
+    <tr><td>Less: Eligible Reliefs & Deductions (Rent Relief/CRA, Pension, NHF, NHIS, Life Assurance)</td><td class="amt">(${fmt(result.eligibleDeductions.total)})</td></tr>
+    <tr class="bold"><td>Chargeable Income</td><td class="amt">${fmt(result.chargeableIncome)}</td></tr>
+    <tr><td>Gross Tax Liability</td><td class="amt">${fmt(result.grossTaxLiability)}</td></tr>
+    <tr><td>Less: PAYE Deducted</td><td class="amt">(${fmt(result.credits.payeDeducted)})</td></tr>
+    <tr><td>Less: WHT Credits</td><td class="amt">(${fmt(result.credits.whtCredits)})</td></tr>
+    <tr><td>Less: Unilateral Foreign Tax Credit (s. 120)</td><td class="amt">(${fmt(result.credits.foreignTaxCredit)})</td></tr>
+    <tr class="bold"><td>${result.taxRefundable > 0 ? 'Net Tax Refundable' : 'Net Tax Payable'}</td><td class="amt">${fmt(result.taxRefundable > 0 ? result.taxRefundable : result.netTaxPayable)}</td></tr>
+  </table>
+
+  <table>
+    <tr><th>Tax Band</th><th class="amt">Rate</th><th class="amt">Taxable in Band</th><th class="amt">Tax</th></tr>
+    ${bandRows || '<tr><td colspan="4" class="muted">Zero chargeable income.</td></tr>'}
+  </table>
+
+  <h2>3. Statement of Accounts (P&amp;L) &amp; WHT Credit Notes</h2>
+  <table>
+    <tr><th>Category</th><th class="amt">Amount (NGN)</th></tr>
+    <tr><td>Employment / PAYE Income</td><td class="amt">${fmt(result.employmentIncome)}</td></tr>
+    <tr><td>Business / Freelance / Creator Gross Income</td><td class="amt">${fmt(result.businessGrossIncome)}</td></tr>
+    <tr><td>Rental Income</td><td class="amt">${fmt(result.rentalIncome)}</td></tr>
+    <tr><td>Investment / Other Taxable Income</td><td class="amt">${fmt(result.investmentIncome + result.otherTaxableIncome)}</td></tr>
+    <tr><td>Digital Asset Net Gain (Ring-Fenced s. 28(3)(iv))</td><td class="amt">${fmt(result.digitalAssetNetGain)}</td></tr>
+    <tr><td>Disallowed Expenses (Missing VAT / Duty s. 21(p))</td><td class="amt">${fmt(result.disallowedVatExpenseTotal)}</td></tr>
+  </table>
+  <table>
+    <tr><th>Client / Payer</th><th>Payer TIN</th><th>Credit Note Ref</th><th class="amt">Gross</th><th class="amt">WHT</th></tr>
+    ${whtRows}
+  </table>
+
+  <h2>4. Foreign Currency (FX) Schedule (NTAA s. 39)</h2>
+  <table>
+    <tr><th>Date</th><th>Payer / Source</th><th>Original Amount</th><th class="amt">FX Rate</th><th class="amt">NGN Equivalent</th></tr>
+    ${fxRows}
+  </table>
+
+  <h2>5. Capital Allowance Schedule (NTA 2025 Table I)</h2>
+  <table>
+    <tr><th>Asset</th><th>Class</th><th class="amt">Cost (NGN)</th><th class="amt">Rate</th><th class="amt">Allowance</th></tr>
+    ${caRows}
+  </table>
+
+  <h2>6. Excluded Non-Taxable Inflows Reconciliation</h2>
+  <table>
+    <tr><th>Reconciliation</th><th class="amt">Amount (NGN)</th></tr>
+    <tr><td>Total Bank Credits</td><td class="amt">${fmt(result.totalBankCredits)}</td></tr>
+    <tr><td>Less: Excluded Non-Taxable Inflows &amp; Final WHT Interest</td><td class="amt">(${fmt(result.excludedNonTaxableTotal + result.excludedFinalWhtInterestTotal)})</td></tr>
+    <tr class="bold"><td>Gross Reportable Income</td><td class="amt">${fmt(result.grossReportableIncome)}</td></tr>
+  </table>
+  <table>
+    <tr><th>Date</th><th>Source</th><th>Classification</th><th class="amt">Amount (NGN)</th></tr>
+    ${excludedRows}
+  </table>
+
+  <div class="disclaimer">
+    <strong>Disclaimer:</strong> This Filing Pack is prepared for personal self-assessment preparation and review with a licensed tax professional or relevant State Internal Revenue Service (e.g. LIRS/FIRS). It does not constitute formal tax advice or legal representation, and SpendNG does not submit filings automatically.
+  </div>
+</body>
+</html>`;
   }
 
   static async shareFile(path: string): Promise<void> {

@@ -168,7 +168,11 @@ export default function TransactionDetailScreen() {
         {/* Hero */}
         <View style={[styles.heroSection, { backgroundColor: heroBg }]}>
           <View style={styles.heroTopRow}>
-            <Text style={[styles.merchantName, { color: theme.onBackground }]}>
+            <Text
+              style={[styles.merchantName, { color: theme.onBackground }]}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
               {transaction.merchantName ?? 'Unknown'}
             </Text>
             <View style={[styles.typePill, { borderColor: isDebit ? Colors.main.error : Colors.main.success, borderWidth: 1 }]}>
@@ -403,15 +407,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heroTopRow: {
+    width: '100%',
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
+    rowGap: 6,
+    columnGap: 8,
   },
   merchantName: {
     fontFamily: Typography.fonts.display,
     fontSize: Typography.sizes.headlineS,
     lineHeight: Typography.sizes.headlineS * 1.2,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   typePill: {
     paddingVertical: 2,
@@ -419,6 +428,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   typePillText: {
     fontFamily: Typography.fonts.medium,

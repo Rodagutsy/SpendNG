@@ -60,7 +60,7 @@ export default function TransactionsScreen() {
     setRefreshing(false);
   }, []);
 
-  const hasActiveFilters = Object.keys(filters).length > 0;
+  const hasActiveFilters = Object.values(filters).some((v) => v !== undefined && v !== '');
 
   const SORT_OPTIONS = [
     { key: 'newest', label: 'Newest' },
@@ -189,7 +189,13 @@ export default function TransactionsScreen() {
 
       {hasActiveFilters && (
         <View style={styles.clearRowWrapper}>
-          <TouchableOpacity onPress={clearFilters} style={styles.clearRow}>
+          <TouchableOpacity
+            onPress={() => {
+              setSearchText('');
+              clearFilters();
+            }}
+            style={styles.clearRow}
+          >
             <Text style={[styles.clearText, { color: theme.primary }]}>Clear filters</Text>
           </TouchableOpacity>
         </View>
@@ -226,7 +232,7 @@ export default function TransactionsScreen() {
         visible={showFilterModal}
         onClose={() => setShowFilterModal(false)}
         initialFilters={filters}
-        onApply={(f) => setFilters({ ...filters, ...f })}
+        onApply={(f) => setFilters(filters.keyword ? { ...f, keyword: filters.keyword } : f)}
       />
     </SafeAreaView>
   );

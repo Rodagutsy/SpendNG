@@ -72,7 +72,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
 
   useEffect(() => {
     if (visible) {
-      setPeriod('all');
+      setPeriod(initialFilters?.startDate || initialFilters?.endDate ? 'custom' : 'all');
       setTxType(initialFilters?.transactionType ?? 'all');
       setStartDate(initialFilters?.startDate ? new Date(initialFilters.startDate) : null);
       setEndDate(initialFilters?.endDate ? new Date(initialFilters.endDate) : null);
@@ -82,8 +82,18 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
 
   const getDateRange = (): { startDate?: number; endDate?: number } => {
     if (period === 'custom') {
-      if (startDate) return { startDate: startDate.getTime() };
-      return {};
+      const range: { startDate?: number; endDate?: number } = {};
+      if (startDate) {
+        const s = new Date(startDate);
+        s.setHours(0, 0, 0, 0);
+        range.startDate = s.getTime();
+      }
+      if (endDate) {
+        const e = new Date(endDate);
+        e.setHours(23, 59, 59, 999);
+        range.endDate = e.getTime();
+      }
+      return range;
     }
     const now = Date.now();
     const day = 86400000;
@@ -100,12 +110,14 @@ export const FilterModal: React.FC<FilterModalProps> = ({ visible, onClose, init
   };
 
   const handleApply = () => {
-    const dateRange = getDateRange();
-    onApply?.({
-      ...dateRange,
-      transactionType: txType === 'all' ? undefined : txType as 'credit' | 'debit',
-      needsReview: reviewStatus === 'needs_review' ? true : undefined,
-    });
+    const nextFilters: FilterValues = { ...getDateRange() };
+    if (txType !== 'all') {
+      nextFilters.transactionType = txType as 'credit' | 'debit';
+    }
+    if (reviewStatus === 'needs_review') {
+      nextFilters.needsReview = true;
+    }
+    onApply?.(nextFilters);
     onClose();
   };
 

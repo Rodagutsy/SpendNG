@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
+import { useTaxProfileStore } from '@/lib/stores/taxProfileStore';
+import type { IncomeStream } from '@/lib/tax-engine';
 import { TaxClassSheet } from '@/components/tax/TaxClassSheet';
 import { TransactionReviewSheet } from '@/components/tax/TransactionReviewSheet';
 import { TransactionFilterSheet, TransactionFilters } from '@/components/tax/TransactionFilterSheet';
@@ -43,7 +45,20 @@ export default function TaxPrepScreen() {
   const { classifications: taxClasses, getById: getTaxClassById } = useTaxClassificationStore();
 
   const taxSteps = useTaxStore((s) => s.steps);
+  const taxYear = useTaxStore((s) => s.taxYear);
+  const setTaxYear = useTaxStore((s) => s.setTaxYear);
+  const fetchWhtCredits = useTaxStore((s) => s.fetchWhtCredits);
+  const taxProfile = useTaxProfileStore((s) => s.profile);
+  const fetchProfileAndAssets = useTaxProfileStore((s) => s.fetchProfileAndAssets);
   const stepsDone = taxSteps.filter((s) => s.done).length;
+
+  useEffect(() => {
+    fetchProfileAndAssets();
+  }, [fetchProfileAndAssets]);
+
+  useEffect(() => {
+    fetchWhtCredits(taxYear);
+  }, [fetchWhtCredits, taxYear]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
@@ -58,7 +73,9 @@ export default function TaxPrepScreen() {
   const [reviewTx, setReviewTx] = useState<TransactionRecord | null>(null);
 
   const filteredTransactions = useMemo(() => {
-    let base = transactions.filter((t) => !t.isDuplicate);
+    let base = transactions.filter(
+      (t) => !t.isDuplicate && new Date(t.transactionDate).getFullYear() === taxYear
+    );
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -87,15 +104,23 @@ export default function TaxPrepScreen() {
     }
 
     return base.sort((a, b) => b.transactionDate - a.transactionDate);
-  }, [transactions, searchQuery, filters]);
+  }, [transactions, taxYear, searchQuery, filters]);
 
   const unclassifiedCount = useMemo(
-    () => transactions.filter((t) => !t.isDuplicate && !t.taxClassificationId).length,
-    [transactions]
+    () =>
+      transactions.filter(
+        (t) =>
+          !t.isDuplicate &&
+          new Date(t.transactionDate).getFullYear() === taxYear &&
+          !t.taxClassificationId
+      ).length,
+    [transactions, taxYear]
   );
 
   const summary = useMemo(() => {
-    const all = transactions.filter((t) => !t.isDuplicate);
+    const all = transactions.filter(
+      (t) => !t.isDuplicate && new Date(t.transactionDate).getFullYear() === taxYear
+    );
     const needsReview = all.filter((t) => !t.taxClassificationId);
     const highConfidence = all.filter((t) => t.confidenceLevel === 'high');
     return {
@@ -103,7 +128,7 @@ export default function TaxPrepScreen() {
       needsReview: needsReview.length,
       highConfidence: highConfidence.length,
     };
-  }, [transactions]);
+  }, [transactions, taxYear]);
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -223,7 +248,81 @@ export default function TaxPrepScreen() {
           <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <MaterialIcons name="arrow-back" size={22} color={theme.onBackground} />
           </TouchableOpacity>
-          <Text style={[styles.title, { color: theme.onBackground }]}>Tax Prep</Text>
+          <Text style={[styles.title, { color: theme.onBackground, flex: 1 }]}>Tax Prep</Text>
+          <View style={[styles.yearPillGroup, { backgroundColor: theme.surfaceContainerLow }]}>
+            {[2025, 2026].map((yr) => {
+              const active = taxYear === yr;
+              return (
+                <TouchableOpacity
+                  key={yr}
+                  onPress={() => setTaxYear(yr)}
+                  style={[
+                    styles.yearPill,
+                    active && { backgroundColor: Colors.main.primary },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[
+                      styles.yearPillText,
+                      { color: active ? '#FFFFFF' : theme.outline },
+                    ]}
+                  >
+                    {yr}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Tax Profile Summary Card */}
+        <TouchableOpacity
+          style={[styles.profileCard, { backgroundColor: theme.surface }]}
+          onPress={() => router.push('/settings/tax-profile' as any)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.profileCardLeft}>
+            <View style={[styles.profileIconCircle, { backgroundColor: theme.primaryContainer }]}>
+              <MaterialIcons name="badge" size={20} color={Colors.main.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.profileCardTitle, { color: theme.onBackground }]}>
+                Tax Profile ({taxProfile.stateOfResidence})
+              </Text>
+              <Text style={[styles.profileCardSub, { color: theme.outline }]} numberOfLines={1}>
+                {taxProfile.incomeStreams
+                  .map((s: IncomeStream) =>
+                    s === 'employment_paye'
+                      ? 'PAYE'
+                      : s === 'freelance'
+                      ? 'Freelance'
+                      : s === 'content_creator'
+                      ? 'Creator'
+                      : 'Business Name'
+                  )
+                  .join(' · ')}{' '}
+                • {taxProfile.taxId ? 'TIN/NIN set' : 'No TIN/NIN'}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.profileEditPill}>
+            <Text style={[styles.profileEditText, { color: Colors.main.primary }]}>Edit</Text>
+            <MaterialIcons name="chevron-right" size={18} color={Colors.main.primary} />
+          </View>
+        </TouchableOpacity>
+
+        {/* Compliance Deadlines Banner */}
+        <View style={[styles.deadlineBanner, { backgroundColor: Colors.main.warning + '14', borderColor: Colors.main.warning + '40' }]}>
+          <MaterialIcons name="event" size={18} color={Colors.main.warning} style={{ marginTop: 2 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.deadlineTitle, { color: theme.onBackground }]}>
+              {taxYear >= 2026 ? 'NTA 2025' : 'Legacy PITA'} Filing Deadlines
+            </Text>
+            <Text style={[styles.deadlineBody, { color: theme.outline }]}>
+              Individual Self-Assessment: 31 Mar {taxYear + 1} (NTAA s. 13) • Employer PAYE H1: 31 Jan {taxYear + 1}. Late filing penalty: ₦100,000 + ₦50,000/month.
+            </Text>
+          </View>
         </View>
 
         {/* Tax Review Progress */}
@@ -838,5 +937,81 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.display,
     fontSize: 15,
     color: '#FFFFFF',
+  },
+  yearPillGroup: {
+    flexDirection: 'row',
+    borderRadius: Radius.full,
+    padding: 3,
+    gap: 2,
+  },
+  yearPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: Radius.full,
+  },
+  yearPillText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 12,
+  },
+  profileCard: {
+    marginHorizontal: Spacing[4],
+    marginBottom: Spacing[2],
+    padding: Spacing[4],
+    borderRadius: Radius.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing[2],
+  },
+  profileCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    flex: 1,
+  },
+  profileIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileCardTitle: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 14,
+  },
+  profileCardSub: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  profileEditPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  profileEditText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 13,
+  },
+  deadlineBanner: {
+    marginHorizontal: Spacing[4],
+    marginBottom: Spacing[4],
+    padding: Spacing[4],
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing[2],
+  },
+  deadlineTitle: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  deadlineBody: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 11,
+    lineHeight: 16,
   },
 });

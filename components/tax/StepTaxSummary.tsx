@@ -6,6 +6,8 @@ import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
 import { useTaxStore } from '@/lib/stores/taxStore';
+import { useTaxProfileStore } from '@/lib/stores/taxProfileStore';
+import { computePersonalIncomeTax } from '@/lib/tax-engine';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useAuth } from '@/context/AuthContext';
 import { ExportService } from '@/lib/export-service';
@@ -22,16 +24,15 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
   const getCategoryById = useCategoryStore((s) => s.getCategoryById);
   const { classifications: taxClasses } = useTaxClassificationStore();
   const whtCredits = useTaxStore((s) => s.whtCredits);
+  const taxYear = useTaxStore((s) => s.taxYear);
+  const profile = useTaxProfileStore((s) => s.profile);
+  const assets = useTaxProfileStore((s) => s.assets);
 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const { user } = useAuth();
   const userName = user?.user_metadata?.full_name || user?.email || 'User';
-
-  const taxYear = new Date().getFullYear();
-  const startDate = new Date(taxYear, 0, 1);
-  const endDate = new Date(taxYear, 11, 31);
 
   const categoryNames = useMemo(() => {
     const map: Record<string, string> = {};
@@ -48,8 +49,38 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
     setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const incomeTxs = useMemo(() => transactions.filter((t) => !t.isDuplicate && t.transactionType === 'credit'), [transactions]);
-  const expenseTxs = useMemo(() => transactions.filter((t) => !t.isDuplicate && t.transactionType === 'debit'), [transactions]);
+  const incomeTxs = useMemo(
+    () =>
+      transactions.filter(
+        (t) =>
+          !t.isDuplicate &&
+          t.transactionType === 'credit' &&
+          new Date(t.transactionDate).getFullYear() === taxYear
+      ),
+    [transactions, taxYear]
+  );
+  const expenseTxs = useMemo(
+    () =>
+      transactions.filter(
+        (t) =>
+          !t.isDuplicate &&
+          t.transactionType === 'debit' &&
+          new Date(t.transactionDate).getFullYear() === taxYear
+      ),
+    [transactions, taxYear]
+  );
+
+  const taxResult = useMemo(
+    () =>
+      computePersonalIncomeTax({
+        transactions,
+        assets,
+        whtCredits,
+        profile,
+        config: { taxYear },
+      }),
+    [transactions, assets, whtCredits, profile, taxYear]
+  );
 
   const incomeTaxClasses = useMemo(() => taxClasses.filter((tc) => tc.direction === 'income'), [taxClasses]);
   const expenseTaxClasses = useMemo(() => taxClasses.filter((tc) => tc.direction === 'expense'), [taxClasses]);
@@ -70,29 +101,27 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
     }));
   }, [expenseTaxClasses, expenseTxs]);
 
-  const totalIncome = incomeTxs.reduce((s, t) => s + t.amount, 0);
-  const totalDeductibleExpenses = expenseByClass
-    .filter((g) => g.id === 'business-expense' || g.id === 'business-asset' || g.id === 'tax-paid')
-    .reduce((s, g) => s + g.transactions.reduce((s2, t) => s2 + t.amount, 0), 0);
+  const foreignTxns = useMemo(
+    () => incomeTxs.filter((t) => t.originalCurrency && t.originalCurrency !== 'NGN'),
+    [incomeTxs]
+  );
 
-  const totalWht = whtCredits.reduce((s, c) => s + c.whtAmount, 0);
-  const estimatedTaxableIncome = totalIncome - totalDeductibleExpenses;
-  const foreignTxns = useMemo(() => incomeTxs.filter((t) => t.originalCurrency && t.originalCurrency !== 'NGN'), [incomeTxs]);
-
-  const generateAndShare = async (title: string) => {
+  const generateAndShare = async (_title: string) => {
     setPdfLoading(true);
     try {
-      const uri = await ExportService.exportData({
-        format: 'PDF',
-        startDate,
-        endDate,
-        transactions,
+      const uri = await ExportService.generateTaxFilingPackPDF({
+        taxYear,
         userName,
+        profile,
+        result: taxResult,
+        transactions,
+        assets,
+        whtCredits,
         categoryNames,
-      }, () => {});
+      });
       await ExportService.shareFile(uri);
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to generate PDF');
+      Alert.alert('Error', err.message || 'Failed to generate Tax Filing Pack PDF');
     } finally {
       setPdfLoading(false);
     }
@@ -137,30 +166,116 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
           </View>
 
           <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-            {incomeByClass.map((g) =>
-              renderCollapsibleCard(
-                g.name,
-                g.transactions.reduce((s, t) => s + t.amount, 0),
-                g.transactions.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
-                `income-${g.id}`
-              )
+            {/* Primary Tax Liability Hero */}
+            <View style={[styles.taxableCard, { backgroundColor: Colors.main.primary }]}>
+              <View style={styles.regimeRow}>
+                <Text style={styles.taxableLabel}>
+                  {taxResult.taxRefundable > 0 ? 'Estimated Tax Refundable' : 'Estimated Net Tax Payable'}
+                </Text>
+                <View style={styles.regimeBadge}>
+                  <Text style={styles.regimeBadgeText}>
+                    {taxResult.regime === 'NTA_2025' ? 'NTA 2025' : 'PITA'} • {taxYear}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.taxableValue}>
+                ₦{(taxResult.taxRefundable > 0 ? taxResult.taxRefundable : taxResult.netTaxPayable).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+              </Text>
+              <Text style={styles.taxableSub}>
+                Effective Rate: {(taxResult.effectiveTaxRate * 100).toFixed(2)}%
+                {taxResult.minimumWageExempt ? ' • Minimum Wage Exempt' : ''}
+                {taxResult.minimumTaxApplied ? ' • 1% Minimum Tax Applied' : ''}
+              </Text>
+              <Text style={styles.taxableDisclaimer}>
+                Estimated computation for self-assessment prep and review with a tax professional — not formal tax advice.
+              </Text>
+            </View>
+
+            {/* Warnings */}
+            {taxResult.warnings.length > 0 && (
+              <View style={[styles.warningBox, { backgroundColor: Colors.main.warning + '14' }]}>
+                <Text style={styles.warningTitle}>Review Notes ({taxResult.warnings.length})</Text>
+                {taxResult.warnings.map((w, idx) => (
+                  <Text key={idx} style={styles.warningItem}>• {w}</Text>
+                ))}
+              </View>
             )}
 
-            {expenseByClass.map((g) =>
-              renderCollapsibleCard(
-                g.name,
-                g.transactions.reduce((s, t) => s + t.amount, 0),
-                g.transactions.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
-                `expense-${g.id}`
-              )
-            )}
-
+            {/* Statutory Computation Waterfall */}
             <View style={[styles.card, { backgroundColor: Colors.light.surface }]}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.cardTitle}>WHT Credits</Text>
-                <Text style={styles.cardTotal}>₦{totalWht.toLocaleString()}</Text>
+              <Text style={[styles.cardTitle, { marginBottom: 8 }]}>Statutory Computation Waterfall</Text>
+              {[
+                { label: 'Gross Reportable Income', val: taxResult.grossReportableIncome },
+                { label: 'Less: Allowable Business Expenses', val: -taxResult.allowableBusinessExpenses },
+                { label: 'Less: Capital Allowances (Table I)', val: -taxResult.capitalAllowancesTotal },
+                { label: 'Net Business Profit', val: taxResult.netBusinessProfit, bold: true },
+                { label: 'Total Income (All Streams)', val: taxResult.totalIncome, bold: true },
+                { label: 'Less: Eligible Reliefs & Deductions', val: -taxResult.eligibleDeductions.total },
+                { label: 'Chargeable Income', val: taxResult.chargeableIncome, bold: true },
+                { label: 'Gross Tax Liability', val: taxResult.grossTaxLiability },
+                { label: 'Less: PAYE / WHT / Foreign Tax Credits', val: -taxResult.credits.totalCredits },
+              ].map((row, i) => (
+                <View key={i} style={styles.itemRow}>
+                  <Text style={[styles.itemName, row.bold && { fontFamily: Typography.fonts.medium, color: Colors.light.onSurface }]}>
+                    {row.label}
+                  </Text>
+                  <Text style={[styles.itemAmount, row.bold && { color: Colors.main.primary }]}>
+                    {row.val < 0 ? `-₦${Math.abs(row.val).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `₦${row.val.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Tax Band Breakdown */}
+            {renderCollapsibleCard(
+              'Tax Band Breakdown',
+              taxResult.grossTaxLiability,
+              taxResult.bandBreakdown.map((b) => ({
+                name: `${b.label} (${(b.rate * 100).toFixed(0)}%) on ₦${b.taxableInBand.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                amount: Math.round(b.taxInBand),
+              })),
+              'band-breakdown'
+            )}
+
+            {/* Non-Taxable & Disallowed Summary */}
+            <View style={[styles.card, { backgroundColor: Colors.light.surface }]}>
+              <View style={styles.itemRow}>
+                <Text style={styles.itemName}>Excluded Non-Taxable Inflows</Text>
+                <Text style={styles.itemAmount}>₦{taxResult.excludedNonTaxableTotal.toLocaleString()}</Text>
+              </View>
+              <View style={styles.itemRow}>
+                <Text style={styles.itemName}>Disallowed Expenses (No VAT s.21(p))</Text>
+                <Text style={[styles.itemAmount, taxResult.disallowedVatExpenseTotal > 0 && { color: Colors.main.error }]}>
+                  ₦{taxResult.disallowedVatExpenseTotal.toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.itemRow}>
+                <Text style={styles.itemName}>Credits (PAYE + WHT + Foreign)</Text>
+                <Text style={styles.itemAmount}>₦{taxResult.credits.totalCredits.toLocaleString()}</Text>
               </View>
             </View>
+
+            {incomeByClass
+              .filter((g) => g.transactions.length > 0)
+              .map((g) =>
+                renderCollapsibleCard(
+                  g.name,
+                  g.transactions.reduce((s, t) => s + t.amount, 0),
+                  g.transactions.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
+                  `income-${g.id}`
+                )
+              )}
+
+            {expenseByClass
+              .filter((g) => g.transactions.length > 0)
+              .map((g) =>
+                renderCollapsibleCard(
+                  g.name,
+                  g.transactions.reduce((s, t) => s + t.amount, 0),
+                  g.transactions.map((t) => ({ name: t.merchantName ?? 'Unknown', amount: t.amount })),
+                  `expense-${g.id}`
+                )
+              )}
 
             {foreignTxns.length > 0 && (
               <View style={[styles.foreignNote, { backgroundColor: Colors.main.primary + '0D' }]}>
@@ -179,22 +294,14 @@ export const StepTaxSummary: React.FC<StepTaxSummaryProps> = ({ visible, onClose
               </View>
             )}
 
-            <View style={[styles.taxableCard, { backgroundColor: Colors.main.primary }]}>
-              <Text style={styles.taxableLabel}>Estimated Taxable Income</Text>
-              <Text style={styles.taxableValue}>₦{estimatedTaxableIncome.toLocaleString()}</Text>
-              <Text style={styles.taxableDisclaimer}>
-                Total income minus deductible expenses. This is a summary for your accountant, not a tax calculation.
-              </Text>
-            </View>
-
             <View style={styles.buttonRow}>
               <TouchableOpacity style={styles.shareBtn} onPress={() => generateAndShare('Share Tax Report')} disabled={pdfLoading}>
                 <MaterialIcons name="ios-share" size={18} color={Colors.light.onPrimary} />
-                <Text style={styles.shareBtnText}>{pdfLoading ? 'Generating…' : 'Share PDF'}</Text>
+                <Text style={styles.shareBtnText}>{pdfLoading ? 'Generating…' : 'Share Filing Pack'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.downloadBtn} onPress={() => generateAndShare('Save Tax Report')} disabled={pdfLoading}>
                 <MaterialIcons name="download" size={18} color={Colors.main.primary} />
-                <Text style={styles.downloadBtnText}>{pdfLoading ? 'Generating…' : 'Download'}</Text>
+                <Text style={styles.downloadBtnText}>{pdfLoading ? 'Generating…' : 'Download PDF'}</Text>
               </TouchableOpacity>
             </View>
 
@@ -401,5 +508,44 @@ const styles = StyleSheet.create({
     fontFamily: Typography.fonts.display,
     fontSize: 14,
     color: Colors.main.primary,
+  },
+  regimeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  regimeBadge: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  regimeBadgeText: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 11,
+    color: '#FFFFFF',
+  },
+  taxableSub: {
+    fontFamily: Typography.fonts.medium,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+  warningBox: {
+    borderRadius: Radius.sm,
+    padding: Spacing[3],
+    marginBottom: 8,
+    gap: 4,
+  },
+  warningTitle: {
+    fontFamily: Typography.fonts.display,
+    fontSize: 13,
+    color: Colors.main.warning,
+  },
+  warningItem: {
+    fontFamily: Typography.fonts.body,
+    fontSize: 11,
+    color: Colors.light.onSurface,
+    lineHeight: 16,
   },
 });
