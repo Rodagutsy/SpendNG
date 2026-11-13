@@ -70,5 +70,16 @@
     "eslint-config-expo": "~10.0.0",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "expo-pdf-text-extract",
+          "react-native-get-sms-android",
+          "@maniac-tech/react-native-expo-read-sms"
+        ]
+      }
+    }
+  }
 }
