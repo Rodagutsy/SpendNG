@@ -81,7 +81,10 @@ export class ExportService {
 
   private static escapeCSV(value: unknown): string {
     if (value === null || value === undefined) return '';
-    const str = String(value);
+    let str = String(value);
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = `'${str}`;
+    }
     if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
       return `"${str.replace(/"/g, '""')}"`;
     }
@@ -467,7 +470,7 @@ export class ExportService {
     <div class="cover-title">${esc(reportTitle)}</div>
     <div class="cover-period">${fmtDate(startDate.getTime())} – ${fmtDate(endDate.getTime())}</div>
     <div class="cover-client">${esc(userName)}</div>
-    <div class="cover-meta">Currency: ${currency}${allSameCurrency ? '' : ' (mixed)'} &nbsp;|&nbsp; Prepared by SpendNG</div>
+    <div class="cover-meta">Currency: ${esc(currency)}${allSameCurrency ? '' : ' (mixed)'} &nbsp;|&nbsp; Prepared by SpendNG</div>
     <div class="cover-divider"></div>
 
     <table class="metrics-table">
@@ -488,7 +491,7 @@ export class ExportService {
 
     <div class="data-source">
       <p><strong>Data Sources</strong></p>
-      <p>Bank Accounts: ${bankAccounts.length > 0 ? bankAccounts.join(', ') : 'Not specified'}</p>
+      <p>Bank Accounts: ${bankAccounts.length > 0 ? esc(bankAccounts.join(', ')) : 'Not specified'}</p>
       <p>Cards: —</p>
       <p>Import Method: ${esc(importMethod)}</p>
     </div>
@@ -497,7 +500,7 @@ export class ExportService {
   <!-- PAGE 2+ - TRANSACTION LEDGER -->
   <div class="page-break"></div>
   <div class="section-title">Transaction Ledger</div>
-  <div class="section-sub">Chronological order • All transactions in ${currency}</div>
+  <div class="section-sub">Chronological order • All transactions in ${esc(currency)}</div>
 
       <table>
     <thead>

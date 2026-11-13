@@ -1,5 +1,7 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -141,21 +143,38 @@ function makeMockClient() {
 let supabase: any;
 
 if (isMock) {
-  console.log('[Supabase] No credentials found — using mock client');
+  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+    throw new Error(
+      'Missing Supabase configuration: EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are required in production builds.',
+    );
+  }
+  console.log('[Supabase] No credentials found — using dev mock client');
   supabase = makeMockClient();
 } else {
   const { createClient } = require('@supabase/supabase-js');
-  const ssrSafeStorage = {
+  const secureStorage = {
     getItem: (key: string) =>
-      typeof window === 'undefined' ? Promise.resolve(null) : AsyncStorage.getItem(key),
+      Platform.OS === 'web'
+        ? typeof window === 'undefined'
+          ? Promise.resolve(null)
+          : AsyncStorage.getItem(key)
+        : SecureStore.getItemAsync(key),
     setItem: (key: string, value: string) =>
-      typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.setItem(key, value),
+      Platform.OS === 'web'
+        ? typeof window === 'undefined'
+          ? Promise.resolve()
+          : AsyncStorage.setItem(key, value)
+        : SecureStore.setItemAsync(key, value),
     removeItem: (key: string) =>
-      typeof window === 'undefined' ? Promise.resolve() : AsyncStorage.removeItem(key),
+      Platform.OS === 'web'
+        ? typeof window === 'undefined'
+          ? Promise.resolve()
+          : AsyncStorage.removeItem(key)
+        : SecureStore.deleteItemAsync(key),
   };
   supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      storage: ssrSafeStorage,
+      storage: secureStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

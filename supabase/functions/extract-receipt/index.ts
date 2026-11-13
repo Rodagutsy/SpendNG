@@ -9,7 +9,6 @@ interface ExtractionResult {
 }
 
 Deno.serve(async (req: Request) => {
-  console.log("STEP 1: Received request");
   try {
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -18,47 +17,65 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { filePath } = await req.json();
-    if (!filePath || typeof filePath !== 'string') {
-      return new Response(JSON.stringify({ error: 'Missing filePath' }), {
-        status: 400,
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    console.log("STEP 2: filePath:", filePath);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
 
-    if (!supabaseUrl || !serviceRoleKey || !geminiApiKey) {
-      return new Response(JSON.stringify({ error: 'Missing environment variables' }), {
+    if (!supabaseUrl || !supabaseAnonKey || !geminiApiKey) {
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    console.log("STEP 2a: API key prefix:", geminiApiKey.substring(0, 6) + '...');
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { filePath } = await req.json();
+    if (
+      !filePath ||
+      typeof filePath !== 'string' ||
+      filePath.includes('..') ||
+      !filePath.startsWith(`${authData.user.id}/`)
+    ) {
+      return new Response(JSON.stringify({ error: 'Invalid filePath' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25000);
     const cleanup = () => clearTimeout(timeout);
 
-    console.log("STEP 3: Downloading from storage");
     const { data: fileBlob, error: downloadError } = await supabase.storage
       .from('receipts')
       .download(filePath);
 
     if (downloadError || !fileBlob) {
       cleanup();
-      return new Response(JSON.stringify({ error: `Download failed: ${downloadError?.message ?? 'No data'}` }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: 'Failed to load receipt file' }), {
+        status: 404,
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    console.log("STEP 3b: Image downloaded, size:", fileBlob.size);
 
     const arrayBuffer = await fileBlob.arrayBuffer();
     const uint8 = new Uint8Array(arrayBuffer);
@@ -67,24 +84,17 @@ Deno.serve(async (req: Request) => {
       binary += String.fromCharCode(uint8[i]);
     }
     const base64 = btoa(binary);
-    console.log("STEP 3c: Base64 size:", base64.length);
 
     const contentType = fileBlob.type || 'image/jpeg';
 
-    console.log("STEP 4: Calling Gemini models list to test key");
-    const modelsCheck = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`,
-      { signal: controller.signal },
-    );
-    const modelsText = await modelsCheck.text();
-    console.log("STEP 4a: Models list status:", modelsCheck.status, "body:", modelsText.substring(0, 500));
-
-    console.log("STEP 4b: Calling Gemini generateContent");
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': geminiApiKey,
+        },
         signal: controller.signal,
         body: JSON.stringify({
           contents: [
@@ -110,62 +120,51 @@ Return ONLY valid JSON, no markdown, no explanation.`,
       },
     );
 
-    console.log("STEP 5: Gemini response received, status:", geminiResponse.status);
-
     if (!geminiResponse.ok) {
       cleanup();
-      const errText = await geminiResponse.text();
-      console.log("STEP 5a: Gemini error body:", errText);
-      return new Response(JSON.stringify({ error: `Gemini API error: ${errText}` }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: 'Receipt extraction failed' }), {
+        status: 502,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    console.log("STEP 5c: Parsing Gemini JSON");
     const geminiData = await geminiResponse.json();
-    console.log("STEP 5d: Checking candidates");
     const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-    console.log("STEP 5e: rawText length:", rawText?.length ?? 0);
 
     if (!rawText) {
       cleanup();
-      console.log("STEP 5f: Empty Gemini response, blockReason:", geminiData?.promptFeedback?.blockReason ?? 'none');
-      return new Response(JSON.stringify({ error: 'Empty Gemini response' }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: 'No extraction output returned' }), {
+        status: 502,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    console.log("STEP 6: Cleaning and parsing JSON");
     const cleanedText = rawText.replace(/^```json\s*/i, '').replace(/```$/i, '');
 
     let result: ExtractionResult;
     try {
       result = JSON.parse(cleanedText);
-    } catch (e) {
+    } catch {
       cleanup();
-      return new Response(JSON.stringify({ error: 'Invalid JSON from Gemini', raw: cleanedText }), {
-        status: 500,
+      return new Response(JSON.stringify({ error: 'Failed to parse extraction output' }), {
+        status: 502,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    console.log("STEP 7: JSON parsed successfully:", JSON.stringify(result));
     cleanup();
     return new Response(JSON.stringify(result), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
-    console.error('extract-receipt CAUGHT:', err?.constructor?.name, err);
     if (err instanceof DOMException && err.name === 'AbortError') {
       return new Response(JSON.stringify({ error: 'Request timed out' }), {
         status: 504,
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }), {
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

@@ -118,6 +118,10 @@ function extractRows(text: string): ParsedRow[] {
   return rows;
 }
 
+import { createClient } from 'npm:@supabase/supabase-js@2';
+
+const MAX_BASE64_LENGTH = 10 * 1024 * 1024; // ~7.5 MB binary PDF limit
+
 Deno.serve(async (req: Request) => {
   try {
     if (req.method !== 'POST') {
@@ -127,10 +131,44 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    if (!supabaseUrl || !supabaseAnonKey) {
+      return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const { fileBase64 } = await req.json();
     if (!fileBase64 || typeof fileBase64 !== 'string') {
       return new Response(JSON.stringify({ error: 'Missing fileBase64' }), {
         status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    if (fileBase64.length > MAX_BASE64_LENGTH) {
+      return new Response(JSON.stringify({ error: 'PDF payload too large' }), {
+        status: 413,
         headers: { 'Content-Type': 'application/json' },
       });
     }
@@ -148,9 +186,8 @@ Deno.serve(async (req: Request) => {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
-  } catch (err) {
-    console.error('parse-pdf error:', err);
-    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'Unknown error' }), {
+  } catch {
+    return new Response(JSON.stringify({ error: 'Failed to parse PDF' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

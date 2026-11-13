@@ -8,6 +8,9 @@ import { useTransactionStore } from '@/lib/stores/transactionStore';
 import { useCategoryStore } from '@/lib/stores/categoryStore';
 import { useCategoryDefaultStore } from '@/lib/stores/categoryDefaultStore';
 import { useTaxClassificationStore } from '@/lib/stores/taxClassificationStore';
+import { useTaxProfileStore, DEFAULT_TAX_PROFILE } from '@/lib/stores/taxProfileStore';
+import { useTaxStore } from '@/lib/stores/taxStore';
+import { useNotificationStore } from '@/lib/stores/notificationStore';
 import { startReadSMS, checkIfHasSMSPermission } from '@maniac-tech/react-native-expo-read-sms';
 import { IngestionEngine } from '@/lib/ingestion-engine';
 
@@ -60,6 +63,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    const clearUserData = () => {
+      useAuthStore.getState().setUserId(null);
+      useTransactionStore.setState({
+        transactions: [],
+        homeTransactions: [],
+        loading: false,
+        error: null,
+      });
+      useCategoryStore.setState({ categories: [] });
+      useCategoryDefaultStore.setState({ defaults: [] });
+      useTaxProfileStore.setState({
+        profile: DEFAULT_TAX_PROFILE,
+        assets: [],
+        loading: false,
+        error: null,
+      });
+      useTaxStore.getState().resetReview();
+      useTaxStore.setState({ whtCredits: [] });
+      useNotificationStore.setState({ clearedIds: [] });
+    };
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -67,6 +91,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         useTransactionStore.getState().fetchHomeTransactions();
         useTransactionStore.getState().fetchTransactions();
+      } else {
+        clearUserData();
       }
     });
 
@@ -88,6 +114,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    useAuthStore.getState().setUserId(null);
+    useTransactionStore.setState({
+      transactions: [],
+      homeTransactions: [],
+      loading: false,
+      error: null,
+    });
+    useCategoryStore.setState({ categories: [] });
+    useCategoryDefaultStore.setState({ defaults: [] });
+    useTaxProfileStore.setState({
+      profile: DEFAULT_TAX_PROFILE,
+      assets: [],
+      loading: false,
+      error: null,
+    });
+    useTaxStore.getState().resetReview();
+    useTaxStore.setState({ whtCredits: [] });
+    useNotificationStore.setState({ clearedIds: [] });
   };
 
   return (
