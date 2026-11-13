@@ -336,15 +336,16 @@ function tryGenericAccountInfo(body: string): { last4: string | null } {
 
 export class Parser {
   static parseSMS(body: string, sender: string, timestamp: number, debug?: boolean): ParsedTransaction | null {
+    const isDebug = Boolean(debug) && typeof __DEV__ !== 'undefined' && __DEV__;
     const bank = this.identifyBank(sender);
-    if (debug) console.log(`[Parser] Bank identified: ${bank || 'null'} from sender: ${sender}`);
+    if (isDebug) console.log(`[Parser] Bank identified: ${bank || 'null'} from sender: ${sender}`);
 
     let results: Record<string, any> = {};
 
     if (bank) {
-      results = this.extractSMSWithBank(body, bank, timestamp, debug);
+      results = this.extractSMSWithBank(body, bank, timestamp, isDebug);
     } else {
-      if (debug) console.log('[Parser] No bank match, using generic fallback');
+      if (isDebug) console.log('[Parser] No bank match, using generic fallback');
     }
 
     if (!results.amount) {
@@ -399,15 +400,15 @@ export class Parser {
       : 'low';
 
     if (results.amount === null || results.amount === undefined) {
-      if (debug) console.log('[Parser] Failed: no amount extracted');
+      if (isDebug) console.log('[Parser] Failed: no amount extracted');
       return null;
     }
     if (!results.type) {
-      if (debug) console.log('[Parser] Failed: no transaction type extracted');
+      if (isDebug) console.log('[Parser] Failed: no transaction type extracted');
       return null;
     }
 
-    if (debug) console.log('[Parser] Final result:', {
+    if (isDebug) console.log('[Parser] Final result:', {
       amount: results.amount,
       type: results.type,
       merchant: results.merchant,

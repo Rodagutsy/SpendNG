@@ -26,7 +26,7 @@ export default function SetPasswordScreen() {
     setFormError('');
 
     if (!password) { setPasswordError('Enter a password'); return; }
-    if (password.length < 6) { setPasswordError('Password must be at least 6 characters'); return; }
+    if (password.length < 10) { setPasswordError('Password must be at least 10 characters'); return; }
     if (!confirmPassword) { setConfirmError('Confirm your password'); return; }
     if (password !== confirmPassword) { setConfirmError('Passwords do not match'); return; }
 

@@ -32,8 +32,8 @@ export default function ChangePasswordScreen() {
       setConfirmPasswordError('Passwords do not match');
       return;
     }
-    if (newPassword.length < 6) {
-      setNewPasswordError('Password must be at least 6 characters');
+    if (newPassword.length < 10) {
+      setNewPasswordError('Password must be at least 10 characters');
       return;
     }
 

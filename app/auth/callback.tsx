@@ -17,8 +17,24 @@ export default function AuthCallbackScreen() {
       }
 
       try {
+        const parsed = Linking.parse(url);
+        const isExpectedCallback =
+          parsed.scheme === 'spendngapp' &&
+          (parsed.hostname === 'auth' || parsed.path?.startsWith('auth/callback') || parsed.path === 'callback');
+        if (!isExpectedCallback) {
+          router.replace('/(onboarding)/sign-in');
+          return;
+        }
+
         const queryStart = url.indexOf('?');
-        const code = queryStart >= 0 ? new URLSearchParams(url.substring(queryStart)).get('code') : null;
+        const params = queryStart >= 0 ? new URLSearchParams(url.substring(queryStart)) : null;
+        if (params?.get('error')) {
+          showAlert({ title: 'Authentication failed', message: 'Sign-in was cancelled or denied.' });
+          router.replace('/(onboarding)/sign-in');
+          return;
+        }
+
+        const code = params?.get('code') ?? null;
 
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);

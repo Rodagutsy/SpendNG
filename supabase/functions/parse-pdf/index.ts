@@ -121,6 +121,26 @@ function extractRows(text: string): ParsedRow[] {
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const MAX_BASE64_LENGTH = 10 * 1024 * 1024; // ~7.5 MB binary PDF limit
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 20;
+const userBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function isRateLimited(userId: string): boolean {
+  const now = Date.now();
+  const entry = userBuckets.get(userId);
+  if (!entry || now > entry.resetAt) {
+    userBuckets.set(userId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > RATE_LIMIT_MAX;
+}
+
+const JSON_HEADERS = {
+  'Content-Type': 'application/json',
+  'X-Content-Type-Options': 'nosniff',
+  'Cache-Control': 'no-store',
+};
 
 Deno.serve(async (req: Request) => {
   try {
@@ -155,7 +175,14 @@ Deno.serve(async (req: Request) => {
     if (authError || !authData?.user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' },
+        headers: JSON_HEADERS,
+      });
+    }
+
+    if (isRateLimited(authData.user.id)) {
+      return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
+        status: 429,
+        headers: JSON_HEADERS,
       });
     }
 

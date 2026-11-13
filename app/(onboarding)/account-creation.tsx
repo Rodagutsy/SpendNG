@@ -30,7 +30,7 @@ export default function AccountCreationScreen() {
     if (!name) { setNameError('Enter your full name'); return; }
     if (!email) { setEmailError('Enter your email address'); return; }
     if (!password) { setPasswordError('Enter a password'); return; }
-    if (password.length < 6) { setPasswordError('Password must be at least 6 characters'); return; }
+    if (password.length < 10) { setPasswordError('Password must be at least 10 characters'); return; }
     if (!agreed) { setFormError('You must agree to the Terms of Service and Privacy Policy'); return; }
     setLoading(true);
     try {
@@ -43,7 +43,7 @@ export default function AccountCreationScreen() {
       if (msg.toLowerCase().includes('invalid email')) {
         setEmailError('Enter a valid email address');
       } else if (msg.toLowerCase().includes('already registered') || msg.toLowerCase().includes('already been registered') || msg.toLowerCase().includes('user already exists')) {
-        setEmailError('An account with this email already exists. Sign in instead.');
+        setFormError('Unable to complete sign up with those details. Please sign in or reset your password.');
       } else {
         setFormError(msg);
       }

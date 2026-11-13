@@ -859,7 +859,16 @@ export class ExportService {
   static async shareFile(path: string): Promise<void> {
     if (await Sharing.isAvailableAsync()) {
       const mimeType = path.endsWith('.csv') ? 'text/csv' : 'application/pdf';
-      await Sharing.shareAsync(path, { mimeType, dialogTitle: 'Share SpendNG Export' });
+      try {
+        await Sharing.shareAsync(path, { mimeType, dialogTitle: 'Share SpendNG Export' });
+      } finally {
+        try {
+          const f = new File(path);
+          if (f.exists) f.delete();
+        } catch {
+          // Best-effort cache cleanup
+        }
+      }
     } else {
       throw new Error('Sharing is not available on this device');
     }

@@ -21,6 +21,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.rodagutsy.spendngapp",
+      "allowBackup": false,
       "newArchEnabled": true,
       "permissions": [
         "android.permission.READ_SMS",

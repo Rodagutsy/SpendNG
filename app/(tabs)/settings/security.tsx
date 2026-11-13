@@ -1,11 +1,12 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, Radius } from '@/constants/Tokens';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAlert } from '@/context/AlertContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAppLockStore } from '@/lib/stores/appLockStore';
 
 export default function SecurityScreen() {
   const router = useRouter();
@@ -13,9 +14,33 @@ export default function SecurityScreen() {
   const colorScheme = useColorScheme() ?? 'light';
   const theme = Colors[colorScheme];
   const { showAlert } = useAlert();
+  const biometricEnabled = useAppLockStore((s) => s.biometricEnabled);
+  const hydrated = useAppLockStore((s) => s.hydrated);
+  const hydrate = useAppLockStore((s) => s.hydrate);
+  const setBiometricEnabled = useAppLockStore((s) => s.setBiometricEnabled);
+  const [toggling, setToggling] = useState(false);
 
-  const handleBiometrics = () => {
-    showAlert({ title: 'Coming Soon', message: 'Enable PIN / biometric login feature is coming soon!' });
+  useEffect(() => {
+    if (!hydrated) hydrate();
+  }, [hydrated, hydrate]);
+
+  const handleToggleBiometrics = async (next: boolean) => {
+    if (Platform.OS === 'web') {
+      showAlert({ title: 'Mobile Only', message: 'Biometric / device lock is available on iOS and Android devices.' });
+      return;
+    }
+    setToggling(true);
+    try {
+      const ok = await setBiometricEnabled(next);
+      if (!ok) {
+        showAlert({
+          title: 'Biometrics Unavailable',
+          message: 'Ensure Face ID, Fingerprint, or a device passcode is enrolled in your phone settings.',
+        });
+      }
+    } finally {
+      setToggling(false);
+    }
   };
 
   return (
@@ -43,15 +68,20 @@ export default function SecurityScreen() {
           <IconSymbol name="chevron.right" size={16} color={theme.outline} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.row} onPress={handleBiometrics} activeOpacity={0.7}>
+        <View style={styles.row}>
           <View style={styles.rowLeft}>
             <View style={[styles.iconContainer, { backgroundColor: theme.primaryContainer }]}>
               <IconSymbol name="person.fill" size={16} color={theme.primary} />
             </View>
-            <Text style={[styles.label, { color: theme.onBackground }]}>Enable PIN / biometric login</Text>
+            <Text style={[styles.label, { color: theme.onBackground }]}>Biometric / device lock</Text>
           </View>
-          <IconSymbol name="chevron.right" size={16} color={theme.outline} />
-        </TouchableOpacity>
+          <Switch
+            value={biometricEnabled}
+            onValueChange={handleToggleBiometrics}
+            disabled={toggling}
+            trackColor={{ false: theme.outlineVariant, true: Colors.main.primary }}
+          />
+        </View>
       </View>
     </ScrollView>
   );
